@@ -1,0 +1,23 @@
+Here are some quick notes on how to set up/use chan_fax.  These are
+based upon conversations on IRC with anthm.  I haven't yet tested a
+full setup (I don't have Hylafax set up).
+
+1) Get chan_fax compiled and installed.
+
+	* chan_fax requires SpanDSP and libtiff
+
+2) Create the config file /etc/openpbx/chan_fax.conf based on the sample in
+   configs/chan_fax.conf.sample
+
+3) Add to inittab:
+
+fax0:234:respawn:/usr/sbin/faxgetty /dev/FAX0
+    .
+    .
+faxN:234:respawn:/usr/sbin/faxgetty /dev/FAXN
+
+4) Create /var/spool/fax/etc/config.FAX<N> (N is 0 .. number of modems configured in chan_fax).
+
+Sample config file:
+
+http://www.sofaswitch.org/chan_fax/config.FAX0

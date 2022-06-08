@@ -1,0 +1,25 @@
+#!/bin/sh
+g=`nireport / /groups gid | sort -n | tail -n 1`; \
+g=`echo $g + 1 | bc`; \
+if [ $g -lt 250 ]; then 
+	g=250
+fi
+echo group $g
+u=`nireport / /users uid | sort -n | tail -n 1`
+u=`echo $u + 1 | bc`
+echo user $u
+if [ $u -lt 250 ]; then 
+	u=250
+fi
+if [ "`nireport / /groups name gid | grep ${OPBXRUNGROUP}`" = "" ]; then 
+	niutil -create / /groups/${OPBXRUNGROUP}; \
+	niutil -createprop / /groups/${OPBXRUNGROUP} gid $g; \
+else
+	g=`nireport / /groups name gid | grep ${OPBXRUNGROUP} | awk '{print $2}'`
+fi
+if [ "`nireport / /users name uid  |grep ${OPBXRUNUSER}`" = "" ]; then \
+	niutil -create / /users/${OPBXRUNUSER}; \
+	niutil -createprop / /users/${OPBXRUNUSER} gid $g; \
+	niutil -createprop / /users/${OPBXRUNUSER} uid $u; \
+	niutil -createprop / /users/${OPBXRUNUSER} home ${INSTALL_PATH}${OPBXVARRUNDIR}; \
+fi

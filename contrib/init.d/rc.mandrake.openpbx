@@ -1,0 +1,178 @@
+#!/bin/sh
+# 
+# openpbx:		Starts the openpbx service
+# 
+# Version:		@(#) /etc/rc.d/init.d/openpbx 1.0
+# 
+# chkconfig: 2345 95 10
+# description:	Starts the openpbx service
+# 
+# processname:	openpbx
+# 
+
+TTY=9			# TTY (if you want one) for OpenPBX to run on
+CONSOLE=yes		# Whether or not you want a console
+NOTIFY=root		# Who to notify about crashes
+DUMPDROP=/tmp
+HOSTNAME=`hostname`
+CONFIGFILE=/etc/sysconfig/`basename $0`
+
+# Setup environment
+cd /usr/src
+if [ -f /usr/lib/openpbx/modules/chan_h323.so -a `grep -c ^noload=chan_h323.so /etc/openpbx/modules.conf` -eq 0 ]; then
+	OPENH323DIR=/usr/src/h323/openh323
+	PWLIBDIR=/usr/src/h323/pwlib
+else
+	OPENH323DIR=/usr/src/oh323/openh323
+	PWLIBDIR=/usr/src/oh323/pwlib
+fi
+
+# Put overrides in /etc/sysconfig/openpbx
+[ -f $CONFIGFILE ] && . $CONFIGFILE
+
+LD_LIBRARY_PATH=$OPENH323DIR/lib:$PWLIBDIR/lib
+export OPENH323DIR PWLIBDIR LD_LIBRARY_PATH
+
+# Source function library.
+. /etc/rc.d/init.d/functions
+
+#
+# Don't fork when running "safely"
+#
+ASTARGS="-p"
+if [ "$TTY" != "" ]; then
+	if [ -c /dev/tty${TTY} ]; then
+		TTY=tty${TTY}
+	elif [ -c /dev/vc/${TTY} ]; then
+		TTY=vc/${TTY}
+	else
+		echo "Cannot find your TTY (${TTY})" >&2
+		exit 1
+	fi
+	ASTARGS="${ASTARGS} -vvv"
+	if [ "$CONSOLE" != "no" ]; then
+		ASTARGS="${ASTARGS} -c"
+	fi
+fi
+if [ ! -w ${DUMPDROP} ]; then	
+	echo "Cannot write to ${DUMPDROP}" >&2
+	exit 1
+fi
+
+#
+# Let OpenPBX dump core
+#
+ulimit -c unlimited
+
+#launch_openpbx()
+#{
+#}
+
+SIGMSG=("Hangup" "Interrupt" "Quit" "Illegal instruction" "Trace trap" "IOT Trap" "Bus Error" "Floating-point exception" "Killed" "User-defined signal 1" "Segmentation violation" "User-defined signal 2" "Broken pipe" "Alarm clock" "Termination" "Stack fault")
+
+run_openpbx()
+{
+	while :; do 
+
+		if [ "$TTY" != "" ]; then
+			cd /tmp
+			stty sane < /dev/${TTY}
+			openpbx ${ASTARGS} > /dev/${TTY} 2>&1 < /dev/${TTY}
+		else
+			cd /tmp
+			openpbx ${ASTARGS}
+		fi
+		EXITSTATUS=$?
+		echo "OpenPBX ended with exit status $EXITSTATUS"
+		if [ "$EXITSTATUS" = "0" ]; then
+			# Properly shutdown....
+			echo "OpenPBX shutdown normally."
+			exit 0
+		elif [ $EXITSTATUS -gt 128 ]; then
+			EXITSIGNAL=$(($EXITSTATUS - 128))
+			EXITMSG=$SIGMSG[$EXITSIGNAL]
+			echo "OpenPBX exited on signal $EXITSIGNAL - $EXITMSG."
+			if [ "$NOTIFY" != "" ]; then
+				echo "OpenPBX exited on signal $EXITSIGNAL - $EXITMSG.  Might want to take a peek." | \
+				mail -s "OpenPBX Died ($HOSTNAME)" $NOTIFY
+			fi
+			if [ -f /tmp/core ]; then
+				mv /tmp/core ${DUMPDROP}/core.`hostname`-`date -Iseconds` &
+			fi
+		else
+			echo "OpenPBX died with code $EXITSTATUS.  Aborting."
+			if [ -f /tmp/core ]; then
+				mv /tmp/core ${DUMPDROP}/core.`hostname`-`date -Iseconds` &
+			fi
+			exit 0
+		fi
+		echo "Automatically restarting OpenPBX."
+	done
+}
+
+case "$1" in
+	start)
+		gprintf "Starting openpbx: "
+		run_openpbx >/dev/null 2>&1 &
+		sleep 2	# Give it time to die
+		succeeded=`pidof openpbx|awk '{print NF}'`
+		if [ $succeeded = "0" ]; then
+			failure
+		else
+			success
+		fi
+		echo
+		;;
+	stop)
+		gprintf "Stopping openpbx: "
+		openpbx -r -x "stop gracefully" >/dev/null 2>&1
+		killall -9 mpg123 2>/dev/null
+		success
+		echo
+		;;
+	restart)
+		$0 stop
+		usleep 100000
+		$0 start
+		;;
+	reload)
+		gprintf "Reloading openpbx: "
+		openpbx -r -x "reload" >/dev/null 2>&1
+		success
+		echo
+		;;
+	stopnow)
+		gprintf "Stopping openpbx: "
+		openpbx -r -x "stop now" >/dev/null 2>&1
+		success
+		echo
+		;;
+	restartnow)
+		$0 stopnow
+		$0 start
+		;;
+	fullrestart)
+		$0 stop
+		service zaptel restart
+		$0 start
+		;;
+	fullrestartnow)
+		$0 stopnow
+		service zaptel restart
+		$0 start
+		;;
+	status)
+		succeeded=`pidof openpbx|awk '{print NF}'`
+		if [ $succeeded = "0" ]; then
+			echo "OpenPBX is not running"
+		else
+			echo "OpenPBX is currently running with $succeeded threads"
+		fi
+		;;
+	*)
+		gprintf "*** Usage: $0 {start|stop[now]|reload|[full]restart[now]|status}\n"
+		exit 1
+esac
+
+exit 0
+

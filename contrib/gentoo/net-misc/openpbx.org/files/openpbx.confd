@@ -1,0 +1,98 @@
+# Copyright 1999-2004 Gentoo Foundation
+# Distributed under the terms of the GNU General Public License v2
+# $Header: $
+
+#
+# Additional options for openpbx
+#
+# see "openpbx -h" for a list of options
+#
+OPENPBX_OPTS=""
+
+#
+# User and group to run openpbx as
+#
+# Value: double-colon separated list of user and group, or empty to run as root:
+#
+#
+# "openpbx:openpbx" to run as user "openpbx" and group "openpbx"
+#
+#         "openpbx" to run as user "openpbx" and default group of user openpbx
+#
+#        ":openpbx" to run as user "root" and group "openpbx"
+#
+#                "" to run as user "root" and group "root"
+#
+OPENPBX_USER="openpbx:openpbx"
+
+#
+# Nicelevel
+#
+# Set the priority of the openpbx process
+#
+# Value: (highest) -20..19 (lowest)
+#
+#OPENPBX_NICE="19"
+
+#
+# Wrapper script
+#
+# Value: yes or no/empty
+#
+OPENPBX_WRAPPER="yes"
+
+############# Wrapper script settings #############
+
+#
+# Send crash notifications emails to this address
+# (needs a working mail service and /usr/sbin/sendmail to do so (e.g. ssmtp))
+#
+# Value: Email address or empty to disable
+#
+OPENPBX_NOTIFY_EMAIL="stkn@netdomination.org"
+
+#
+# Send openpbx's output to this terminal
+#
+# Value: Full path to device node or a number
+#
+#OPENPBX_TTY="/dev/tty9"
+
+#
+# Start an openpbx console on the terminal specified by OPENPBX_TTY
+#
+# Warning! Use only for debugging, this is a potential security issue!
+#
+# Value: yes or no/empty
+#
+OPENPBX_CONSOLE="no"
+
+#
+# Maximum size of core files. 
+#
+# Value: Size in bytes, unlimited for no limit or empty to disable.
+# 
+OPENPBX_CORE_SIZE="unlimited"
+
+#
+# OPENPBX_CORE_DIR
+#
+# Value: Directory (will be created if non-existant), default is /tmp
+#
+OPENPBX_CORE_DIR="/var/lib/openpbx/coredump"
+
+#
+# Max number of filedescriptors
+#
+# Value: Number of descriptors
+#
+#OPENPBX_MAX_FD="1024"
+
+#
+# Kill these tasks after openpbx crashed (OPENPBX_WRAPPER=yes only!)
+#
+# Warning! This will kill _ALL_ tasks with the specified names!
+#
+# Value: Space separated list of names in double quotes (e.g. "mpg123 mad")
+#
+#OPENPBX_CLEANUP_ON_CRASH="mpg123 mad"

@@ -1,0 +1,17 @@
+#!/sbin/runscript
+
+depend() {
+	need net logger
+}
+
+start() {
+	ebegin "Starting OpenPBX"
+	/usr/sbin/openpbx
+	eend $? "Failed to start OpenPBX"
+}
+
+stop() {
+	ebegin "Stopping OpenPBX"
+	kill $(cat /var/run/openpbx.pid)
+	eend $? "Failed to stop OpenPBX"
+}

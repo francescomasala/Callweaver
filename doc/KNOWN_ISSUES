@@ -1,0 +1,15 @@
+# vim:tw=80:ft=txt
+
+These are known issues with OpenPBX.Org
+
+SPEAKUP JITTERBUFFER
+
+Problem
+  - In some circumstances, the speakup jitterbuffer leaks memory as per call
+    (http://trac.openpbx.org/cgi-bin/trac.cgi/ticket/244).
+  - There have been reports of the speakup jitterbuffer causing threads to hang
+    using 100% CPU (http://trac.openpbx.org/cgi-bin/trac.cgi/ticket/248).
+
+Solution
+  Use the 'fixed' jitterbuffer implementation instead of 'speakup'
+

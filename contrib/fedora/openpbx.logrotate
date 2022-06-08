@@ -1,0 +1,8 @@
+/var/log/openpbx.org/*log /var/log/openpbx.org/messages {
+  sharedscripts
+  missingok
+  notifempty
+  postrotate
+	/usr/sbin/openpbx -rx 'logger reload' &>/dev/null || :
+  endscript
+}

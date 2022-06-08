@@ -1,0 +1,10 @@
+#!/bin/sh
+cat << END
+/*
+ * version.h 
+ * Automatically generated
+ */
+#define OPENPBX_VERSION "${OPENPBXVERSION}"
+#define OPENPBX_VERSION_NUM ${OPENPBXVERSIONNUM}
+
+END

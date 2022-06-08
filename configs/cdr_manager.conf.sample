@@ -1,0 +1,6 @@
+;
+; OpenPBX Call Management CDR
+;
+[general]
+enabled = no
+

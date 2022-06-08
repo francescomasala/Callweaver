@@ -1,0 +1,32 @@
+Requirements
+------------
+
+- spandsp spandsp-0.0.3_pre24.ebuild (get it from the Gentoo VoIP overlay)
+  or from http://wojia.be/
+- libedit-20061103.ebuild, this version fixes a bug of a header file installtion
+- the openpbx.org-rc2.tar.gz, but you already have this
+- you need to know how to put files in $PORTDIR_OVERLAY and $DISTDIR (see 
+  Gentoo wiki for how to do that)
+- activate $PORTDIR_OVERLAY in your make.conf
+
+Pre-flight check
+----------------
+
+- put the spandsp ebuild in $PORTDIR_OVERLAY/media-libs/spandsp
+- put net-misc in your $PORTDIR_OVERLAY
+- put openpbx.org-rc2.tar.gz in your $DISTDIR
+- cd $PORTDIR_OVERLAY/media-libs/spandsp
+- ebuild spandsp-0.0.3_pre24.ebuild digest
+- cd $PORTDIR_OVERLAY/net-misc/openpbx.org
+- ebuild openpbx.org-rc2.ebuild digest
+
+Installation
+------------
+- emerge -pv openpbx.org-rc2.ebuild
+- set the USE flags you want
+- emerge openpbx.org
+
+You will find more information about how to run/configure OpenPBX.org on
+http://www.OpenPBX.org/
+
+Happy chatting

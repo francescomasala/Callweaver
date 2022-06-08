@@ -1,0 +1,11 @@
+/var/log/openpbx.orgcdr-csv/Master.csv /var/log/openpbx.orgqueue_log /var/log/openpbx.orgevent_log /var/log/openpbx.orgmessages /var/log/openpbx.orgfull {
+        daily
+        missingok
+	compress
+	delaycompress
+        rotate 30
+        sharedscripts
+        postrotate
+                /usr/sbin/invoke-rc.d openpbx logger-reload
+        endscript
+}

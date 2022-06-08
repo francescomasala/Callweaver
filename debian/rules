@@ -1,0 +1,75 @@
+#!/usr/bin/make -f
+# Sample debian/rules that uses cdbs.  Originaly written by Robert Millan.
+# This file is public domain.
+  
+
+# Add here any variable or target overrides you need
+
+  
+include /usr/share/cdbs/1/rules/debhelper.mk
+#include /usr/share/cdbs/1/rules/tarball.mk
+#include /usr/share/cdbs/1/rules/simple-patchsys.mk
+include /usr/share/cdbs/1/class/autotools.mk
+
+ENABLE_DEBUG			:=no
+ENABLE_ODBC			:=no
+ENABLE_MISC			:=yes
+
+DEB_TAR_SRCDIR                  := openpbx-0.2.0
+DEB_AUTO_CLEANUP_RCS            := yes
+
+
+DEB_CONFIGURE_EXTRA_FLAGS	:= \
+    --with-directory-layout=lsb \
+    --with-pbx_ael=yes \
+    --with-app_sql_postgres=yes \
+    --enable-postgresql=yes \
+    --with-res_config_pgsql \
+    --with-res_sqlite=yes \
+    --with-cdr_pgsql=yes \
+    --with-app_meetme=no \
+    --with-chan-capi=yes \
+    --enable-iax-trunking=yes \
+    --with-res_config_curl=yes \
+    --enable-t38=yes
+
+ifeq ($(ENABLE_ODBC), yes)
+ DEB_CONFIGURE_EXTRA_FLAGS += \
+    --with-chan-fax=yes \
+    --enable-jabber=yes \
+    --with-res_jabber=yes \
+    --enable-odbc=yes \
+    --with-cdr_odbc=yes \
+    --with-res_config_odbc=yes \
+    --with-res_odbc=yes
+
+endif
+
+ifeq ($(ENABLE_DEBUG), yes)
+ CFLAGS= -ggdb3 -O0 -DDO_CRASH -DDEBUG_SCHEDULER -DSTACK_BACKTRACES -DDETECT_DEADLOCKS
+ DEB_CONFIGURE_EXTRA_FLAGS += \
+    --enable-debug=yes \
+    --enable-do-crash=yes \
+    --enable-frame-tracing=yes \
+    --enable-valgrind=yes \
+    --enable-debug=yes \
+    --enable-debug-scheduler=yes \
+    --enable-stack-backtraces=yes \
+    --disable-optimization
+endif
+
+ifeq ($(ENABLE_MISC), yes)
+ DEB_CONFIGURE_EXTRA_FLAGS += \
+    --with-chan_bluetooth=yes
+endif
+
+
+DEB_DH_INSTALL_SOURCEDIR	:= debian/tmp
+
+# dh_install cannot handle rename,
+# so need an explicit rule here.
+common-install-arch::
+	sed -e "s,__OPENPBX_SBIN_DIR__,/usr/sbin," contrib/scripts/safe_openpbx > \
+	        debian/tmp/usr/sbin/safe_openpbx
+
+
