@@ -1,12 +1,12 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  *
  * Copyright (C) 1999 - 2005, Digium, Inc.
  *
  * Mark Spencer <markster@digium.com>
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -29,53 +29,52 @@
 #include <string.h>
 #include <stdlib.h>
 
-#include "callweaver.h"
+#include "openpbx.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/apps/app_lookupcidname.c $", "$Revision: 4723 $")
+OPENPBX_FILE_VERSION("$HeadURL$", "$Revision$")
 
-#include "callweaver/lock.h"
-#include "callweaver/file.h"
-#include "callweaver/logger.h"
-#include "callweaver/options.h"
-#include "callweaver/channel.h"
-#include "callweaver/pbx.h"
-#include "callweaver/module.h"
-#include "callweaver/translate.h"
-#include "callweaver/image.h"
-#include "callweaver/phone_no_utils.h"
-#include "callweaver/callweaver_db.h"
+#include "openpbx/lock.h"
+#include "openpbx/file.h"
+#include "openpbx/logger.h"
+#include "openpbx/options.h"
+#include "openpbx/channel.h"
+#include "openpbx/pbx.h"
+#include "openpbx/module.h"
+#include "openpbx/translate.h"
+#include "openpbx/image.h"
+#include "openpbx/phone_no_utils.h"
+#include "openpbx/opbxdb.h"
 
 static char *tdesc = "Look up CallerID Name from local database";
 
-static void *app;
-static const char *name = "LookupCIDName";
-static const char *synopsis = "Look up CallerID Name from local database";
-static const char *syntax = "LookupCIDName()";
-static const char *descrip =
-  "Looks up the Caller*ID number on the active\n"
-  "channel in the CallWeaver database (family 'cidname') and sets the\n"
+static char *app = "LookupCIDName";
+
+static char *synopsis = "Look up CallerID Name from local database";
+
+static char *descrip =
+  "  LookupCIDName: Looks up the Caller*ID number on the active\n"
+  "channel in the OpenPBX database (family 'cidname') and sets the\n"
   "Caller*ID name.  Does nothing if no Caller*ID was received on the\n"
   "channel.  This is useful if you do not subscribe to Caller*ID\n"
   "name delivery, or if you want to change the names on some incoming\n"
   "calls.  Always returns 0.\n";
-
 
 STANDARD_LOCAL_USER;
 
 LOCAL_USER_DECL;
 
 static int
-lookupcidname_exec (struct cw_channel *chan, int argc, char **argv)
+lookupcidname_exec (struct opbx_channel *chan, void *data)
 {
   char dbname[64];
   struct localuser *u;
 
   LOCAL_USER_ADD (u);
   if (chan->cid.cid_num) {
-	if (!cw_db_get ("cidname", chan->cid.cid_num, dbname, sizeof (dbname))) {
-		cw_set_callerid (chan, NULL, dbname, NULL);
+	if (!opbx_db_get ("cidname", chan->cid.cid_num, dbname, sizeof (dbname))) {
+		opbx_set_callerid (chan, NULL, dbname, NULL);
 		  if (option_verbose > 2)
-		    cw_verbose (VERBOSE_PREFIX_3 "Changed Caller*ID name to %s\n",
+		    opbx_verbose (VERBOSE_PREFIX_3 "Changed Caller*ID name to %s\n",
 				 dbname);
 	}
   }
@@ -86,17 +85,15 @@ lookupcidname_exec (struct cw_channel *chan, int argc, char **argv)
 int
 unload_module (void)
 {
-  int res = 0;
   STANDARD_HANGUP_LOCALUSERS;
-  res |= cw_unregister_application (app);
-  return res;
+  return opbx_unregister_application (app);
 }
 
 int
 load_module (void)
 {
-  app = cw_register_application(name, lookupcidname_exec, synopsis, syntax, descrip);
-  return 0;
+  return opbx_register_application (app, lookupcidname_exec, synopsis,
+				   descrip);
 }
 
 char *

@@ -1,12 +1,12 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  *
  * Copyright (C) 1999 - 2005, Digium, Inc.
  *
  * Mark Spencer <markster@digium.com>
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -36,14 +36,14 @@
 #include <fcntl.h>
 #include <unistd.h>
 
-#include "callweaver.h"
+#include "openpbx.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/corelib/term.c $", "$Revision: 4723 $")
+OPENPBX_FILE_VERSION("$HeadURL$", "$Revision$")
 
-#include "callweaver/term.h"
-#include "callweaver/options.h"
-#include "callweaver/lock.h"
-#include "callweaver/utils.h"
+#include "openpbx/term.h"
+#include "openpbx/options.h"
+#include "openpbx/lock.h"
+#include "openpbx/utils.h"
 
 static int vt100compat = 0;
 
@@ -75,7 +75,7 @@ static short convshort(char *s)
 }
 
 
-int cw_term_init(void)
+int opbx_term_init(void)
 {
 	char *term = getenv("TERM");
 	char termfile[256] = "";
@@ -140,21 +140,21 @@ int cw_term_init(void)
 }
 
 
-char *cw_term_color(char *outbuf, const char *inbuf, int fgcolor, int bgcolor, int maxout)
+char *opbx_term_color(char *outbuf, const char *inbuf, int fgcolor, int bgcolor, int maxout)
 {
 	int attr=0;
 	char tmp[40];
 	if (!vt100compat) {
-		cw_copy_string(outbuf, inbuf, maxout);
+		opbx_copy_string(outbuf, inbuf, maxout);
 		return outbuf;
 	}
 	if (!fgcolor && !bgcolor) {
-		cw_copy_string(outbuf, inbuf, maxout);
+		opbx_copy_string(outbuf, inbuf, maxout);
 		return outbuf;
 	}
 	if ((fgcolor & 128) && (bgcolor & 128)) {
 		/* Can't both be highlighted */
-		cw_copy_string(outbuf, inbuf, maxout);
+		opbx_copy_string(outbuf, inbuf, maxout);
 		return outbuf;
 	}
 	if (!bgcolor)
@@ -183,7 +183,7 @@ char *cw_term_color(char *outbuf, const char *inbuf, int fgcolor, int bgcolor, i
 	return outbuf;
 }
 
-char *cw_term_color_code(char *outbuf, int fgcolor, int bgcolor, int maxout)
+char *opbx_term_color_code(char *outbuf, int fgcolor, int bgcolor, int maxout)
 {
 	int attr=0;
 	char tmp[40];
@@ -222,7 +222,7 @@ char *cw_term_color_code(char *outbuf, int fgcolor, int bgcolor, int maxout)
 	return outbuf;
 }
 
-char *cw_term_strip(char *outbuf, char *inbuf, int maxout)
+char *opbx_term_strip(char *outbuf, char *inbuf, int maxout)
 {
 	char *outbuf_ptr = outbuf, *inbuf_ptr = inbuf;
 
@@ -243,10 +243,10 @@ char *cw_term_strip(char *outbuf, char *inbuf, int maxout)
 	return outbuf;
 }
 
-char *cw_term_prompt(char *outbuf, const char *inbuf, int maxout)
+char *opbx_term_prompt(char *outbuf, const char *inbuf, int maxout)
 {
 	if (!vt100compat) {
-		cw_copy_string(outbuf, inbuf, maxout);
+		opbx_copy_string(outbuf, inbuf, maxout);
 		return outbuf;
 	}
 	snprintf(outbuf, maxout, "%c[%d;%d;%dm%c%c[%d;%d;%dm%s",
@@ -257,18 +257,18 @@ char *cw_term_prompt(char *outbuf, const char *inbuf, int maxout)
 	return outbuf;
 }
 
-char *cw_term_prep(void)
+char *opbx_term_prep(void)
 {
 	return prepdata;
 }
 
-char *cw_term_end(void)
+char *opbx_term_end(void)
 {
 	return enddata;
 }
 
 
-char *cw_term_quit(void)
+char *opbx_term_quit(void)
 {
 	return quitdata;
 }

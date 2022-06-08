@@ -4,8 +4,8 @@
 # by Steve Creel <screel@turbs.com>
 # 
 
-# Directory housing the voicemail spool for callweaver
-$dir = "/opt/callweaver.org/var/spool/voicemail";
+# Directory housing the voicemail spool for openpbx
+$dir = "/opt/openpbx.org/var/spool/voicemail";
 
 # Context for which the script should be running
 $context = "default";

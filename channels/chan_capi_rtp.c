@@ -1,7 +1,8 @@
 /*
  * (CAPI*)
  *
- * An implementation of Common ISDN API 2.0 for CallWeaver
+ * An implementation of Common ISDN API 2.0 for
+ * Asterisk / OpenPBX.org
  *
  * Copyright (C) 2006 Cytronics & Melware
  *
@@ -24,21 +25,21 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 
-#include "callweaver/lock.h"
-#include "callweaver/frame.h"
-#include "callweaver/channel.h"
-#include "callweaver/logger.h"
-#include "callweaver/module.h"
-#include "callweaver/pbx.h"
-#include "callweaver/config.h"
-#include "callweaver/options.h"
-#include "callweaver/features.h"
-#include "callweaver/utils.h"
-#include "callweaver/rtp.h"
-#include "callweaver/strings.h"
-#include "callweaver/chan_capi20.h"
-#include "callweaver/chan_capi.h"
-#include "callweaver/chan_capi_rtp.h"
+#include "openpbx/lock.h"
+#include "openpbx/frame.h"
+#include "openpbx/channel.h"
+#include "openpbx/logger.h"
+#include "openpbx/module.h"
+#include "openpbx/pbx.h"
+#include "openpbx/config.h"
+#include "openpbx/options.h"
+#include "openpbx/features.h"
+#include "openpbx/utils.h"
+#include "openpbx/rtp.h"
+#include "openpbx/strings.h"
+#include "openpbx/chan_capi20.h"
+#include "openpbx/chan_capi.h"
+#include "openpbx/chan_capi_rtp.h"
 
 /* RTP settings / NCPI RTP struct */
 
@@ -137,27 +138,27 @@ _cstruct capi_rtp_ncpi(struct capi_pvt *i)
 	if ((i) && (i->owner) &&
 	    (i->bproto == CC_BPROTO_RTP)) {
 		switch(i->codec) {
-		case CW_FORMAT_ALAW:
+		case OPBX_FORMAT_ALAW:
 			ncpi = NCPI_voice_over_ip_alaw;
 			break;
-		case CW_FORMAT_ULAW:
+		case OPBX_FORMAT_ULAW:
 			ncpi = NCPI_voice_over_ip_ulaw;
 			break;
-		case CW_FORMAT_GSM:
+		case OPBX_FORMAT_GSM:
 			ncpi = NCPI_voice_over_ip_gsm;
 			break;
-		case CW_FORMAT_G723_1:
+		case OPBX_FORMAT_G723_1:
 			ncpi = NCPI_voice_over_ip_g723;
 			break;
-		case CW_FORMAT_G726:
+		case OPBX_FORMAT_G726:
 			ncpi = NCPI_voice_over_ip_g726;
 			break;
-		case CW_FORMAT_G729A:
+		case OPBX_FORMAT_G729A:
 			ncpi = NCPI_voice_over_ip_g729;
 			break;
 		default:
 			cc_log(LOG_ERROR, "%s: format %s(%d) invalid.\n",
-				i->vname, cw_getformatname(i->codec), i->codec);
+				i->vname, opbx_getformatname(i->codec), i->codec);
 			break;
 		}
 	}
@@ -170,24 +171,24 @@ _cstruct capi_rtp_ncpi(struct capi_pvt *i)
  */
 int capi_alloc_rtp(struct capi_pvt *i)
 {
-	struct cw_hostent ahp;
+	struct opbx_hostent ahp;
 	struct hostent *hp;
 	struct in_addr addr;
 	struct sockaddr_in us;
 	char temp[MAXHOSTNAMELEN];
 
-	hp = cw_gethostbyname("localhost", &ahp);
+	hp = opbx_gethostbyname("localhost", &ahp);
 	memcpy(&addr, hp->h_addr, sizeof(addr));
 
-	if (!(i->rtp = cw_rtp_new_with_bindaddr(NULL, NULL, 0, 0, addr))) {
+	if (!(i->rtp = opbx_rtp_new_with_bindaddr(NULL, NULL, 0, 0, addr))) {
 		cc_log(LOG_ERROR, "%s: unable to alloc rtp.\n", i->vname);
 		return 1;
 	}
-	cw_rtp_get_us(i->rtp, &us);
-	cw_rtp_set_peer(i->rtp, &us);
+	opbx_rtp_get_us(i->rtp, &us);
+	opbx_rtp_set_peer(i->rtp, &us);
 	cc_verbose(2, 1, VERBOSE_PREFIX_4 "%s: alloc rtp socket on %s:%d\n",
 		i->vname,
-		cw_inet_ntoa(temp, sizeof(temp), us.sin_addr),
+		opbx_inet_ntoa(temp, sizeof(temp), us.sin_addr),
 		ntohs(us.sin_port));
 	i->timestamp = 0;
 	return 0;
@@ -196,13 +197,12 @@ int capi_alloc_rtp(struct capi_pvt *i)
 /*
  * write rtp for a channel
  */
-int capi_write_rtp(struct cw_channel *c, struct cw_frame *f)
+int capi_write_rtp(struct opbx_channel *c, struct opbx_frame *f)
 {
 	struct capi_pvt *i = CC_CHANNEL_PVT(c);
 	_cmsg CMSG;
 	struct sockaddr_in us;
-	int len;
-	unsigned int uslen;
+	int len, uslen;
 	unsigned int *rtpheader;
 	unsigned char buf[256];
 
@@ -213,16 +213,16 @@ int capi_write_rtp(struct cw_channel *c, struct cw_frame *f)
 		return -1;
 	}
 
-	cw_rtp_get_us(i->rtp, &us);
-	cw_rtp_set_peer(i->rtp, &us);
-	if (cw_rtp_write(i->rtp, f) != 0) {
+	opbx_rtp_get_us(i->rtp, &us);
+	opbx_rtp_set_peer(i->rtp, &us);
+	if (opbx_rtp_write(i->rtp, f) != 0) {
 		cc_verbose(3, 0, VERBOSE_PREFIX_2 "%s: rtp_write error, dropping packet.\n",
 			i->vname);
 		return 0;
 	}
 
 	while(1) {
-		len = recvfrom(cw_rtp_fd(i->rtp), buf, sizeof(buf),
+		len = recvfrom(opbx_rtp_fd(i->rtp), buf, sizeof(buf),
 			0, (struct sockaddr *)&us, &uslen);
 		if (len <= 0)
 			break;
@@ -249,7 +249,7 @@ int capi_write_rtp(struct cw_channel *c, struct cw_frame *f)
 		i->send_buffer_handle++;
 
 		cc_verbose(6, 1, VERBOSE_PREFIX_4 "%s: RTP write for NCCI=%#x len=%d(%d) %s ts=%x\n",
-			i->vname, i->NCCI, len, f->datalen, cw_getformatname(f->subclass),
+			i->vname, i->NCCI, len, f->datalen, opbx_getformatname(f->subclass),
 			i->timestamp);
 
 		DATA_B3_REQ_HEADER(&CMSG, capi_ApplID, get_capi_MessageNumber(), 0);
@@ -268,9 +268,9 @@ int capi_write_rtp(struct cw_channel *c, struct cw_frame *f)
 /*
  * read data b3 in RTP mode
  */
-struct cw_frame *capi_read_rtp(struct capi_pvt *i, unsigned char *buf, int len)
+struct opbx_frame *capi_read_rtp(struct capi_pvt *i, unsigned char *buf, int len)
 {
-	struct cw_frame *f;
+	struct opbx_frame *f;
 	struct sockaddr_in us;
 
 	if (!(i->owner))
@@ -281,30 +281,30 @@ struct cw_frame *capi_read_rtp(struct capi_pvt *i, unsigned char *buf, int len)
 		return NULL;
 	}
 
-	cw_rtp_get_us(i->rtp, &us);
-	cw_rtp_set_peer(i->rtp, &us);
+	opbx_rtp_get_us(i->rtp, &us);
+	opbx_rtp_set_peer(i->rtp, &us);
 
-	if (len != sendto(cw_rtp_fd(i->rtp), buf, len, 0, (struct sockaddr *)&us, sizeof(us))) {
+	if (len != sendto(opbx_rtp_fd(i->rtp), buf, len, 0, (struct sockaddr *)&us, sizeof(us))) {
 		cc_verbose(4, 1, VERBOSE_PREFIX_3 "%s: RTP sendto error\n",
 			i->vname);
 		return NULL;
 	}
 
-	if ((f = cw_rtp_read(i->rtp))) {
-		if (f->frametype != CW_FRAME_VOICE) {
+	if ((f = opbx_rtp_read(i->rtp))) {
+		if (f->frametype != OPBX_FRAME_VOICE) {
 			cc_verbose(3, 1, VERBOSE_PREFIX_3 "%s: DATA_B3_IND RTP (len=%d) non voice type=%d\n",
 				i->vname, len, f->frametype);
 			return NULL;
 		}
 		cc_verbose(6, 1, VERBOSE_PREFIX_4 "%s: DATA_B3_IND RTP NCCI=%#x len=%d %s (read/write=%d/%d)\n",
-			i->vname, i->NCCI, len, cw_getformatname(f->subclass),
+			i->vname, i->NCCI, len, opbx_getformatname(f->subclass),
 			i->owner->readformat, i->owner->writeformat);
 		if (i->owner->nativeformats != f->subclass) {
 			cc_verbose(3, 1, VERBOSE_PREFIX_3 "%s: DATA_B3_IND RTP nativeformats=%d, but subclass=%d\n",
 				i->vname, i->owner->nativeformats, f->subclass);
 			i->owner->nativeformats = f->subclass;
-			cw_set_read_format(i->owner, i->owner->readformat);
-			cw_set_write_format(i->owner, i->owner->writeformat);
+			opbx_set_read_format(i->owner, i->owner->readformat);
+			opbx_set_write_format(i->owner, i->owner->writeformat);
 		}
 	}
 	return f;
@@ -380,27 +380,27 @@ void voice_over_ip_profile(struct cc_capi_controller *cp)
 
 	cc_verbose(3, 0, VERBOSE_PREFIX_4 "RTP codec: ");
 	if (payload1 & 0x00000100) {
-		cp->rtpcodec |= CW_FORMAT_ALAW;
+		cp->rtpcodec |= OPBX_FORMAT_ALAW;
 		cc_verbose(3, 0, "G.711-alaw ");
 	}
 	if (payload1 & 0x00000001) {
-		cp->rtpcodec |= CW_FORMAT_ULAW;
+		cp->rtpcodec |= OPBX_FORMAT_ULAW;
 		cc_verbose(3, 0, "G.711-ulaw ");
 	}
 	if (payload1 & 0x00000008) {
-		cp->rtpcodec |= CW_FORMAT_GSM;
+		cp->rtpcodec |= OPBX_FORMAT_GSM;
 		cc_verbose(3, 0, "GSM ");
 	}
 	if (payload1 & 0x00000010) {
-		cp->rtpcodec |= CW_FORMAT_G723_1;
+		cp->rtpcodec |= OPBX_FORMAT_G723_1;
 		cc_verbose(3, 0, "G.723.1 ");
 	}
 	if (payload1 & 0x00000004) {
-		cp->rtpcodec |= CW_FORMAT_G726;
+		cp->rtpcodec |= OPBX_FORMAT_G726;
 		cc_verbose(3, 0, "G.726 ");
 	}
 	if (payload1 & 0x00040000) {
-		cp->rtpcodec |= CW_FORMAT_G729A;
+		cp->rtpcodec |= OPBX_FORMAT_G729A;
 		cc_verbose(3, 0, "G.729");
 	}
 	cc_verbose(3, 0, "\n");

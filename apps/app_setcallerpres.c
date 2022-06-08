@@ -1,12 +1,12 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  *
  * Copyright (C) 1999 - 2005, Digium, Inc.
  *
  * Mark Spencer <markster@digium.com>
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -31,29 +31,32 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "callweaver.h"
+#include "openpbx.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/apps/app_setcallerpres.c $", "$Revision: 4723 $")
+OPENPBX_FILE_VERSION(__FILE__, "$Revision: 7221 $")
 
-#include "callweaver/lock.h"
-#include "callweaver/file.h"
-#include "callweaver/logger.h"
-#include "callweaver/channel.h"
-#include "callweaver/pbx.h"
-#include "callweaver/module.h"
-#include "callweaver/translate.h"
-#include "callweaver/image.h"
-#include "callweaver/callerid.h"
-#include "callweaver/phone_no_utils.h"
+#include "openpbx/lock.h"
+#include "openpbx/file.h"
+#include "openpbx/logger.h"
+#include "openpbx/channel.h"
+#include "openpbx/pbx.h"
+#include "openpbx/module.h"
+#include "openpbx/translate.h"
+#include "openpbx/image.h"
+#include "openpbx/callerid.h"
 
 static char *tdesc = "SetCallerPres Application";
 
-static void *setcallerid_pres_app;
-static const char *setcallerid_pres_name = "SetCallerPres";
-static const char *setcallerid_pres_synopsis = "Set CallerID Presentation";
-static const char *setcallerid_pres_syntax = "SetCallerPres(presentation)";
-static const char *setcallerid_pres_descrip = 
-"Set Caller*ID presentation on a call.\n"
+static char *app = "SetCallerPres";
+
+static char *synopsis = "Set CallerID Presentation";
+
+STANDARD_LOCAL_USER;
+
+LOCAL_USER_DECL;
+
+static char *descrip = 
+"  SetCallerPres(presentation): Set Caller*ID presentation on a call.\n"
 "  Valid presentations are:\n"
 "\n"
 "      allowed_not_screened    : Presentation Allowed, Not Screened\n"
@@ -68,21 +71,18 @@ static const char *setcallerid_pres_descrip =
 "\n"
 ;
 
-STANDARD_LOCAL_USER;
-
-LOCAL_USER_DECL;
-
-static int setcallerid_pres_exec(struct cw_channel *chan, int argc, char **argv)
+static int setcallerid_pres_exec(struct opbx_channel *chan, void *data)
 {
 	struct localuser *u;
 	int pres = -1;
 
 	LOCAL_USER_ADD(u);
 	
-	pres = cw_parse_caller_presentation(argv[0]);
+	pres = opbx_parse_caller_presentation(data);
 
 	if (pres < 0) {
-		cw_log(LOG_WARNING, "'%s' is not a valid presentation (see 'show application SetCallerPres')\n", argv[0]);
+		opbx_log(LOG_WARNING, "'%s' is not a valid presentation (see 'show application SetCallerPres')\n",
+			(char *) data);
 		LOCAL_USER_REMOVE(u);
 		return 0;
 	}
@@ -95,16 +95,22 @@ static int setcallerid_pres_exec(struct cw_channel *chan, int argc, char **argv)
 
 int unload_module(void)
 {
-	int res = 0;
-	res |= cw_unregister_application(setcallerid_pres_app);
+	int res;
+
+	res = opbx_unregister_application(app);
+
 	STANDARD_HANGUP_LOCALUSERS;
+
 	return res;
 }
 
 int load_module(void)
 {
-	setcallerid_pres_app = cw_register_application(setcallerid_pres_name, setcallerid_pres_exec, setcallerid_pres_synopsis, setcallerid_pres_syntax, setcallerid_pres_descrip);
-	return 0;
+	int res;
+	
+	res = opbx_register_application(app, setcallerid_pres_exec, synopsis, descrip);
+
+	return res;
 }
 
 char *description(void)
@@ -122,6 +128,6 @@ int usecount(void)
 #if 0
 char *key()
 {
-	return CW_GPL_KEY;
+	return OPBX_GPL_KEY;
 }
 #endif

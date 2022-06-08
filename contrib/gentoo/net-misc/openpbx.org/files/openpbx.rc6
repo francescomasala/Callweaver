@@ -1,0 +1,235 @@
+#!/sbin/runscript
+# Copyright 1999-2004 Gentoo Foundation
+# Distributed under the terms of the GNU General Public License v2
+# $Header: $
+
+opts="${opts} forcestop reload"
+
+depend() {
+	need net
+	use zaptel mysql postgresql slapd capi
+}
+
+is_running() {
+	if [[ -z "$(pidof openpbx)" ]]; then
+		return 1
+	else
+		PID="$(cat /var/run/openpbx.org/openpbx.pid)"
+		for x in $(pidof openpbx); do
+			if [[ "${x}" = "${PID}" ]]; then
+				return 0
+			fi	
+		done
+	fi
+
+	return 1
+}
+
+openpbx_run_loop() {
+	local OPTS ARGS MSG NICE=""
+	local result=0 signal=0
+
+	# default options
+	OPTS="-f"  # don't fork / detach breaks wrapper script...
+
+	# filter (redundant) arguments
+	ARGS="$(echo "${@}" | sed -e "s:-c\|-f::g")"
+
+	# mangle yes/no options
+	OPENPBX_CONSOLE="$(echo ${OPENPBX_CONSOLE} | tr [:lower:] [:upper:])"
+
+	if [[ -n "${OPENPBX_CORE_SIZE}" ]] &&
+	   [[ "${OPENPBX_CORE_SIZE}" != "0" ]]; then
+		ulimit -c ${OPENPBX_CORE_SIZE}
+
+		if [[ -n "${OPENPBX_CORE_DIR}" ]] && \
+		   [[ ! -d "${OPENPBX_CORE_DIR}" ]]
+		then
+			mkdir -m750 -p "${OPENPBX_CORE_DIR}"
+
+			if [[ -n "${OPENPBX_USER}" ]]; then
+				chown -R "${OPENPBX_USER}" "${OPENPBX_CORE_DIR}"
+			fi
+		fi
+		OPENPBX_CORE_DIR="${OPENPBX_CORE_DIR:-/tmp}"
+
+		cd "${OPENPBX_CORE_DIR}"
+		echo "   Core dump size            : ${OPENPBX_CORE_SIZE}"
+		echo "   Core dump location        : ${OPENPBX_CORE_DIR}"
+	fi
+
+	if [[ -n "${OPENPBX_MAX_FD}" ]]; then
+		ulimit -n ${OPENPBX_MAX_FD}
+		echo "   Max open filedescriptors  : ${OPENPBX_MAX_FD}"
+	fi
+
+	if [[ -n "${OPENPBX_NICE}" ]]; then
+		echo "   Nice level                : ${OPENPBX_NICE}"
+		NICE="/bin/nice -n ${OPENPBX_NICE} --"
+	fi
+
+	if [[ -n "${OPENPBX_NOTIFY_EMAIL}" ]]; then
+		if [[ -x /usr/sbin/sendmail ]]; then
+			echo "   Email notifications go to : ${OPENPBX_NOTIFY_EMAIL}"
+		else
+			echo "   Notifications disabled, /usr/sbin/sendmail doesn't exist or is not executable!"
+			unset OPENPBX_NOTIFY_EMAIL
+		fi
+	fi
+
+	if [[ -n "${OPENPBX_TTY}" ]]; then
+		for x in ${OPENPBX_TTY} \
+			 /dev/tty${OPENPBX_TTY} \
+			 /dev/vc/${OPENPBX_TTY}
+		do
+			if [[ -c "${x}" ]]; then
+				TTY="${x}"
+			fi
+		done
+		[[ -n "${TTY}" ]] && \
+			echo "   Messages are sent to      : ${TTY}"
+	fi
+
+	if [[ "${OPENPBX_CONSOLE}" = "YES" ]] && [[ -n "${TTY}" ]]; then
+		echo "   Starting Openpbx console : ${OPENPBX_CONSOLE}"
+		OPTS="${OPTS} -c"
+	fi
+
+	OPTS="${OPTS} ${ARGS}"
+
+	while :; do
+
+		if [[ -n "${TTY}" ]]; then
+			/usr/bin/stty -F ${TTY} sane
+			${NICE} /usr/sbin/openpbx ${OPTS} >${TTY} 2>&1 <${TTY}
+			result=$?
+		else
+			${NICE} /usr/sbin/openpbx ${OPTS} &>/dev/null
+			result=$?
+		fi		
+
+		if [[ $result -eq 0 ]]; then
+			echo "Openpbx terminated normally"
+			break
+		else
+			if [[ $result -gt 128 ]]; then
+				signal=$((result -  128))
+				MSG="Openpbx terminated with Signal: $signal"
+
+				CORE_TARGET="core-$(date "+%Y%m%d-%h%M%s")"
+
+				local CORE_DUMPED=0
+				if [[ -f "${OPENPBX_CORE_DIR}/core" ]]; then
+					mv "${OPENPBX_CORE_DIR}/core" \
+					   "${OPENPBX_CORE_DIR}/${CORE_TARGET}"
+					CORE_DUMPED=1
+
+				elif [[ -f "${OPENPBX_CORE_DIR}/core.${PID}" ]]; then
+					mv "${OPENPBX_CORE_DIR}/core.${PID}" \
+					   "${OPENPBX_CORE_DIR}/${CORE_TARGET}"
+					CORE_DUMPED=1
+
+				fi
+
+				[[ $CORE_DUMPED -eq 1 ]] && \
+					MSG="${MSG}\n\rCore dumped: ${OPENPBX_CORE_DIR}/${CORE_TARGET}"
+			else
+				MSG="Openpbx terminated with return code: $result"
+			fi
+
+			# kill left-over tasks
+			for X in ${OPENPBX_CLEANUP_ON_CRASH}; do
+				kill -9 $(pidof ${X});
+			done
+		fi
+
+		[[ -n "${TTY}" ]] \
+			&& echo "${MSG}" >${TTY} \
+			|| echo "${MSG}"
+
+
+		if [[ -n "${OPENPBX_NOTIFY_EMAIL}" ]] && \
+		   [[ -x /usr/sbin/sendmail ]]; then
+			echo -e -n "Subject: Openpbx crashed\n\r${MSG}\n\r" |\
+				 /usr/sbin/sendmail "${OPENPBX_NOTIFY_EMAIL}"
+		fi
+		sleep 5
+		echo "Restarting Openpbx..."
+	done
+	return 0
+}
+
+start() {
+	local OPTS USER GROUP PID
+	local tmp x
+
+	if [[ -n "${OPENPBX_NICE}" ]]; then
+		if [[ ${OPENPBX_NICE} -ge -20 ]] && \
+		   [[ ${OPENPBX_NICE} -le  19 ]]; then 
+			OPTS="--nicelevel ${OPENPBX_NICE}"
+		else
+			eerror "Nice value must be between -20 and 19"
+			return 1
+		fi
+	fi
+
+	if [[ -n "${OPENPBX_USER}" ]]; then
+		USER=${OPENPBX_USER/:*/}
+		GROUP=$(echo $OPENPBX_USER | awk -F: '/.*:.*/ { print $2 }')
+		if [[ -n "${USER}" ]]; then
+			OPENPBX_OPTS="${OPENPBX_OPTS} -U ${USER}"
+		fi
+		if [[ -n "${GROUP}" ]]; then
+			OPENPBX_OPTS="${OPENPBX_OPTS} -G ${GROUP}"
+			GROUP=":${GROUP}"	# make it look nice...
+		fi
+		ebegin "Starting Openpbx (as ${USER}${GROUP})"
+	else
+		ebegin "Starting Openpbx (as root)"
+	fi
+
+	if [[ "$(echo ${OPENPBX_WRAPPER} | tr [:upper:] [:lower:])" != "yes" ]]; then
+		start-stop-daemon --start --exec /usr/sbin/openpbx \
+			${OPTS} -- ${OPENPBX_OPTS}
+	else
+		openpbx_run_loop ${OPENPBX_OPTS} 2>/dev/null &
+	fi
+
+	if [[ $result -eq 0 ]]; then
+		# 2 seconds should be enough for openpbx to start
+		sleep 2
+
+		result=$(is_running)
+	fi
+
+	eend $result
+}
+
+forcestop() {
+	ebegin "Stopping Openpbx PBX"
+	start-stop-daemon --stop --pidfile /var/run/openpbx.org/openpbx.pid
+	eend $?
+}
+
+stop() {
+
+	if is_running; then
+		ebegin "Stopping openpbx gracefully"
+		/usr/sbin/openpbx -r -x "stop gracefully" &>/dev/null
+		[[ $? -eq 0 ]] && svc_stop
+		eend
+	else
+
+		eerror "Openpbx is not running!"
+	fi
+}
+
+reload() {
+	if is_running; then
+		ebegin "Forcing openpbx to reload configuration"
+		/usr/sbin/openpbx -r -x "reload" &>/dev/null
+		eend $?
+	else
+		eerror "Openpbx is not running!"
+	fi
+}

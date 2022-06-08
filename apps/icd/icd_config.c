@@ -4,17 +4,17 @@
  * Written by Anthony Minessale II <anthmct at yahoo dot com>
  * Written by Bruce Atherton <bruce at callenish dot com>
  * Additions, Changes and Support by Tim R. Clark <tclark at shaw dot ca>
- * Changed to adopt to jabber interaction and adjusted for CallWeaver.org by
+ * Changed to adopt to jabber interaction and adjusted for OpenPBX.org by
  * Halo Kwadrat Sp. z o.o., Piotr Figurny and Michal Bielicki
  * 
  * This application is a part of:
  * 
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  * Copyright (C) 1999 - 2005, Digium, Inc.
  * Mark Spencer <markster@digium.com>
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -48,15 +48,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "callweaver/logger.h"
-#include "callweaver/icd/icd_types.h"
-#include "callweaver/icd/icd_config.h"
-#include "callweaver/icd/icd_fieldset.h"
-#include "callweaver/icd/icd_common.h"
+#include "openpbx/logger.h"
+#include "openpbx/icd/icd_types.h"
+#include "openpbx/icd/icd_config.h"
+#include "openpbx/icd/icd_fieldset.h"
+#include "openpbx/icd/icd_common.h"
 
 /* This is for getting at the function pointers in the registry */
-#include "callweaver/icd/icd_distributor.h"
-#include "callweaver/icd/icd_list.h"
+#include "openpbx/icd/icd_distributor.h"
+#include "openpbx/icd/icd_list.h"
 
 /*===== Private Types, Variables, and APIs =====*/
 
@@ -65,12 +65,12 @@
 typedef enum {
     ICD_CONFIG_STATE_CREATED, ICD_CONFIG_STATE_INITIALIZED,
     ICD_CONFIG_STATE_CLEARED, ICD_CONFIG_STATE_DESTROYED,
-    ICD_CONFIG_STATE_L, CW_STANDARD
+    ICD_CONFIG_STATE_L, OPBX_STANDARD
 } icd_config_state;
 
 typedef enum {
     ICD_CONFIG_REGNODE_EXACT, ICD_CONFIG_REGNODE_PARENT,
-    ICD_CONFIG_REGNODE_XLATE, ICD_CONFIG_REGNODE_L, CW_STANDARD_FIXME
+    ICD_CONFIG_REGNODE_XLATE, ICD_CONFIG_REGNODE_L, OPBX_STANDARD_FIXME
 } icd_config_regnode_type;
 
 struct icd_config {
@@ -122,7 +122,7 @@ icd_config *create_icd_config(icd_config_registry * registry, char *name)
     ICD_MALLOC(config, sizeof(icd_config));
     config->allocated = 1;
     if (config == NULL) {
-        cw_log(LOG_ERROR, "No memory available to create a new ICD config\n");
+        opbx_log(LOG_ERROR, "No memory available to create a new ICD config\n");
         return NULL;
     }
     config->state = ICD_CONFIG_STATE_CREATED;
@@ -226,7 +226,7 @@ icd_status icd_config__set_value(icd_config * that, char *key, char *setting)
             icd_fieldset__set_value(that->entries, key, setting);
             return ICD_SUCCESS;
         } else {
-            cw_log(LOG_WARNING, "Could not find key %s in registry %s for configuration %s\n", key,
+            opbx_log(LOG_WARNING, "Could not find key %s in registry %s for configuration %s\n", key,
                 correct_null_str(that->registry->name), correct_null_str(that->name));
             return ICD_ENOTFOUND;
         }
@@ -238,7 +238,7 @@ icd_status icd_config__set_value(icd_config * that, char *key, char *setting)
         child_regnode = icd_fieldset__get_value(that->registry->entries, child_key);
         /* If no child, we have a registered key with no valid value. This is always wrong. */
         if (child_regnode == NULL) {
-            cw_log(LOG_WARNING, "Could not find child key %s in registry %s for configuration %s\n", child_key,
+            opbx_log(LOG_WARNING, "Could not find child key %s in registry %s for configuration %s\n", child_key,
                 correct_null_str(that->registry->name), correct_null_str(that->name));
             ICD_STD_FREE(child_key);
             return ICD_ENOTFOUND;
@@ -246,7 +246,7 @@ icd_status icd_config__set_value(icd_config * that, char *key, char *setting)
         ICD_STD_FREE(child_key);
         icd_fieldset__set_value(that->entries, key, child_regnode->value);
     } else {
-        cw_log(LOG_ERROR, "Config Registry %s error, invalid registry type for key %s\n",
+        opbx_log(LOG_ERROR, "Config Registry %s error, invalid registry type for key %s\n",
             correct_null_str(that->name), key);
     }
     return ICD_SUCCESS;
@@ -269,7 +269,7 @@ icd_status icd_config__set_raw(icd_config * that, char *key, void *data)
     /* We still need to check for validation of this entry, even if raw. */
     regnode = (icd_config_registry_node *) icd_fieldset__get_value(that->registry->entries, key);
     if (regnode == NULL) {
-        cw_log(LOG_WARNING, "Could not find key %s in registry %s for configuration %s\n", key,
+        opbx_log(LOG_WARNING, "Could not find key %s in registry %s for configuration %s\n", key,
             correct_null_str(that->registry->name), correct_null_str(that->name));
         return ICD_ENOTFOUND;
     }
@@ -429,7 +429,7 @@ icd_config_registry *create_icd_config_registry(char *name)
     /* make a new config from scratch */
     ICD_MALLOC(registry, sizeof(icd_config_registry));
     if (registry == NULL) {
-        cw_log(LOG_ERROR, "No memory available to create a new ICD Config Registry\n");
+        opbx_log(LOG_ERROR, "No memory available to create a new ICD Config Registry\n");
         return NULL;
     }
     registry->allocated = 1;
@@ -510,13 +510,13 @@ icd_status icd_config_registry__register(icd_config_registry * that, char *key)
     /* Check to make sure it isn't already in there */
     node = (icd_config_registry_node *) icd_fieldset__get_value(that->entries, key);
     if (node != NULL) {
-        cw_log(LOG_WARNING, "Configuration %s Registry key '%s' is duplicated\n", correct_null_str(that->name),
+        opbx_log(LOG_WARNING, "Configuration %s Registry key '%s' is duplicated\n", correct_null_str(that->name),
             key);
         return ICD_EGENERAL;
     }
     ICD_MALLOC(node, sizeof(icd_config_registry_node));
     if (node == NULL) {
-        cw_log(LOG_ERROR, "No memory available to create a new entry in ICD Config Registry %s\n",
+        opbx_log(LOG_ERROR, "No memory available to create a new entry in ICD Config Registry %s\n",
             correct_null_str(that->name));
         return ICD_ERESOURCE;;
     }
@@ -543,7 +543,7 @@ icd_status icd_config_registry__register_ptr(icd_config_registry * that, char *k
     child_key = icd_config__create_child_key(key, keysetting);
     child_node = (icd_config_registry_node *) icd_fieldset__get_value(that->entries, child_key);
     if (child_node != NULL) {
-        cw_log(LOG_WARNING, "Configuration %s Registry key '%s' for '%s' is duplicated.\n",
+        opbx_log(LOG_WARNING, "Configuration %s Registry key '%s' for '%s' is duplicated.\n",
             correct_null_str(that->name), key, correct_null_str(value));
         ICD_STD_FREE(child_key);
         return ICD_EGENERAL;
@@ -554,7 +554,7 @@ icd_status icd_config_registry__register_ptr(icd_config_registry * that, char *k
     if (parent_node == NULL) {
         ICD_MALLOC(parent_node, sizeof(icd_config_registry_node));
         if (parent_node == NULL) {
-            cw_log(LOG_ERROR, "No memory available to create a parent entry in ICD Config Registry %s\n",
+            opbx_log(LOG_ERROR, "No memory available to create a parent entry in ICD Config Registry %s\n",
                 correct_null_str(that->name));
             return ICD_ERESOURCE;;
         }
@@ -570,7 +570,7 @@ icd_status icd_config_registry__register_ptr(icd_config_registry * that, char *k
 
     ICD_MALLOC(child_node, sizeof(icd_config_registry_node));
     if (child_node == NULL) {
-        cw_log(LOG_ERROR, "No memory available to create a new entry in ICD Config Registry %s\n",
+        opbx_log(LOG_ERROR, "No memory available to create a new entry in ICD Config Registry %s\n",
             correct_null_str(that->name));
         return ICD_ERESOURCE;;
     }
@@ -810,7 +810,7 @@ void *icd_config__get_param(icd_config * that, char *name)
     void_hash_table *hash = icd_config__get_value(that, "params");
 
     if (!hash)
-        cw_verbose("WTF\n");
+        opbx_verbose("WTF\n");
     return vh_read(hash, name);
 }
 

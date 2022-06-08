@@ -2,7 +2,7 @@
  * app_nconference
  *
  * NConference
- * A channel independent conference application for CallWeaver
+ * A channel independent conference application for Openpbx
  *
  * Copyright (C) 2002, 2003 Navynet SRL
  * http://www.navynet.it
@@ -25,9 +25,8 @@
 #include "member.h"
 #include "frame.h"
 #include "sounds.h"
-#include "cli.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/apps/nconference/cli.c $", "$Revision: 4723 $");
+OPENPBX_FILE_VERSION(__FILE__, "$Revision: 2308 $");
 
 STANDARD_LOCAL_USER ;
 LOCAL_USER_DECL;
@@ -37,33 +36,39 @@ LOCAL_USER_DECL;
  * ************************************************************************/
 /*
 
-static void *admin_app;
-static char *admin_name = "NConferenceAdmin";
-static char *admin_synopsis= "NConference participant count";
-static char *admin_syntax = "NConference(confno[, var])";
-static char *admin_description =
-"Plays back the number of users in the specified\n"
+static char *app_admin = "NConferenceAdmin";
+static char *descr_admin =
+"  NConference(confno[|var]): Plays back the number of users in the specified\n"
 "conference. If var is specified, playback will be skipped and the value\n"
 "will be returned in the variable. Returns 0.\n";
 
 // TODO - Do it if someone needs it
 
-static int app_admin_exec(struct cw_channel *chan, int argc, char **argv)
+static char *synopsis_admin = "NConference participant count";
+
+static int app_admin_exec(struct opbx_channel *chan, void *data)
 {
 	struct localuser *u;
-	struct cw_conference *conf;
+	struct opbx_conference *conf;
 
-	if (argc < 2 || argc > 3 || !argv[0][0] || !argv[1][0]) {
-		cw_log(LOG_ERROR, "Syntax: %s\n", admin_syntax);
-		return -1;
+	if (data && !opbx_strlen_zero(data)) {		
+		params = opbx_strdupa((char *) data);
+		confno = strsep(&params, "|");
+		command = strsep(&params, "|");
+		caller = strsep(&params, "|");
+
+		if (!command) {
+			opbx_log(LOG_WARNING, "requires a command!\n");
+			return -1;
+		}
+
+		// Find the right conference 
+		if (!(conf = find_conf(argv[2]))) {
+			return -1;
+		}
+
+//			opbx_mutex_unlock(&conflock);
 	}
-
-	// Find the right conference 
-	if (!(conf = find_conf(argv[0]))) {
-		return -1;
-	}
-
-//	cw_mutex_unlock(&conflock);
 
 	LOCAL_USER_ADD(u);
 	LOCAL_USER_REMOVE(u);
@@ -76,46 +81,51 @@ static int app_admin_exec(struct cw_channel *chan, int argc, char **argv)
  * ***************************************************************/
 
 
-static void *count_app;
-static char *count_name = "NConferenceCount";
-static char *count_synopsis= "NConference members count";
-static char *count_syntax = "NConferenceCount(confno[, var])";
-static char *count_description =
-"Plays back the number of users in the specified\n"
+static char *app_count = "NConferenceCount";
+static char *descr_count =
+"  NConference(confno[|var]): Plays back the number of users in the specified\n"
 "conference to the conference members. \n"
 "If var is specified, playback will be skipped and the value\n"
 "will be returned in the variable. Returns 0.\n";
 
+static char *synopsis_count = "NConference members count";
 
-static int app_count_exec(struct cw_channel *chan, int argc, char **argv)
+static int app_count_exec(struct opbx_channel *chan, void *data)
 {
 	struct localuser *u;
-
+	
 	int res = 0;
-	struct cw_conference *conf;
+	struct opbx_conference *conf;
 	int count;
+	char *confnum, *localdata;
 	char val[80] = "0"; 
 
-	if (argc < 1 || argc > 2 || !argv[0][0]) {
-		cw_log(LOG_ERROR, "Syntax: %s\n", count_syntax);
+	if (!data || opbx_strlen_zero(data)) {
+		opbx_log(LOG_WARNING, "NConferenceCount requires an argument (conference number)\n");
 		return -1;
 	}
 
+	localdata = opbx_strdupa(data);
+
 	LOCAL_USER_ADD(u);
 
-	conf = find_conf(argv[0]);
+	confnum = strsep(&localdata, "|");       
+
+	conf = find_conf(confnum);
 
 	if (conf) {
-		cw_mutex_lock(&conf->lock);
+		opbx_mutex_lock(&conf->lock);
 		count = conf->membercount;
-		cw_mutex_unlock(&conf->lock);
+		opbx_mutex_unlock(&conf->lock);
 	}
 	else
 		count = 0;
 
-	if (argc > 1 && argv[1][0]) {
+	if (localdata && !opbx_strlen_zero(localdata)){
+		pbx_builtin_setvar_helper(chan, localdata, "");
+		/* have var so load it and exit */
 		snprintf(val, sizeof(val), "%i", count);
-		pbx_builtin_setvar_helper(chan, argv[1], val);
+		pbx_builtin_setvar_helper(chan, localdata, val);
 	} else if (conf != NULL) {
 		char buf[10];
 		snprintf(buf, sizeof(buf), "%d", count);
@@ -141,7 +151,7 @@ static char nconference_admin_usage[] =
 	"       <command> can be: kick, list, lock, mute, show, unlock, unmute\n"
 ;
 
-static struct cw_cli_entry nconference_admin_cli = { 
+static struct opbx_cli_entry nconference_admin_cli = { 
 	{ "NConference", NULL, NULL },
 	nconference_admin_exec,
 	"Administration Tool for NConference",
@@ -151,8 +161,8 @@ static struct cw_cli_entry nconference_admin_cli = {
 
 int nconference_admin_exec( int fd, int argc, char *argv[] )
 {
-	struct cw_conference *conf 	= NULL;
-	struct cw_conf_member *member	= NULL;
+	struct opbx_conference *conf 	= NULL;
+	struct opbx_conf_member *member	= NULL;
 	char cmdline [512];
 	int i = 0;
 	int total = 0;
@@ -161,32 +171,32 @@ int nconference_admin_exec( int fd, int argc, char *argv[] )
 		return RESULT_SHOWUSAGE ;
 
 	if (argc > 4)
-		cw_cli(fd, "Invalid Arguments.\n");
+		opbx_cli(fd, "Invalid Arguments.\n");
 
 	// Check for length so no buffer will overflow... 
 	for (i = 0; i < argc; i++) {
 		if (strlen(argv[i]) > 100)
-			cw_cli(fd, "Invalid Arguments.\n");
+			opbx_cli(fd, "Invalid Arguments.\n");
 	}
 
 	if (argc == 2 && strstr(argv[1], "show") ) {
 		// Show all the conferences 
 		conf = conflist;
 		if (!conf) {
-			cw_cli(fd, "No active conferences.\n");
+			opbx_cli(fd, "No active conferences.\n");
 			return RESULT_SUCCESS;
 		}
-		cw_cli(fd, " %-s    %7s\n", "Conf. Num", "mEMBERS");
+		opbx_cli(fd, " %-s    %7s\n", "Conf. Num", "mEMBERS");
 		while(conf) {
 			if (conf->membercount == 0)
-				cw_copy_string(cmdline, "N/A ", sizeof(cmdline) );
+				opbx_copy_string(cmdline, "N/A ", sizeof(cmdline) );
 			else 
 				snprintf(cmdline, sizeof(cmdline), "%4d", conf->membercount);
-			cw_cli(fd, " %-9s    %7d\n", conf->name, conf->membercount );
+			opbx_cli(fd, " %-9s    %7d\n", conf->name, conf->membercount );
 			total += conf->membercount; 	
 			conf = conf->next;
 		}
-		cw_cli(fd, "*Total number of members: %d\n", total);
+		opbx_cli(fd, "*Total number of members: %d\n", total);
 		return RESULT_SUCCESS;
 	}
 
@@ -197,7 +207,7 @@ int nconference_admin_exec( int fd, int argc, char *argv[] )
 
 	/* Find the right conference */
 	if (!(conf = find_conf(argv[2]))) {
-		cw_cli(fd, "No such conference: %s.\n", argv[2]);
+		opbx_cli(fd, "No such conference: %s.\n", argv[2]);
 			return RESULT_SUCCESS;
 	}
 
@@ -205,7 +215,7 @@ int nconference_admin_exec( int fd, int argc, char *argv[] )
 	if (argc > 3 ) {
 	    member = find_member(conf,argv[3] );
 	    if ( strcmp( argv[3],"all" ) && ( member == NULL ) ) {
-		cw_cli(fd, "No such member: %s in conference %s.\n", argv[3], argv[2]);
+		opbx_cli(fd, "No such member: %s in conference %s.\n", argv[3], argv[2]);
 			return RESULT_SUCCESS;
 	    }
 	}
@@ -215,10 +225,10 @@ int nconference_admin_exec( int fd, int argc, char *argv[] )
 	if      ( !strcmp(argv[1], "list") ) {
 		member = conf->memberlist;
 		total = 0;
-		cw_cli(fd, " %-14s  %-14s  %9s %6s %3s\n", "Channel", "Type","Speaking","Muted","VAD");
+		opbx_cli(fd, " %-14s  %-14s  %9s %6s %3s\n", "Channel", "Type","Speaking","Muted","VAD");
 		while ( member != NULL ) 
 		{
-		    cw_cli(fd, " %-14s  %-14s  %9d %6d %3d\n", 
+		    opbx_cli(fd, " %-14s  %-14s  %9d %6d %3d\n", 
 			member->chan->name ,
 			membertypetostring( member->type ),
 			member->is_speaking,
@@ -228,11 +238,11 @@ int nconference_admin_exec( int fd, int argc, char *argv[] )
 		    total ++;
 		    member = member->next ;
 		}
-		cw_cli(fd, "*Total members: %d \n", total );
+		opbx_cli(fd, "*Total members: %d \n", total );
 	}
 	else if ( !strcmp(argv[1], "unlock") ) {
 	    if ( conf->is_locked == 0 )
-		cw_cli(fd, "Conference: %s is already unlocked.\n", conf->name);
+		opbx_cli(fd, "Conference: %s is already unlocked.\n", conf->name);
  	    else { 
 		conf->is_locked = 0;
 	        add_command_to_queue( conf, NULL, CONF_ACTION_QUEUE_SOUND, 0, "conf-unlockednow" );
@@ -240,7 +250,7 @@ int nconference_admin_exec( int fd, int argc, char *argv[] )
 	}
 	else if ( !strcmp(argv[1], "lock") ) {
 	    if ( conf->is_locked == 1 )
-		cw_cli(fd, "Conference: %s is already locked.\n", conf->name);
+		opbx_cli(fd, "Conference: %s is already locked.\n", conf->name);
  	    else { 
 		conf->is_locked = 1;
 	        add_command_to_queue( conf, NULL, CONF_ACTION_QUEUE_SOUND, 0, "conf-lockednow" );
@@ -256,7 +266,7 @@ int nconference_admin_exec( int fd, int argc, char *argv[] )
 	    {
 		member->talk_mute = 1;
 		conference_queue_sound( member, "conf-muted" );
-		cw_cli(fd, "Conference: %s - Member %s is now muted.\n", conf->name, member->chan->name);
+		opbx_cli(fd, "Conference: %s - Member %s is now muted.\n", conf->name, member->chan->name);
 	    }
 	}
 	else if ( !strcmp(argv[1], "unmute") ) {
@@ -267,20 +277,20 @@ int nconference_admin_exec( int fd, int argc, char *argv[] )
 	    {
 		member->talk_mute = 0;
 		conference_queue_sound( member, "conf-unmuted" );
-		cw_cli(fd, "Conference: %s - Member %s is now unmuted.\n", conf->name, member->chan->name);
+		opbx_cli(fd, "Conference: %s - Member %s is now unmuted.\n", conf->name, member->chan->name);
 	    }
 	}
 
 	else if ( !strcmp(argv[1], "kick") ) {
 	    if ( member == NULL ) {
-		    cw_cli(fd, "Conference: %s - Member is not correct.\n", conf->name);
+		    opbx_cli(fd, "Conference: %s - Member is not correct.\n", conf->name);
 	    }
 	    else 
 	    {
 		queue_incoming_silent_frame(member,5);
 		conference_queue_sound( member, "conf-kicked" );
 		member->force_remove_flag = 1;
-		cw_cli(fd, "Conference: %s - Member %s has been kicked.\n", conf->name, member->chan->name);
+		opbx_cli(fd, "Conference: %s - Member %s has been kicked.\n", conf->name, member->chan->name);
 	    }
 	}
 
@@ -294,8 +304,8 @@ int nconference_admin_exec( int fd, int argc, char *argv[] )
 static char *nconference_admin_complete(char *line, char *word, int pos, int state) {
 #define CONF_COMMANDS 7
 	int which = 0, x = 0;
-	struct cw_conference *cnf 	= NULL;
-	struct cw_conf_member *usr 	= NULL;
+	struct opbx_conference *cnf 	= NULL;
+	struct opbx_conf_member *usr 	= NULL;
 	char *confno 			= NULL;
 	char usrno[50] 			= "";
 	char cmds[CONF_COMMANDS][20] 	= {"lock", "unlock", "mute", "unmute", "kick", "list", "show"};
@@ -313,7 +323,7 @@ static char *nconference_admin_complete(char *line, char *word, int pos, int sta
 	} 
 	else if (pos == 2) {
 		// Conference Number 
-		cw_mutex_lock(&conflist_lock);
+		opbx_mutex_lock(&conflist_lock);
 		cnf = conflist;
 		while(cnf) {
 			if (!strncasecmp(word, cnf->name, strlen(word))) {
@@ -322,7 +332,7 @@ static char *nconference_admin_complete(char *line, char *word, int pos, int sta
 			}
 			cnf = cnf->next;
 		}
-		cw_mutex_unlock(&conflist_lock);
+		opbx_mutex_unlock(&conflist_lock);
 		return cnf ? strdup(cnf->name) : NULL;
 	} 
 	else if (pos == 3) {
@@ -333,10 +343,10 @@ static char *nconference_admin_complete(char *line, char *word, int pos, int sta
 				return strdup("all");
 			}
 			which++;
-			cw_mutex_lock(&conflist_lock);
+			opbx_mutex_lock(&conflist_lock);
 			cnf = conflist;
 
-			myline = cw_strdupa(line);
+			myline = opbx_strdupa(line);
 			if ( strsep(&myline, " ") && strsep(&myline, " ") && !confno) {
 				while( (confno = strsep(&myline, " ") ) && ( strcmp(confno, " ") == 0 ) )
 					;
@@ -361,7 +371,7 @@ static char *nconference_admin_complete(char *line, char *word, int pos, int sta
 					usr = usr->next;
 				}
 			}
-			cw_mutex_unlock(&conflist_lock);
+			opbx_mutex_unlock(&conflist_lock);
 			return usr ? strdup(usrno) : NULL;
 		}
 	}
@@ -375,16 +385,16 @@ static char *nconference_admin_complete(char *line, char *word, int pos, int sta
 
 void register_conference_cli( void ) 
 {
-	cw_cli_register( &nconference_admin_cli ) ;
-	count_app = cw_register_application(count_name, app_count_exec, count_synopsis, count_syntax, count_description);
-	//admin_app = cw_register_application(admin_name, app_admin_exec, admin_synopsis, admin_syntax, admin_description);
+	opbx_cli_register( &nconference_admin_cli ) ;
+	opbx_register_application(app_count, app_count_exec, synopsis_count, descr_count);
+	//opbx_register_application(app_admin, app_admin_exec, synopsis_admin, descr_admin);
 }
 
 void unregister_conference_cli( void )
 {
-	cw_cli_unregister( &nconference_admin_cli ) ;
-	cw_unregister_application(count_app);
-	//cw_unregister_application(app_admin);
+	opbx_cli_unregister( &nconference_admin_cli ) ;
+	opbx_unregister_application(app_count);
+	//opbx_unregister_application(app_admin);
 }
 
 

@@ -1,27 +1,27 @@
-diff -u -r festival-1.4.3/lib/tts.scm festival-1.4.3-callweaver/lib/tts.scm
+diff -u -r festival-1.4.3/lib/tts.scm festival-1.4.3-openpbx/lib/tts.scm
 --- festival-1.4.3/lib/tts.scm	2003-01-09 07:39:22.000000000 -0800
-+++ festival-1.4.3-callweaver/lib/tts.scm	2003-08-14 12:07:00.000000000 -0700
++++ festival-1.4.3-openpbx/lib/tts.scm	2003-08-14 12:07:00.000000000 -0700
 @@ -234,6 +234,17 @@
         (utt.synth
  	(eval (list 'Utterance 'Text string))))))
  
-+;; begin tts_textcallweaver
-+(define (tts_textcallweaver string mode)
-+  "(tts_textcallweaver STRING MODE)
++;; begin tts_textopenpbx
++(define (tts_textopenpbx string mode)
++  "(tts_textopenpbx STRING MODE)
 +Apply tts to STRING.  This function is specifically designed for
 +use in server mode so a single function call may synthesize the string.
 +This function name may be added to the server safe functions."
-+  (utt.send.wave.callweaver 
++  (utt.send.wave.openpbx 
 +   (utt.synth
 +    (eval (list 'Utterance 'Text string)))))
-+;; end tts_textcallweaver
++;; end tts_textopenpbx
 +
  (define (tts_return_to_client)
    "(tts_return_to_client)
  This function is called by clients who wish to return waveforms of
-diff -u -r festival-1.4.3/src/arch/festival/wave.cc festival-1.4.3-callweaver/src/arch/festival/wave.cc
+diff -u -r festival-1.4.3/src/arch/festival/wave.cc festival-1.4.3-openpbx/src/arch/festival/wave.cc
 --- festival-1.4.3/src/arch/festival/wave.cc	2003-01-13 11:09:55.000000000 -0800
-+++ festival-1.4.3-callweaver/src/arch/festival/wave.cc	2003-08-14 12:10:53.000000000 -0700
++++ festival-1.4.3-openpbx/src/arch/festival/wave.cc	2003-08-14 12:10:53.000000000 -0700
 @@ -381,6 +381,7 @@
  	type = "nist";
      else
@@ -34,8 +34,8 @@ diff -u -r festival-1.4.3/src/arch/festival/wave.cc festival-1.4.3-callweaver/sr
      return utt;
  }
  
-+// begin utt_send_wave_callweaver()
-+static LISP utt_send_wave_callweaver(LISP utt)
++// begin utt_send_wave_openpbx()
++static LISP utt_send_wave_openpbx(LISP utt)
 +{
 +    // Send the waveform to a client (must be acting as server)
 +    EST_Utterance *u = utterance(utt);
@@ -70,7 +70,7 @@ diff -u -r festival-1.4.3/src/arch/festival/wave.cc festival-1.4.3-callweaver/sr
 +
 +    return utt;
 +}
-+// end utt_send_wave_callweaver()
++// end utt_send_wave_openpbx()
 +
  static LISP send_sexpr_to_client(LISP l)
  {
@@ -80,13 +80,13 @@ diff -u -r festival-1.4.3/src/arch/festival/wave.cc festival-1.4.3-callweaver/sr
    Sends wave in UTT to client.  If not in server mode gives an error\n\
    Note the client must be expecting to receive the waveform.");
 +
-+// begin callweaver mod
-+    init_subr_1("utt.send.wave.callweaver",utt_send_wave_callweaver,
-+ "(utt.send.wave.callweaver UTT)\n\
++// begin openpbx mod
++    init_subr_1("utt.send.wave.openpbx",utt_send_wave_openpbx,
++ "(utt.send.wave.openpbx UTT)\n\
 +  Sends wave in UTT to client.  If not in server mode gives an error\n\
 +  Note the client must be expecting to receive the waveform. The waveform\n\
-+  is rescaled and resampled according to what callweaver needs");
-+// end callweaver mod
++  is rescaled and resampled according to what openpbx needs");
++// end openpbx mod
 +
      init_subr_1("send_sexpr_to_client", send_sexpr_to_client,
   "(send_sexpr_to_client SEXPR)\n\

@@ -1,5 +1,5 @@
-callweaver (1.2.0-1) unstable; urgency=low
+openpbx (1.2-RC3-2469) opo; urgency=low
 
-  * SVN checkout build for callweaver RC branch
-  
- -- Massimo Cetra <devel@navynet.it>  Sun,  6 May 2007 16:28:16 +0100
+  * Openpbx.org 1.2 initial release.
+
+ -- Massimo Cetra <devel@navynet.it>  Tue,  3 Jan 2006 20:41:15 +0100

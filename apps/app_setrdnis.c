@@ -1,13 +1,13 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  *
  * Copyright (C) 1999 - 2005, Digium, Inc.
  *
  * Mark Spencer <markster@digium.com>
  * Oliver Daudey <traveler@xs4all.nl>
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -30,29 +30,29 @@
 #include <string.h>
 #include <stdlib.h>
 
-#include "callweaver.h"
+#include "openpbx.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/apps/app_setrdnis.c $", "$Revision: 4723 $")
+OPENPBX_FILE_VERSION("$HeadURL$", "$Revision$")
 
-#include "callweaver/lock.h"
-#include "callweaver/file.h"
-#include "callweaver/logger.h"
-#include "callweaver/channel.h"
-#include "callweaver/pbx.h"
-#include "callweaver/module.h"
-#include "callweaver/translate.h"
-#include "callweaver/image.h"
-#include "callweaver/phone_no_utils.h"
-#include "callweaver/utils.h"
+#include "openpbx/lock.h"
+#include "openpbx/file.h"
+#include "openpbx/logger.h"
+#include "openpbx/channel.h"
+#include "openpbx/pbx.h"
+#include "openpbx/module.h"
+#include "openpbx/translate.h"
+#include "openpbx/image.h"
+#include "openpbx/phone_no_utils.h"
+#include "openpbx/utils.h"
 
 static char *tdesc = "Set RDNIS Number";
 
-static void *setrdnis_app;
-static const char *setrdnis_name = "SetRDNIS";
-static const char *setrdnis_synopsis = "Set RDNIS Number";
-static const char *setrdnis_syntax = "SetRDNIS(cnum)";
-static const char *setrdnis_descrip = 
-"Set RDNIS Number on a call to a new\n"
+static char *app = "SetRDNIS";
+
+static char *synopsis = "Set RDNIS Number";
+
+static char *descrip = 
+"  SetRDNIS(cnum): Set RDNIS Number on a call to a new\n"
 "value.  Always returns 0\n"
 "SetRDNIS has been deprecated in favor of the function\n"
 "CALLERID(rdnis)\n";
@@ -61,28 +61,38 @@ STANDARD_LOCAL_USER;
 
 LOCAL_USER_DECL;
 
-static int setrdnis_exec(struct cw_channel *chan, int argc, char **argv)
+static int setrdnis_exec(struct opbx_channel *chan, void *data)
 {
 	struct localuser *u;
-	char *n, *l;
+	char *opt, *n, *l;
+	char *tmp = NULL;
 	static int deprecation_warning = 0;
 
+	LOCAL_USER_ADD(u);
+	
 	if (!deprecation_warning) {
-		cw_log(LOG_WARNING, "SetRDNIS is deprecated, please use Set(CALLERID(rdnis)=value) instead.\n");
+		opbx_log(LOG_WARNING, "SetRDNIS is deprecated, please use Set(CALLERID(rdnis)=value) instead.\n");
 		deprecation_warning = 1;
 	}
 
-	LOCAL_USER_ADD(u);
+	if (data)
+		tmp = opbx_strdupa(data);
+	else
+		tmp = "";	
 
+	opt = strchr(tmp, '|');
+	if (opt)
+		*opt = '\0';
+	
 	n = l = NULL;
-	cw_callerid_parse(argv[0], &n, &l);
+	opbx_callerid_parse(tmp, &n, &l);
 	if (l) {
-		cw_shrink_phone_number(l);
-		cw_mutex_lock(&chan->lock);
+		opbx_shrink_phone_number(l);
+		opbx_mutex_lock(&chan->lock);
 		if (chan->cid.cid_rdnis)
 			free(chan->cid.cid_rdnis);
 		chan->cid.cid_rdnis = (l[0]) ? strdup(l) : NULL;
-		cw_mutex_unlock(&chan->lock);
+		opbx_mutex_unlock(&chan->lock);
 	}
 
 	LOCAL_USER_REMOVE(u);
@@ -92,16 +102,13 @@ static int setrdnis_exec(struct cw_channel *chan, int argc, char **argv)
 
 int unload_module(void)
 {
-	int res = 0;
 	STANDARD_HANGUP_LOCALUSERS;
-	res |= cw_unregister_application(setrdnis_app);
-	return res;
+	return opbx_unregister_application(app);
 }
 
 int load_module(void)
 {
-	setrdnis_app = cw_register_application(setrdnis_name, setrdnis_exec, setrdnis_synopsis, setrdnis_syntax, setrdnis_descrip);
-	return 0;
+	return opbx_register_application(app, setrdnis_exec, synopsis, descrip);
 }
 
 char *description(void)

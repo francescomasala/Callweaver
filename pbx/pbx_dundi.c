@@ -1,12 +1,12 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  *
  * Copyright (C) 1999 - 2005, Digium, Inc.
  *
  * Mark Spencer <markster@digium.com>
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -47,29 +47,29 @@
 #endif
 #include <zlib.h>
 
-#include "callweaver.h"
+#include "openpbx.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/pbx/pbx_dundi.c $", "$Revision: 4723 $")
+OPENPBX_FILE_VERSION("$HeadURL$", "$Revision$")
 
-#include "callweaver/file.h"
-#include "callweaver/logger.h"
-#include "callweaver/channel.h"
-#include "callweaver/config.h"
-#include "callweaver/options.h"
-#include "callweaver/pbx.h"
-#include "callweaver/module.h"
-#include "callweaver/frame.h"
-#include "callweaver/file.h"
-#include "callweaver/cli.h"
-#include "callweaver/lock.h"
-#include "callweaver/dundi.h"
-#include "callweaver/sched.h"
-#include "callweaver/io.h"
-#include "callweaver/utils.h"
-#include "callweaver/crypto.h"
-#include "callweaver/callweaver_db.h"
-#include "callweaver/acl.h"
-#include "callweaver/aes.h"
+#include "openpbx/file.h"
+#include "openpbx/logger.h"
+#include "openpbx/channel.h"
+#include "openpbx/config.h"
+#include "openpbx/options.h"
+#include "openpbx/pbx.h"
+#include "openpbx/module.h"
+#include "openpbx/frame.h"
+#include "openpbx/file.h"
+#include "openpbx/cli.h"
+#include "openpbx/lock.h"
+#include "openpbx/dundi.h"
+#include "openpbx/sched.h"
+#include "openpbx/io.h"
+#include "openpbx/utils.h"
+#include "openpbx/crypto.h"
+#include "openpbx/opbxdb.h"
+#include "openpbx/acl.h"
+#include "openpbx/aes.h"
 
 #include "dundi-parser.h"
 
@@ -77,36 +77,23 @@ CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branche
 
 #define MAX_PACKET_SIZE 8192
 
-extern char cw_config_CW_KEY_DIR[];
+extern char opbx_config_OPBX_KEY_DIR[];
 
 static char *tdesc = "Distributed Universal Number Discovery (DUNDi)";
 
-static void *dundi_app;
-static const char *dundi_lookup_name = "DUNDiLookup";
-static const char *dundi_lookup_synopsis = "Look up a number with DUNDi";
-static const char *dundi_lookup_syntax = "DUNDiLookup(number[,context[,options]])";
-static const char *dundi_lookup_descrip = 
-	"      Looks up a given number in the global context specified or in\n"
-	"the reserved 'e164' context if not specified.  Returns -1 if the channel\n"
-	"is hungup during the lookup or 0 otherwise.  On completion, the variable\n"
-	"${DUNDTECH} and ${DUNDDEST} will contain the technology and destination\n"
-	"of the appropriate technology and destination to access the number. If no\n"
-	"answer was found, the variable ${DUNDISTATUS} will be set to FAILED.\n"
-	"Otherwise, it will be set to SUCCESS. Note that this will only occur if\n"
-	"the global priority jumping option is enabled in extensions.conf. If the\n"
-	"'b' option is specified, the internal DUNDi cache will by bypassed.\n";
-
-static void *dundi_func;
-static const char *dundifunc_name = "DUNDILOOKUP";
-static const char *dundifunc_synopsis = "Do a DUNDi lookup of a phone number.";
-static const char *dundifunc_syntax = "DUNDILOOKUP(number[,context[,options]])";
-static const char *dundifunc_desc =
-	"This will do a DUNDi lookup of the given phone number.\n"
-	"If no context is given, the default will be e164. The result of\n"
-	"this function will the Technology/Resource found in the DUNDi\n"
-	"lookup. If no results were found, the result will be blank.\n"
-	"If the 'b' option is specified, the internal DUNDi cache will\n"
-	"be bypassed.\n";
+static char *app = "DUNDiLookup";
+static char *synopsis = "Look up a number with DUNDi";
+static char *descrip = 
+"DUNDiLookup(number[|context[|options]])\n"
+"      Looks up a given number in the global context specified or in\n"
+"the reserved 'e164' context if not specified.  Returns -1 if the channel\n"
+"is hungup during the lookup or 0 otherwise.  On completion, the variable\n"
+"${DUNDTECH} and ${DUNDDEST} will contain the technology and destination\n"
+"of the appropriate technology and destination to access the number. If no\n"
+"answer was found, and the priority n + 101 exists, execution will continue\n"
+"at that location. Note that this will only occur if the global priority\n"
+"jumping option is enabled in extensions.conf. If the 'b' option is specified,\n"
+"the internal DUNDi cache will by bypassed.\n";
 
 #define DUNDI_MODEL_INBOUND		(1 << 0)
 #define DUNDI_MODEL_OUTBOUND	(1 << 1)
@@ -137,8 +124,8 @@ static const char *dundifunc_desc =
 static struct io_context *io;
 static struct sched_context *sched;
 static int netsocket = -1;
-static pthread_t netthreadid = CW_PTHREADT_NULL;
-static pthread_t precachethreadid = CW_PTHREADT_NULL;
+static pthread_t netthreadid = OPBX_PTHREADT_NULL;
+static pthread_t precachethreadid = OPBX_PTHREADT_NULL;
 static int tos = 0;
 static int dundidebug = 0;
 static int authdebug = 0;
@@ -179,7 +166,7 @@ struct dundi_packet {
 
 struct dundi_hint_metadata {
 	unsigned short flags;
-	char exten[CW_MAX_EXTENSION];
+	char exten[OPBX_MAX_EXTENSION];
 };
 
 struct dundi_precache_queue {
@@ -220,8 +207,8 @@ struct dundi_transaction {
 } *alltrans;
 
 struct dundi_request {
-	char dcontext[CW_MAX_EXTENSION];
-	char number[CW_MAX_EXTENSION];
+	char dcontext[OPBX_MAX_EXTENSION];
+	char number[OPBX_MAX_EXTENSION];
 	dundi_eid query_eid;
 	dundi_eid root_eid;
 	struct dundi_result *dr;
@@ -238,13 +225,13 @@ struct dundi_request {
 } *requests;
 
 static struct dundi_mapping {
-	char dcontext[CW_MAX_EXTENSION];
-	char lcontext[CW_MAX_EXTENSION];
+	char dcontext[OPBX_MAX_EXTENSION];
+	char lcontext[OPBX_MAX_EXTENSION];
 	int weight;
 	int options;
 	int tech;
 	int dead;
-	char dest[CW_MAX_EXTENSION];
+	char dest[OPBX_MAX_EXTENSION];
 	struct dundi_mapping *next;
 } *mappings = NULL;
 
@@ -290,20 +277,20 @@ static struct dundi_peer {
 
 static struct dundi_precache_queue *pcq;
 
-CW_MUTEX_DEFINE_STATIC(peerlock);
-CW_MUTEX_DEFINE_STATIC(pclock);
+OPBX_MUTEX_DEFINE_STATIC(peerlock);
+OPBX_MUTEX_DEFINE_STATIC(pclock);
 
 static int dundi_xmit(struct dundi_packet *pack);
 
 static void dundi_debug_output(const char *data)
 {
 	if (dundidebug)
-		cw_verbose("%s", data);
+		opbx_verbose("%s", data);
 }
 
 static void dundi_error_output(const char *data)
 {
-	cw_log(LOG_WARNING, "%s", data);
+	opbx_log(LOG_WARNING, "%s", data);
 }
 
 static int has_permission(struct permission *ps, char *cont)
@@ -345,7 +332,7 @@ static int str2tech(char *str)
 		return -1;
 }
 
-static int dundi_lookup_internal(struct dundi_result *result, int maxret, struct cw_channel *chan, const char *dcontext, const char *number, int ttl, int blockempty, struct dundi_hint_metadata *md, int *expiration, int cybpass, int modeselect, dundi_eid *skip, dundi_eid *avoid[], int direct[]);
+static int dundi_lookup_internal(struct dundi_result *result, int maxret, struct opbx_channel *chan, const char *dcontext, const char *number, int ttl, int blockempty, struct dundi_hint_metadata *md, int *expiration, int cybpass, int modeselect, dundi_eid *skip, dundi_eid *avoid[], int direct[]);
 static int dundi_precache_internal(const char *context, const char *number, int ttl, dundi_eid *avoids[]);
 static struct dundi_transaction *create_transaction(struct dundi_peer *p);
 static struct dundi_transaction *find_transaction(struct dundi_hdr *hdr, struct sockaddr_in *sin)
@@ -378,7 +365,7 @@ static struct dundi_transaction *find_transaction(struct dundi_hdr *hdr, struct 
 					memcpy(&trans->addr, sin, sizeof(trans->addr));
 					trans->dtrans = ntohs(hdr->strans) & 32767;
 				} else
-					cw_log(LOG_WARNING, "Out of memory!\n");
+					opbx_log(LOG_WARNING, "Out of memory!\n");
 			}
 			break;
 		default:
@@ -434,7 +421,7 @@ static void reset_global_eid(void)
 			snprintf(ifr.ifr_name, sizeof(ifr.ifr_name), "eth%d", x);
 			if (!ioctl(s, SIOCGIFHWADDR, &ifr)) {
 				memcpy(&global_eid, ((unsigned char *)&ifr.ifr_hwaddr) + 2, sizeof(global_eid));
-				cw_log(LOG_DEBUG, "Seeding global EID '%s' from '%s'\n", dundi_eid_to_str(eid_str, sizeof(eid_str), &global_eid), ifr.ifr_name);
+				opbx_log(LOG_DEBUG, "Seeding global EID '%s' from '%s'\n", dundi_eid_to_str(eid_str, sizeof(eid_str), &global_eid), ifr.ifr_name);
 				close(s);
 				return;
 			}
@@ -454,7 +441,7 @@ static void reset_global_eid(void)
 				memcpy(
 					&(global_eid.eid),
 					sdp->sdl_data + sdp->sdl_nlen, 6);
-				cw_log(LOG_DEBUG, "Seeding global EID '%s' from '%s'\n", dundi_eid_to_str(eid_str, sizeof(eid_str), &global_eid), ifap->ifa_name);
+				opbx_log(LOG_DEBUG, "Seeding global EID '%s' from '%s'\n", dundi_eid_to_str(eid_str, sizeof(eid_str), &global_eid), ifap->ifa_name);
 				freeifaddrs(ifap);
 				return;
 			}
@@ -463,7 +450,7 @@ static void reset_global_eid(void)
 	}
 #endif
 #endif
-	cw_log(LOG_NOTICE, "No ethernet interface found for seeding global EID  You will have to set it manually.\n");
+	opbx_log(LOG_NOTICE, "No ethernet interface found for seeding global EID  You will have to set it manually.\n");
 }
 
 static int get_trans_id(void)
@@ -497,7 +484,7 @@ static int reset_transaction(struct dundi_transaction *trans)
 	trans->oiseqno = 0;
 	trans->oseqno = 0;
 	trans->aseqno = 0;
-	cw_clear_flag(trans, FLAG_FINAL);	
+	opbx_clear_flag(trans, FLAG_FINAL);	
 	return 0;
 }
 
@@ -529,8 +516,8 @@ struct dundi_query_state {
 	dundi_eid *eids[DUNDI_MAX_STACK + 1]; 
 	int directs[DUNDI_MAX_STACK + 1]; 
 	dundi_eid reqeid;
-	char called_context[CW_MAX_EXTENSION];
-	char called_number[CW_MAX_EXTENSION];
+	char called_context[OPBX_MAX_EXTENSION];
+	char called_number[OPBX_MAX_EXTENSION];
 	struct dundi_mapping *maps;
 	int nummaps;
 	int nocache;
@@ -543,51 +530,51 @@ struct dundi_query_state {
 
 static int dundi_lookup_local(struct dundi_result *dr, struct dundi_mapping *map, char *called_number, dundi_eid *us_eid, int anscnt, struct dundi_hint_metadata *hmd)
 {
-	struct cw_flags flags = {0};
+	struct opbx_flags flags = {0};
 	int x;
-	if (!cw_strlen_zero(map->lcontext)) {
-		if (cw_exists_extension(NULL, map->lcontext, called_number, 1, NULL))
-			cw_set_flag(&flags, DUNDI_FLAG_EXISTS);
-		if (cw_canmatch_extension(NULL, map->lcontext, called_number, 1, NULL))
-			cw_set_flag(&flags, DUNDI_FLAG_CANMATCH);
-		if (cw_matchmore_extension(NULL, map->lcontext, called_number, 1, NULL))
-			cw_set_flag(&flags, DUNDI_FLAG_MATCHMORE);
-		if (cw_ignore_pattern(map->lcontext, called_number))
-			cw_set_flag(&flags, DUNDI_FLAG_IGNOREPAT);
+	if (!opbx_strlen_zero(map->lcontext)) {
+		if (opbx_exists_extension(NULL, map->lcontext, called_number, 1, NULL))
+			opbx_set_flag(&flags, DUNDI_FLAG_EXISTS);
+		if (opbx_canmatch_extension(NULL, map->lcontext, called_number, 1, NULL))
+			opbx_set_flag(&flags, DUNDI_FLAG_CANMATCH);
+		if (opbx_matchmore_extension(NULL, map->lcontext, called_number, 1, NULL))
+			opbx_set_flag(&flags, DUNDI_FLAG_MATCHMORE);
+		if (opbx_ignore_pattern(map->lcontext, called_number))
+			opbx_set_flag(&flags, DUNDI_FLAG_IGNOREPAT);
 
 		/* Clearly we can't say 'don't ask' anymore if we found anything... */
-		if (cw_test_flag(&flags, CW_FLAGS_ALL)) 
-			cw_clear_flag_nonstd(hmd, DUNDI_HINT_DONT_ASK);
+		if (opbx_test_flag(&flags, OPBX_FLAGS_ALL)) 
+			opbx_clear_flag_nonstd(hmd, DUNDI_HINT_DONT_ASK);
 
 		if (map->options & DUNDI_FLAG_INTERNAL_NOPARTIAL) {
 			/* Skip partial answers */
-			cw_clear_flag(&flags, DUNDI_FLAG_MATCHMORE|DUNDI_FLAG_CANMATCH);
+			opbx_clear_flag(&flags, DUNDI_FLAG_MATCHMORE|DUNDI_FLAG_CANMATCH);
 		}
-		if (cw_test_flag(&flags, CW_FLAGS_ALL)) {
+		if (opbx_test_flag(&flags, OPBX_FLAGS_ALL)) {
 			struct varshead headp;
-			struct cw_var_t *newvariable;
-			cw_set_flag(&flags, map->options & 0xffff);
-			cw_copy_flags(dr + anscnt, &flags, CW_FLAGS_ALL);
+			struct opbx_var_t *newvariable;
+			opbx_set_flag(&flags, map->options & 0xffff);
+			opbx_copy_flags(dr + anscnt, &flags, OPBX_FLAGS_ALL);
 			dr[anscnt].techint = map->tech;
 			dr[anscnt].weight = map->weight;
 			dr[anscnt].expiration = dundi_cache_time;
-			cw_copy_string(dr[anscnt].tech, tech2str(map->tech), sizeof(dr[anscnt].tech));
+			opbx_copy_string(dr[anscnt].tech, tech2str(map->tech), sizeof(dr[anscnt].tech));
 			dr[anscnt].eid = *us_eid;
 			dundi_eid_to_str(dr[anscnt].eid_str, sizeof(dr[anscnt].eid_str), &dr[anscnt].eid);
-			if (cw_test_flag(&flags, DUNDI_FLAG_EXISTS)) {
-				CW_LIST_HEAD_INIT_NOLOCK(&headp);
-				newvariable = cw_var_assign("NUMBER", called_number);
-				CW_LIST_INSERT_HEAD(&headp, newvariable, entries);
-				newvariable = cw_var_assign("EID", dr[anscnt].eid_str);
-				CW_LIST_INSERT_HEAD(&headp, newvariable, entries);
-				newvariable = cw_var_assign("SECRET", cursecret);
-				CW_LIST_INSERT_HEAD(&headp, newvariable, entries);
-				newvariable = cw_var_assign("IPADDR", ipaddr);
-				CW_LIST_INSERT_HEAD(&headp, newvariable, entries);
+			if (opbx_test_flag(&flags, DUNDI_FLAG_EXISTS)) {
+				OPBX_LIST_HEAD_INIT_NOLOCK(&headp);
+				newvariable = opbx_var_assign("NUMBER", called_number);
+				OPBX_LIST_INSERT_HEAD(&headp, newvariable, entries);
+				newvariable = opbx_var_assign("EID", dr[anscnt].eid_str);
+				OPBX_LIST_INSERT_HEAD(&headp, newvariable, entries);
+				newvariable = opbx_var_assign("SECRET", cursecret);
+				OPBX_LIST_INSERT_HEAD(&headp, newvariable, entries);
+				newvariable = opbx_var_assign("IPADDR", ipaddr);
+				OPBX_LIST_INSERT_HEAD(&headp, newvariable, entries);
 				pbx_substitute_variables_varshead(&headp, map->dest, dr[anscnt].dest, sizeof(dr[anscnt].dest));
-				while (!CW_LIST_EMPTY(&headp)) {           /* List Deletion. */
-					newvariable = CW_LIST_REMOVE_HEAD(&headp, entries);
-					cw_var_delete(newvariable);
+				while (!OPBX_LIST_EMPTY(&headp)) {           /* List Deletion. */
+					newvariable = OPBX_LIST_REMOVE_HEAD(&headp, entries);
+					opbx_var_delete(newvariable);
 				}
 			} else
 				dr[anscnt].dest[0] = '\0';
@@ -595,16 +582,16 @@ static int dundi_lookup_local(struct dundi_result *dr, struct dundi_mapping *map
 		} else {
 			/* No answers...  Find the fewest number of digits from the
 			   number for which we have no answer. */
-			char tmp[CW_MAX_EXTENSION];
-			for (x=0;x<CW_MAX_EXTENSION;x++) {
+			char tmp[OPBX_MAX_EXTENSION];
+			for (x=0;x<OPBX_MAX_EXTENSION;x++) {
 				tmp[x] = called_number[x];
 				if (!tmp[x])
 					break;
-				if (!cw_canmatch_extension(NULL, map->lcontext, tmp, 1, NULL)) {
+				if (!opbx_canmatch_extension(NULL, map->lcontext, tmp, 1, NULL)) {
 					/* Oops found something we can't match.  If this is longer
 					   than the running hint, we have to consider it */
 					if (strlen(tmp) > strlen(hmd->exten)) {
-						cw_copy_string(hmd->exten, tmp, sizeof(hmd->exten));
+						opbx_copy_string(hmd->exten, tmp, sizeof(hmd->exten));
 					}
 					break;
 				}
@@ -628,7 +615,7 @@ static void *dundi_lookup_thread(void *data)
 	int max = 999999;
 	int expiration = dundi_cache_time;
 
-	cw_log(LOG_DEBUG, "Whee, looking up '%s@%s' for '%s'\n", st->called_number, st->called_context, 
+	opbx_log(LOG_DEBUG, "Whee, looking up '%s@%s' for '%s'\n", st->called_number, st->called_context, 
 		st->eids[0] ? dundi_eid_to_str(eid_str, sizeof(eid_str), st->eids[0]) :  "ourselves");
 	memset(&ied, 0, sizeof(ied));
 	memset(&dr, 0, sizeof(dr));
@@ -655,12 +642,12 @@ static void *dundi_lookup_thread(void *data)
 				dundi_ie_append_cause(&ied, DUNDI_IE_CAUSE, DUNDI_CAUSE_DUPLICATE, "Duplicate Request Pending");
 		}
 	}
-	cw_mutex_lock(&peerlock);
+	opbx_mutex_lock(&peerlock);
 	/* Truncate if "don't ask" isn't present */
-	if (!cw_test_flag_nonstd(&hmd, DUNDI_HINT_DONT_ASK))
+	if (!opbx_test_flag_nonstd(&hmd, DUNDI_HINT_DONT_ASK))
 		hmd.exten[0] = '\0';
-	if (cw_test_flag(st->trans, FLAG_DEAD)) {
-		cw_log(LOG_DEBUG, "Our transaction went away!\n");
+	if (opbx_test_flag(st->trans, FLAG_DEAD)) {
+		opbx_log(LOG_DEBUG, "Our transaction went away!\n");
 		st->trans->thread = 0;
 		destroy_trans(st->trans, 0);
 	} else {
@@ -675,7 +662,7 @@ static void *dundi_lookup_thread(void *data)
 		dundi_send(st->trans, DUNDI_COMMAND_DPRESPONSE, 0, 1, &ied);
 		st->trans->thread = 0;
 	}
-	cw_mutex_unlock(&peerlock);
+	opbx_mutex_unlock(&peerlock);
 	free(st);
 	return NULL;	
 }
@@ -687,26 +674,26 @@ static void *dundi_precache_thread(void *data)
 	struct dundi_hint_metadata hmd;
 	char eid_str[20];
 
-	cw_log(LOG_DEBUG, "Whee, precaching '%s@%s' for '%s'\n", st->called_number, st->called_context, 
+	opbx_log(LOG_DEBUG, "Whee, precaching '%s@%s' for '%s'\n", st->called_number, st->called_context, 
 		st->eids[0] ? dundi_eid_to_str(eid_str, sizeof(eid_str), st->eids[0]) :  "ourselves");
 	memset(&ied, 0, sizeof(ied));
 
 	/* Now produce precache */
 	dundi_precache_internal(st->called_context, st->called_number, st->ttl, st->eids);
 
-	cw_mutex_lock(&peerlock);
+	opbx_mutex_lock(&peerlock);
 	/* Truncate if "don't ask" isn't present */
-	if (!cw_test_flag_nonstd(&hmd, DUNDI_HINT_DONT_ASK))
+	if (!opbx_test_flag_nonstd(&hmd, DUNDI_HINT_DONT_ASK))
 		hmd.exten[0] = '\0';
-	if (cw_test_flag(st->trans, FLAG_DEAD)) {
-		cw_log(LOG_DEBUG, "Our transaction went away!\n");
+	if (opbx_test_flag(st->trans, FLAG_DEAD)) {
+		opbx_log(LOG_DEBUG, "Our transaction went away!\n");
 		st->trans->thread = 0;
 		destroy_trans(st->trans, 0);
 	} else {
 		dundi_send(st->trans, DUNDI_COMMAND_PRECACHERP, 0, 1, &ied);
 		st->trans->thread = 0;
 	}
-	cw_mutex_unlock(&peerlock);
+	opbx_mutex_unlock(&peerlock);
 	free(st);
 	return NULL;	
 }
@@ -721,29 +708,29 @@ static void *dundi_query_thread(void *data)
 	struct dundi_hint_metadata hmd;
 	char eid_str[20];
 	int res;
-	cw_log(LOG_DEBUG, "Whee, looking up '%s@%s' for '%s'\n", st->called_number, st->called_context, 
+	opbx_log(LOG_DEBUG, "Whee, looking up '%s@%s' for '%s'\n", st->called_number, st->called_context, 
 		st->eids[0] ? dundi_eid_to_str(eid_str, sizeof(eid_str), st->eids[0]) :  "ourselves");
 	memset(&ied, 0, sizeof(ied));
 	memset(&dei, 0, sizeof(dei));
 	memset(&hmd, 0, sizeof(hmd));
 	if (!dundi_eid_cmp(&st->trans->us_eid, &st->reqeid)) {
 		/* Ooh, it's us! */
-		cw_log(LOG_DEBUG, "Neat, someone look for us!\n");
-		cw_copy_string(dei.orgunit, dept, sizeof(dei.orgunit));
-		cw_copy_string(dei.org, org, sizeof(dei.org));
-		cw_copy_string(dei.locality, locality, sizeof(dei.locality));
-		cw_copy_string(dei.stateprov, stateprov, sizeof(dei.stateprov));
-		cw_copy_string(dei.country, country, sizeof(dei.country));
-		cw_copy_string(dei.email, email, sizeof(dei.email));
-		cw_copy_string(dei.phone, phone, sizeof(dei.phone));
+		opbx_log(LOG_DEBUG, "Neat, someone look for us!\n");
+		opbx_copy_string(dei.orgunit, dept, sizeof(dei.orgunit));
+		opbx_copy_string(dei.org, org, sizeof(dei.org));
+		opbx_copy_string(dei.locality, locality, sizeof(dei.locality));
+		opbx_copy_string(dei.stateprov, stateprov, sizeof(dei.stateprov));
+		opbx_copy_string(dei.country, country, sizeof(dei.country));
+		opbx_copy_string(dei.email, email, sizeof(dei.email));
+		opbx_copy_string(dei.phone, phone, sizeof(dei.phone));
 		res = 1;
 	} else {
 		/* If we do not have a canonical result, keep looking */
 		res = dundi_query_eid_internal(&dei, st->called_context, &st->reqeid, &hmd, st->ttl, 1, st->eids);
 	}
-	cw_mutex_lock(&peerlock);
-	if (cw_test_flag(st->trans, FLAG_DEAD)) {
-		cw_log(LOG_DEBUG, "Our transaction went away!\n");
+	opbx_mutex_lock(&peerlock);
+	if (opbx_test_flag(st->trans, FLAG_DEAD)) {
+		opbx_log(LOG_DEBUG, "Our transaction went away!\n");
 		st->trans->thread = 0;
 		destroy_trans(st->trans, 0);
 	} else {
@@ -755,14 +742,14 @@ static void *dundi_query_thread(void *data)
 			dundi_ie_append_str(&ied, DUNDI_IE_COUNTRY, dei.country);
 			dundi_ie_append_str(&ied, DUNDI_IE_EMAIL, dei.email);
 			dundi_ie_append_str(&ied, DUNDI_IE_PHONE, dei.phone);
-			if (!cw_strlen_zero(dei.ipaddr))
+			if (!opbx_strlen_zero(dei.ipaddr))
 				dundi_ie_append_str(&ied, DUNDI_IE_IPADDR, dei.ipaddr);
 		}
 		dundi_ie_append_hint(&ied, DUNDI_IE_HINT, hmd.flags, hmd.exten);
 		dundi_send(st->trans, DUNDI_COMMAND_EIDRESPONSE, 0, 1, &ied);
 		st->trans->thread = 0;
 	}
-	cw_mutex_unlock(&peerlock);
+	opbx_mutex_unlock(&peerlock);
 	free(st);
 	return NULL;	
 }
@@ -791,7 +778,7 @@ static int dundi_answer_entity(struct dundi_transaction *trans, struct dundi_ies
 	st = malloc(totallen);
 	if (st) {
 		memset(st, 0, totallen);
-		cw_copy_string(st->called_context, ies->called_context, sizeof(st->called_context));
+		opbx_copy_string(st->called_context, ies->called_context, sizeof(st->called_context));
 		memcpy(&st->reqeid, ies->reqeid, sizeof(st->reqeid));
 		st->trans = trans;
 		st->ttl = ies->ttl - 1;
@@ -803,13 +790,13 @@ static int dundi_answer_entity(struct dundi_transaction *trans, struct dundi_ies
 			*st->eids[x-skipfirst] = *ies->eids[x];
 			s += sizeof(dundi_eid);
 		}
-		cw_log(LOG_DEBUG, "Answering EID query for '%s@%s'!\n", dundi_eid_to_str(eid_str, sizeof(eid_str), ies->reqeid), ies->called_context);
+		opbx_log(LOG_DEBUG, "Answering EID query for '%s@%s'!\n", dundi_eid_to_str(eid_str, sizeof(eid_str), ies->reqeid), ies->called_context);
 		pthread_attr_init(&attr);
 		pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
 		trans->thread = 1;
-		if (cw_pthread_create(&lookupthread, &attr, dundi_query_thread, st)) {
+		if (opbx_pthread_create(&lookupthread, &attr, dundi_query_thread, st)) {
 			trans->thread = 0;
-			cw_log(LOG_WARNING, "Unable to create thread!\n");
+			opbx_log(LOG_WARNING, "Unable to create thread!\n");
 			free(st);
 			memset(&ied, 0, sizeof(ied));
 			dundi_ie_append_cause(&ied, DUNDI_IE_CAUSE, DUNDI_CAUSE_GENERAL, "Out of threads");
@@ -817,7 +804,7 @@ static int dundi_answer_entity(struct dundi_transaction *trans, struct dundi_ies
 			return -1;
 		}
 	} else {
-		cw_log(LOG_WARNING, "Out of memory!\n");
+		opbx_log(LOG_WARNING, "Out of memory!\n");
 		memset(&ied, 0, sizeof(ied));
 		dundi_ie_append_cause(&ied, DUNDI_IE_CAUSE, DUNDI_CAUSE_GENERAL, "Out of memory");
 		dundi_send(trans, DUNDI_COMMAND_EIDRESPONSE, 0, 1, &ied);
@@ -840,10 +827,10 @@ static int cache_save_hint(dundi_eid *eidpeer, struct dundi_request *req, struct
 		expiration = dundi_cache_time;
 
 	/* Only cache hint if "don't ask" is there... */
-	if (!cw_test_flag_nonstd(hint, htons(DUNDI_HINT_DONT_ASK)))	
+	if (!opbx_test_flag_nonstd(hint, htons(DUNDI_HINT_DONT_ASK)))	
 		return 0;
 
-	unaffected = cw_test_flag_nonstd(hint, htons(DUNDI_HINT_UNAFFECTED));
+	unaffected = opbx_test_flag_nonstd(hint, htons(DUNDI_HINT_UNAFFECTED));
 
 	dundi_eid_to_str_short(eidpeer_str, sizeof(eidpeer_str), eidpeer);
 	dundi_eid_to_str_short(eidroot_str, sizeof(eidroot_str), &req->root_eid);
@@ -852,12 +839,12 @@ static int cache_save_hint(dundi_eid *eidpeer, struct dundi_request *req, struct
 
 	time(&timeout);
 	timeout += expiration;
-	snprintf(data, sizeof(data), "%ld,", (long)(timeout));
+	snprintf(data, sizeof(data), "%ld|", (long)(timeout));
 	
-	cw_db_put("dundi/cache", key1, data);
-	cw_log(LOG_DEBUG, "Caching hint at '%s'\n", key1);
-	cw_db_put("dundi/cache", key2, data);
-	cw_log(LOG_DEBUG, "Caching hint at '%s'\n", key2);
+	opbx_db_put("dundi/cache", key1, data);
+	opbx_log(LOG_DEBUG, "Caching hint at '%s'\n", key1);
+	opbx_db_put("dundi/cache", key2, data);
+	opbx_log(LOG_DEBUG, "Caching hint at '%s'\n", key2);
 	return 0;
 }
 
@@ -888,17 +875,17 @@ static int cache_save(dundi_eid *eidpeer, struct dundi_request *req, int start, 
 	/* Build request string */
 	time(&timeout);
 	timeout += expiration;
-	snprintf(data, sizeof(data), "%ld,", (long)(timeout));
+	snprintf(data, sizeof(data), "%ld|", (long)(timeout));
 	for (x=start;x<req->respcount;x++) {
-		/* Skip anything with an illegal comma in it */
-		if (strchr(req->dr[x].dest, ','))
+		/* Skip anything with an illegal pipe in it */
+		if (strchr(req->dr[x].dest, '|'))
 			continue;
-		snprintf(data + strlen(data), sizeof(data) - strlen(data), "%d/%d/%d/%s/%s,", 
+		snprintf(data + strlen(data), sizeof(data) - strlen(data), "%d/%d/%d/%s/%s|", 
 			req->dr[x].flags, req->dr[x].weight, req->dr[x].techint, req->dr[x].dest, 
 			dundi_eid_to_str_short(eidpeer_str, sizeof(eidpeer_str), &req->dr[x].eid));
 	}
-	cw_db_put("dundi/cache", key1, data);
-	cw_db_put("dundi/cache", key2, data);
+	opbx_db_put("dundi/cache", key1, data);
+	opbx_db_put("dundi/cache", key2, data);
 	return 0;
 }
 
@@ -932,8 +919,8 @@ static int dundi_prop_precache(struct dundi_transaction *trans, struct dundi_ies
 	dr.hmd = &hmd;
 	dr.pfds[0] = dr.pfds[1] = -1;
 	trans->parent = &dr;
-	cw_copy_string(dr.dcontext, ies->called_context ? ies->called_context : "e164", sizeof(dr.dcontext));
-	cw_copy_string(dr.number, ies->called_number, sizeof(dr.number));
+	opbx_copy_string(dr.dcontext, ies->called_context ? ies->called_context : "e164", sizeof(dr.dcontext));
+	opbx_copy_string(dr.number, ies->called_number, sizeof(dr.number));
 	
 	for (x=0;x<ies->anscount;x++) {
 		if (trans->parent->respcount < trans->parent->maxcount) {
@@ -956,18 +943,18 @@ static int dundi_prop_precache(struct dundi_transaction *trans, struct dundi_ies
 				dundi_eid_to_str(trans->parent->dr[trans->parent->respcount].eid_str, 
 					sizeof(trans->parent->dr[trans->parent->respcount].eid_str),
 					&ies->answers[x]->eid);
-				cw_copy_string(trans->parent->dr[trans->parent->respcount].dest, (char *)ies->answers[x]->data,
+				opbx_copy_string(trans->parent->dr[trans->parent->respcount].dest, (char *)ies->answers[x]->data,
 					sizeof(trans->parent->dr[trans->parent->respcount].dest));
-					cw_copy_string(trans->parent->dr[trans->parent->respcount].tech, tech2str(ies->answers[x]->protocol),
+					opbx_copy_string(trans->parent->dr[trans->parent->respcount].tech, tech2str(ies->answers[x]->protocol),
 					sizeof(trans->parent->dr[trans->parent->respcount].tech));
 				trans->parent->respcount++;
-				cw_clear_flag_nonstd(trans->parent->hmd, DUNDI_HINT_DONT_ASK);	
+				opbx_clear_flag_nonstd(trans->parent->hmd, DUNDI_HINT_DONT_ASK);	
 			} else if (trans->parent->dr[z].weight > ies->answers[x]->weight) {
 				/* Update weight if appropriate */
 				trans->parent->dr[z].weight = ies->answers[x]->weight;
 			}
 		} else
-			cw_log(LOG_NOTICE, "Dropping excessive answers in precache for %s@%s\n",
+			opbx_log(LOG_NOTICE, "Dropping excessive answers in precache for %s@%s\n",
 				trans->parent->number, trans->parent->dcontext);
 
 	}
@@ -1005,8 +992,8 @@ static int dundi_prop_precache(struct dundi_transaction *trans, struct dundi_ies
 	st = malloc(totallen);
 	if (st) {
 		memset(st, 0, totallen);
-		cw_copy_string(st->called_context, ies->called_context, sizeof(st->called_context));
-		cw_copy_string(st->called_number, ies->called_number, sizeof(st->called_number));
+		opbx_copy_string(st->called_context, ies->called_context, sizeof(st->called_context));
+		opbx_copy_string(st->called_number, ies->called_number, sizeof(st->called_number));
 		st->trans = trans;
 		st->ttl = ies->ttl - 1;
 		st->nocache = ies->cbypass;
@@ -1034,13 +1021,13 @@ static int dundi_prop_precache(struct dundi_transaction *trans, struct dundi_ies
 			cur = cur->next;
 		}
 		st->nummaps = mapcount;
-		cw_log(LOG_DEBUG, "Forwarding precache for '%s@%s'!\n", ies->called_number, ies->called_context);
+		opbx_log(LOG_DEBUG, "Forwarding precache for '%s@%s'!\n", ies->called_number, ies->called_context);
 		pthread_attr_init(&attr);
 		pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
 		trans->thread = 1;
-		if (cw_pthread_create(&lookupthread, &attr, dundi_precache_thread, st)) {
+		if (opbx_pthread_create(&lookupthread, &attr, dundi_precache_thread, st)) {
 			trans->thread = 0;
-			cw_log(LOG_WARNING, "Unable to create thread!\n");
+			opbx_log(LOG_WARNING, "Unable to create thread!\n");
 			free(st);
 			memset(&ied, 0, sizeof(ied));
 			dundi_ie_append_cause(&ied, DUNDI_IE_CAUSE, DUNDI_CAUSE_GENERAL, "Out of threads");
@@ -1048,7 +1035,7 @@ static int dundi_prop_precache(struct dundi_transaction *trans, struct dundi_ies
 			return -1;
 		}
 	} else {
-		cw_log(LOG_WARNING, "Out of memory!\n");
+		opbx_log(LOG_WARNING, "Out of memory!\n");
 		memset(&ied, 0, sizeof(ied));
 		dundi_ie_append_cause(&ied, DUNDI_IE_CAUSE, DUNDI_CAUSE_GENERAL, "Out of memory");
 		dundi_send(trans, DUNDI_COMMAND_PRECACHERP, 0, 1, &ied);
@@ -1097,8 +1084,8 @@ static int dundi_answer_query(struct dundi_transaction *trans, struct dundi_ies 
 	st = malloc(totallen);
 	if (st) {
 		memset(st, 0, totallen);
-		cw_copy_string(st->called_context, ies->called_context, sizeof(st->called_context));
-		cw_copy_string(st->called_number, ies->called_number, sizeof(st->called_number));
+		opbx_copy_string(st->called_context, ies->called_context, sizeof(st->called_context));
+		opbx_copy_string(st->called_number, ies->called_number, sizeof(st->called_number));
 		st->trans = trans;
 		st->ttl = ies->ttl - 1;
 		st->nocache = ies->cbypass;
@@ -1126,13 +1113,13 @@ static int dundi_answer_query(struct dundi_transaction *trans, struct dundi_ies 
 			cur = cur->next;
 		}
 		st->nummaps = mapcount;
-		cw_log(LOG_DEBUG, "Answering query for '%s@%s'!\n", ies->called_number, ies->called_context);
+		opbx_log(LOG_DEBUG, "Answering query for '%s@%s'!\n", ies->called_number, ies->called_context);
 		pthread_attr_init(&attr);
 		pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
 		trans->thread = 1;
-		if (cw_pthread_create(&lookupthread, &attr, dundi_lookup_thread, st)) {
+		if (opbx_pthread_create(&lookupthread, &attr, dundi_lookup_thread, st)) {
 			trans->thread = 0;
-			cw_log(LOG_WARNING, "Unable to create thread!\n");
+			opbx_log(LOG_WARNING, "Unable to create thread!\n");
 			free(st);
 			memset(&ied, 0, sizeof(ied));
 			dundi_ie_append_cause(&ied, DUNDI_IE_CAUSE, DUNDI_CAUSE_GENERAL, "Out of threads");
@@ -1140,7 +1127,7 @@ static int dundi_answer_query(struct dundi_transaction *trans, struct dundi_ies 
 			return -1;
 		}
 	} else {
-		cw_log(LOG_WARNING, "Out of memory!\n");
+		opbx_log(LOG_WARNING, "Out of memory!\n");
 		memset(&ied, 0, sizeof(ied));
 		dundi_ie_append_cause(&ied, DUNDI_IE_CAUSE, DUNDI_CAUSE_GENERAL, "Out of memory");
 		dundi_send(trans, DUNDI_COMMAND_DPRESPONSE, 0, 1, &ied);
@@ -1154,7 +1141,7 @@ static int cache_lookup_internal(time_t now, struct dundi_request *req, char *ke
 	char data[1024];
 	char *ptr, *term, *src;
 	int tech;
-	struct cw_flags flags;
+	struct opbx_flags flags;
 	int weight;
 	int length;
 	int z;
@@ -1162,16 +1149,16 @@ static int cache_lookup_internal(time_t now, struct dundi_request *req, char *ke
 	char fs[256];
 	time_t timeout;
 	/* Build request string */
-	if (!cw_db_get("dundi/cache", key, data, sizeof(data))) {
+	if (!opbx_db_get("dundi/cache", key, data, sizeof(data))) {
 		ptr = data;
-		if (sscanf(ptr, "%ld,%n", &timeout, &length) == 1) {
+		if (sscanf(ptr, "%ld|%n", &timeout, &length) == 1) {
 			expiration = timeout - now;
 			if (expiration > 0) {
-				cw_log(LOG_DEBUG, "Found cache expiring in %d seconds!\n", (int)(timeout - now));
+				opbx_log(LOG_DEBUG, "Found cache expiring in %d seconds!\n", (int)(timeout - now));
 				ptr += length;
 				while((sscanf(ptr, "%d/%d/%d/%n", &(flags.flags), &weight, &tech, &length) == 3)) {
 					ptr += length;
-					term = strchr(ptr, ',');
+					term = strchr(ptr, '|');
 					if (term) {
 						*term = '\0';
 						src = strrchr(ptr, '/');
@@ -1180,7 +1167,7 @@ static int cache_lookup_internal(time_t now, struct dundi_request *req, char *ke
 							src++;
 						} else
 							src = "";
-						cw_log(LOG_DEBUG, "Found cached answer '%s/%s' originally from '%s' with flags '%s' on behalf of '%s'\n", 
+						opbx_log(LOG_DEBUG, "Found cached answer '%s/%s' originally from '%s' with flags '%s' on behalf of '%s'\n", 
 							tech2str(tech), ptr, src, dundi_flags2str(fs, sizeof(fs), flags.flags), eid_str_full);
 						/* Make sure it's not already there */
 						for (z=0;z<req->respcount;z++) {
@@ -1190,19 +1177,19 @@ static int cache_lookup_internal(time_t now, struct dundi_request *req, char *ke
 						}
 						if (z == req->respcount) {
 							/* Copy into parent responses */
-							cw_copy_flags(&(req->dr[req->respcount]), &flags, CW_FLAGS_ALL);	
+							opbx_copy_flags(&(req->dr[req->respcount]), &flags, OPBX_FLAGS_ALL);	
 							req->dr[req->respcount].weight = weight;
 							req->dr[req->respcount].techint = tech;
 							req->dr[req->respcount].expiration = expiration;
 							dundi_str_short_to_eid(&req->dr[req->respcount].eid, src);
 							dundi_eid_to_str(req->dr[req->respcount].eid_str, 
 								sizeof(req->dr[req->respcount].eid_str), &req->dr[req->respcount].eid);
-							cw_copy_string(req->dr[req->respcount].dest, ptr,
+							opbx_copy_string(req->dr[req->respcount].dest, ptr,
 								sizeof(req->dr[req->respcount].dest));
-							cw_copy_string(req->dr[req->respcount].tech, tech2str(tech),
+							opbx_copy_string(req->dr[req->respcount].tech, tech2str(tech),
 								sizeof(req->dr[req->respcount].tech));
 							req->respcount++;
-							cw_clear_flag_nonstd(req->hmd, DUNDI_HINT_DONT_ASK);	
+							opbx_clear_flag_nonstd(req->hmd, DUNDI_HINT_DONT_ASK);	
 						} else if (req->dr[z].weight > weight)
 							req->dr[z].weight = weight;
 						ptr = term + 1;
@@ -1213,9 +1200,9 @@ static int cache_lookup_internal(time_t now, struct dundi_request *req, char *ke
 					*lowexpiration = expiration;
 				return 1;
 			} else 
-				cw_db_del("dundi/cache", key);
+				opbx_db_del("dundi/cache", key);
 		} else 
-			cw_db_del("dundi/cache", key);
+			opbx_db_del("dundi/cache", key);
 	}
 		
 	return 0;
@@ -1261,7 +1248,7 @@ static int cache_lookup(struct dundi_request *req, dundi_eid *peer_eid, unsigned
 			if (res2) {
 				if (strlen(tmp) > strlen(req->hmd->exten)) {
 					/* Update meta data if appropriate */
-					cw_copy_string(req->hmd->exten, tmp, sizeof(req->hmd->exten));
+					opbx_copy_string(req->hmd->exten, tmp, sizeof(req->hmd->exten));
 				}
 			}
 		}
@@ -1280,8 +1267,8 @@ static void apply_peer(struct dundi_transaction *trans, struct dundi_peer *p)
 	trans->us_eid = p->us_eid;
 	trans->them_eid = p->eid;
 	/* Enable encryption if appropriate */
-	if (!cw_strlen_zero(p->inkey))
-		cw_set_flag(trans, FLAG_ENCRYPT);	
+	if (!opbx_strlen_zero(p->inkey))
+		opbx_set_flag(trans, FLAG_ENCRYPT);	
 	if (p->maxms) {
 		trans->autokilltimeout = p->maxms;
 		trans->retranstimer = DUNDI_DEFAULT_RETRANS_TIMER;
@@ -1302,14 +1289,14 @@ static int do_register_expire(void *data)
 	struct dundi_peer *peer = data;
 	char eid_str[20];
 
-	cw_mutex_lock(&peerlock);
+	opbx_mutex_lock(&peerlock);
 
-	cw_log(LOG_DEBUG, "Register expired for '%s'\n", dundi_eid_to_str(eid_str, sizeof(eid_str), &peer->eid));
+	opbx_log(LOG_DEBUG, "Register expired for '%s'\n", dundi_eid_to_str(eid_str, sizeof(eid_str), &peer->eid));
 	peer->registerexpire = -1;
 	peer->lastms = 0;
 	memset(&peer->addr, 0, sizeof(peer->addr));
 
-	cw_mutex_lock(&peerlock);
+	opbx_mutex_lock(&peerlock);
 
 	return 0;
 }
@@ -1317,31 +1304,31 @@ static int do_register_expire(void *data)
 static int update_key(struct dundi_peer *peer)
 {
 	unsigned char key[16];
-	struct cw_key *ekey, *skey;
+	struct opbx_key *ekey, *skey;
 	char eid_str[20];
 	int res;
 	if (!peer->keyexpire || (peer->keyexpire < time(NULL))) {
 		build_iv(key);
 		aes_encrypt_key128(key, &peer->us_ecx);
 		aes_decrypt_key128(key, &peer->us_dcx);
-		ekey = cw_key_get(peer->inkey, CW_KEY_PUBLIC);
+		ekey = opbx_key_get(peer->inkey, OPBX_KEY_PUBLIC);
 		if (!ekey) {
-			cw_log(LOG_NOTICE, "No such key '%s' for creating RSA encrypted shared key for '%s'!\n",
+			opbx_log(LOG_NOTICE, "No such key '%s' for creating RSA encrypted shared key for '%s'!\n",
 				peer->inkey, dundi_eid_to_str(eid_str, sizeof(eid_str), &peer->eid));
 			return -1;
 		}
-		skey = cw_key_get(peer->outkey, CW_KEY_PRIVATE);
+		skey = opbx_key_get(peer->outkey, OPBX_KEY_PRIVATE);
 		if (!skey) {
-			cw_log(LOG_NOTICE, "No such key '%s' for signing RSA encrypted shared key for '%s'!\n",
+			opbx_log(LOG_NOTICE, "No such key '%s' for signing RSA encrypted shared key for '%s'!\n",
 				peer->outkey, dundi_eid_to_str(eid_str, sizeof(eid_str), &peer->eid));
 			return -1;
 		}
-		if ((res = cw_encrypt_bin(peer->txenckey, key, sizeof(key), ekey)) != 128) {
-			cw_log(LOG_NOTICE, "Whoa, got a weird encrypt size (%d != %d)!\n", res, 128);
+		if ((res = opbx_encrypt_bin(peer->txenckey, key, sizeof(key), ekey)) != 128) {
+			opbx_log(LOG_NOTICE, "Whoa, got a weird encrypt size (%d != %d)!\n", res, 128);
 			return -1;
 		}
-		if ((res = cw_sign_bin(skey, (char *)peer->txenckey, 128, peer->txenckey + 128))) {
-			cw_log(LOG_NOTICE, "Failed to sign key (%d)!\n", res);
+		if ((res = opbx_sign_bin(skey, (char *)peer->txenckey, 128, peer->txenckey + 128))) {
+			opbx_log(LOG_NOTICE, "Failed to sign key (%d)!\n", res);
 			return -1;
 		}
 		peer->us_keycrc32 = crc32(0L, peer->txenckey, 128);
@@ -1393,13 +1380,15 @@ static struct dundi_hdr *dundi_decrypt(struct dundi_transaction *trans, unsigned
 	struct dundi_hdr *h;
 	unsigned char *decrypt_space;
 	decrypt_space = alloca(srclen);
+	if (!decrypt_space)
+		return NULL;
 	decrypt_memcpy(decrypt_space, src->encdata, srclen, src->iv, &trans->dcx);
 	/* Setup header */
 	h = (struct dundi_hdr *)dst;
 	*h = *ohdr;
 	bytes = space - 6;
 	if (uncompress(dst + 6, &bytes, decrypt_space, srclen) != Z_OK) {
-		cw_log(LOG_DEBUG, "Ouch, uncompress failed :(\n");
+		opbx_log(LOG_DEBUG, "Ouch, uncompress failed :(\n");
 		return NULL;
 	}
 	/* Update length */
@@ -1419,57 +1408,59 @@ static int dundi_encrypt(struct dundi_transaction *trans, struct dundi_packet *p
 	unsigned char iv[16];
 	len = pack->datalen + pack->datalen / 100 + 42;
 	compress_space = alloca(len);
-	memset(compress_space, 0, len);
-	/* We care about everthing save the first 6 bytes of header */
-	bytes = len;
-	res = compress(compress_space, &bytes, pack->data + 6, pack->datalen - 6);
-	if (res != Z_OK) {
-		cw_log(LOG_DEBUG, "Ouch, compression failed!\n");
-		return -1;
-	}
-	memset(&ied, 0, sizeof(ied));
-	/* Say who we are */
-	if (!pack->h->iseqno && !pack->h->oseqno) {
-		/* Need the key in the first copy */
-		if (!(peer = find_peer(&trans->them_eid))) 
+	if (compress_space) {
+		memset(compress_space, 0, len);
+		/* We care about everthing save the first 6 bytes of header */
+		bytes = len;
+		res = compress(compress_space, &bytes, pack->data + 6, pack->datalen - 6);
+		if (res != Z_OK) {
+			opbx_log(LOG_DEBUG, "Ouch, compression failed!\n");
 			return -1;
-		if (update_key(peer))
-			return -1;
-		if (!peer->sentfullkey)
-			cw_set_flag(trans, FLAG_SENDFULLKEY);	
-		/* Append key data */
-		dundi_ie_append_eid(&ied, DUNDI_IE_EID, &trans->us_eid);
-		if (cw_test_flag(trans, FLAG_SENDFULLKEY)) {
-			dundi_ie_append_raw(&ied, DUNDI_IE_SHAREDKEY, peer->txenckey, 128);
-			dundi_ie_append_raw(&ied, DUNDI_IE_SIGNATURE, peer->txenckey + 128, 128);
-		} else {
-			dundi_ie_append_int(&ied, DUNDI_IE_KEYCRC32, peer->us_keycrc32);
 		}
-		/* Setup contexts */
-		trans->ecx = peer->us_ecx;
-		trans->dcx = peer->us_dcx;
+		memset(&ied, 0, sizeof(ied));
+		/* Say who we are */
+		if (!pack->h->iseqno && !pack->h->oseqno) {
+			/* Need the key in the first copy */
+			if (!(peer = find_peer(&trans->them_eid))) 
+				return -1;
+			if (update_key(peer))
+				return -1;
+			if (!peer->sentfullkey)
+				opbx_set_flag(trans, FLAG_SENDFULLKEY);	
+			/* Append key data */
+			dundi_ie_append_eid(&ied, DUNDI_IE_EID, &trans->us_eid);
+			if (opbx_test_flag(trans, FLAG_SENDFULLKEY)) {
+				dundi_ie_append_raw(&ied, DUNDI_IE_SHAREDKEY, peer->txenckey, 128);
+				dundi_ie_append_raw(&ied, DUNDI_IE_SIGNATURE, peer->txenckey + 128, 128);
+			} else {
+				dundi_ie_append_int(&ied, DUNDI_IE_KEYCRC32, peer->us_keycrc32);
+			}
+			/* Setup contexts */
+			trans->ecx = peer->us_ecx;
+			trans->dcx = peer->us_dcx;
 
-		/* We've sent the full key */
-		peer->sentfullkey = 1;
+			/* We've sent the full key */
+			peer->sentfullkey = 1;
+		}
+		/* Build initialization vector */
+		build_iv(iv);
+		/* Add the field, rounded up to 16 bytes */
+		dundi_ie_append_encdata(&ied, DUNDI_IE_ENCDATA, iv, NULL, ((bytes + 15) / 16) * 16);
+		/* Copy the data */
+		if ((ied.pos + bytes) >= sizeof(ied.buf)) {
+			opbx_log(LOG_NOTICE, "Final packet too large!\n");
+			return -1;
+		}
+		encrypt_memcpy(ied.buf + ied.pos, compress_space, bytes, iv, &trans->ecx);
+		ied.pos += ((bytes + 15) / 16) * 16;
+		/* Reconstruct header */
+		pack->datalen = sizeof(struct dundi_hdr);
+		pack->h->cmdresp = DUNDI_COMMAND_ENCRYPT;
+		pack->h->cmdflags = 0;
+		memcpy(pack->h->ies, ied.buf, ied.pos);
+		pack->datalen += ied.pos;
+		return 0;
 	}
-	/* Build initialization vector */
-	build_iv(iv);
-	/* Add the field, rounded up to 16 bytes */
-	dundi_ie_append_encdata(&ied, DUNDI_IE_ENCDATA, iv, NULL, ((bytes + 15) / 16) * 16);
-	/* Copy the data */
-	if ((ied.pos + bytes) >= sizeof(ied.buf)) {
-		cw_log(LOG_NOTICE, "Final packet too large!\n");
-		return -1;
-	}
-	encrypt_memcpy(ied.buf + ied.pos, compress_space, bytes, iv, &trans->ecx);
-	ied.pos += ((bytes + 15) / 16) * 16;
-	/* Reconstruct header */
-	pack->datalen = sizeof(struct dundi_hdr);
-	pack->h->cmdresp = DUNDI_COMMAND_ENCRYPT;
-	pack->h->cmdflags = 0;
-	memcpy(pack->h->ies, ied.buf, ied.pos);
-	pack->datalen += ied.pos;
-	return 0;
 	return -1;
 }
 
@@ -1477,10 +1468,10 @@ static int check_key(struct dundi_peer *peer, unsigned char *newkey, unsigned ch
 {
 	unsigned char dst[128];
 	int res;
-	struct cw_key *key, *skey;
+	struct opbx_key *key, *skey;
 	char eid_str[20];
 	if (option_debug)
-		cw_log(LOG_DEBUG, "Expected '%08lx' got '%08lx'\n", peer->them_keycrc32, keycrc32);
+		opbx_log(LOG_DEBUG, "Expected '%08lx' got '%08lx'\n", peer->them_keycrc32, keycrc32);
 	if (peer->them_keycrc32 && (peer->them_keycrc32 == keycrc32)) {
 		/* A match */
 		return 1;
@@ -1492,33 +1483,33 @@ static int check_key(struct dundi_peer *peer, unsigned char *newkey, unsigned ch
 		return 1;
 	}
 	/* Decrypt key */
-	key = cw_key_get(peer->outkey, CW_KEY_PRIVATE);
+	key = opbx_key_get(peer->outkey, OPBX_KEY_PRIVATE);
 	if (!key) {
-		cw_log(LOG_NOTICE, "Unable to find key '%s' to decode shared key from '%s'\n",
+		opbx_log(LOG_NOTICE, "Unable to find key '%s' to decode shared key from '%s'\n",
 			peer->outkey, dundi_eid_to_str(eid_str, sizeof(eid_str), &peer->eid));
 		return -1;
 	}
 
-	skey = cw_key_get(peer->inkey, CW_KEY_PUBLIC);
+	skey = opbx_key_get(peer->inkey, OPBX_KEY_PUBLIC);
 	if (!skey) {
-		cw_log(LOG_NOTICE, "Unable to find key '%s' to verify shared key from '%s'\n",
+		opbx_log(LOG_NOTICE, "Unable to find key '%s' to verify shared key from '%s'\n",
 			peer->inkey, dundi_eid_to_str(eid_str, sizeof(eid_str), &peer->eid));
 		return -1;
 	}
 
 	/* First check signature */
-	res = cw_check_signature_bin(skey, (char *)newkey, 128, newsig);
+	res = opbx_check_signature_bin(skey, (char *)newkey, 128, newsig);
 	if (res) 
 		return 0;
 
-	res = cw_decrypt_bin(dst, newkey, sizeof(dst), key);
+	res = opbx_decrypt_bin(dst, newkey, sizeof(dst), key);
 	if (res != 16) {
 		if (res >= 0)
-			cw_log(LOG_NOTICE, "Weird, key decoded to the wrong size (%d)\n", res);
+			opbx_log(LOG_NOTICE, "Weird, key decoded to the wrong size (%d)\n", res);
 		return 0;
 	}
 	/* Decrypted, passes signature */
-	cw_log(LOG_DEBUG, "Wow, new key combo passed signature and decrypt!\n");
+	opbx_log(LOG_DEBUG, "Wow, new key combo passed signature and decrypt!\n");
 	memcpy(peer->rxenckey, newkey, 128);
 	memcpy(peer->rxenckey + 128, newsig, 128);
 	peer->them_keycrc32 = crc32(0L, peer->rxenckey, 128);
@@ -1546,11 +1537,13 @@ static int handle_command_response(struct dundi_transaction *trans, struct dundi
 	memset(&ies, 0, sizeof(ies));
 	if (datalen) {
 		bufcpy = alloca(datalen);
+		if (!bufcpy)
+			return -1;
 		/* Make a copy for parsing */
 		memcpy(bufcpy, hdr->ies, datalen);
-		cw_log(LOG_DEBUG, "Got canonical message %d (%d), %d bytes data%s\n", cmd, hdr->oseqno, datalen, final ? " (Final)" : "");
+		opbx_log(LOG_DEBUG, "Got canonical message %d (%d), %d bytes data%s\n", cmd, hdr->oseqno, datalen, final ? " (Final)" : "");
 		if (dundi_parse_ies(&ies, bufcpy, datalen) < 0) {
-			cw_log(LOG_WARNING, "Failed to parse DUNDI information elements!\n");
+			opbx_log(LOG_WARNING, "Failed to parse DUNDI information elements!\n");
 			return -1;
 		}
 	}
@@ -1583,7 +1576,7 @@ static int handle_command_response(struct dundi_transaction *trans, struct dundi
 				if (cmd == DUNDI_COMMAND_EIDQUERY) {
 					res = dundi_answer_entity(trans, &ies, ies.called_context);
 				} else {
-					if (!ies.called_number || cw_strlen_zero(ies.called_number)) {
+					if (!ies.called_number || opbx_strlen_zero(ies.called_number)) {
 						/* They're not permitted to access that context */
 						dundi_ie_append_cause(&ied, DUNDI_IE_CAUSE, DUNDI_CAUSE_GENERAL, "Invalid or missing number/entity");
 						dundi_send(trans, resp, 0, 1, &ied);
@@ -1627,7 +1620,7 @@ static int handle_command_response(struct dundi_transaction *trans, struct dundi
 		} else {
 			int hasauth = 0;
 			trans->us_eid = peer->us_eid;
-			if (!cw_strlen_zero(peer->inkey)) {
+			if (!opbx_strlen_zero(peer->inkey)) {
 				hasauth = encrypted;
 			} else
 				hasauth = 1;
@@ -1637,14 +1630,14 @@ static int handle_command_response(struct dundi_transaction *trans, struct dundi
 				char data[256];
 				int needqual = 0;
 				if (peer->registerexpire > -1)
-					cw_sched_del(sched, peer->registerexpire);
-				peer->registerexpire = cw_sched_add(sched, (expire + 10) * 1000, do_register_expire, peer);
-				cw_inet_ntoa(iabuf, sizeof(iabuf), trans->addr.sin_addr);
+					opbx_sched_del(sched, peer->registerexpire);
+				peer->registerexpire = opbx_sched_add(sched, (expire + 10) * 1000, do_register_expire, peer);
+				opbx_inet_ntoa(iabuf, sizeof(iabuf), trans->addr.sin_addr);
 				snprintf(data, sizeof(data), "%s:%d:%d", iabuf, ntohs(trans->addr.sin_port), expire);
-				cw_db_put("dundi/dpeers", dundi_eid_to_str_short(eid_str, sizeof(eid_str), &peer->eid), data);
+				opbx_db_put("dundi/dpeers", dundi_eid_to_str_short(eid_str, sizeof(eid_str), &peer->eid), data);
 				if (inaddrcmp(&peer->addr, &trans->addr)) {
 					if (option_verbose > 2)
-						cw_verbose(VERBOSE_PREFIX_3 "Registered DUNDi peer '%s' at '%s:%d'\n", dundi_eid_to_str(eid_str, sizeof(eid_str), &peer->eid), iabuf, ntohs(trans->addr.sin_port));
+						opbx_verbose(VERBOSE_PREFIX_3 "Registered DUNDi peer '%s' at '%s:%d'\n", dundi_eid_to_str(eid_str, sizeof(eid_str), &peer->eid), iabuf, ntohs(trans->addr.sin_port));
 					needqual = 1;
 				}
 					
@@ -1660,8 +1653,8 @@ static int handle_command_response(struct dundi_transaction *trans, struct dundi
 		/* A dialplan response, lets see what we got... */
 		if (ies.cause < 1) {
 			/* Success of some sort */
-			cw_log(LOG_DEBUG, "Looks like success of some sort (%d), %d answers\n", ies.cause, ies.anscount);
-			if (cw_test_flag(trans, FLAG_ENCRYPT)) {
+			opbx_log(LOG_DEBUG, "Looks like success of some sort (%d), %d answers\n", ies.cause, ies.anscount);
+			if (opbx_test_flag(trans, FLAG_ENCRYPT)) {
 				authpass = encrypted;
 			} else 
 				authpass = 1;
@@ -1690,35 +1683,35 @@ static int handle_command_response(struct dundi_transaction *trans, struct dundi
 								dundi_eid_to_str(trans->parent->dr[trans->parent->respcount].eid_str, 
 									sizeof(trans->parent->dr[trans->parent->respcount].eid_str),
 									&ies.answers[x]->eid);
-								cw_copy_string(trans->parent->dr[trans->parent->respcount].dest, (char *)ies.answers[x]->data,
+								opbx_copy_string(trans->parent->dr[trans->parent->respcount].dest, (char *)ies.answers[x]->data,
 									sizeof(trans->parent->dr[trans->parent->respcount].dest));
-								cw_copy_string(trans->parent->dr[trans->parent->respcount].tech, tech2str(ies.answers[x]->protocol),
+								opbx_copy_string(trans->parent->dr[trans->parent->respcount].tech, tech2str(ies.answers[x]->protocol),
 									sizeof(trans->parent->dr[trans->parent->respcount].tech));
 								trans->parent->respcount++;
-								cw_clear_flag_nonstd(trans->parent->hmd, DUNDI_HINT_DONT_ASK);
+								opbx_clear_flag_nonstd(trans->parent->hmd, DUNDI_HINT_DONT_ASK);
 							} else if (trans->parent->dr[z].weight > ies.answers[x]->weight) {
 								/* Update weight if appropriate */
 								trans->parent->dr[z].weight = ies.answers[x]->weight;
 							}
 						} else
-							cw_log(LOG_NOTICE, "Dropping excessive answers to request for %s@%s\n",
+							opbx_log(LOG_NOTICE, "Dropping excessive answers to request for %s@%s\n",
 								trans->parent->number, trans->parent->dcontext);
 					}
 					/* Save all the results (if any) we had.  Even if no results, still cache lookup.  Let
 					   the cache know if this request was unaffected by our entity list. */
 					cache_save(&trans->them_eid, trans->parent, y, 
-							ies.hint ? cw_test_flag_nonstd(ies.hint, htons(DUNDI_HINT_UNAFFECTED)) : 0, ies.expiration, 0);
+							ies.hint ? opbx_test_flag_nonstd(ies.hint, htons(DUNDI_HINT_UNAFFECTED)) : 0, ies.expiration, 0);
 					if (ies.hint) {
 						cache_save_hint(&trans->them_eid, trans->parent, ies.hint, ies.expiration);
-						if (cw_test_flag_nonstd(ies.hint, htons(DUNDI_HINT_TTL_EXPIRED)))
-							cw_set_flag_nonstd(trans->parent->hmd, DUNDI_HINT_TTL_EXPIRED);
-						if (cw_test_flag_nonstd(ies.hint, htons(DUNDI_HINT_DONT_ASK))) { 
+						if (opbx_test_flag_nonstd(ies.hint, htons(DUNDI_HINT_TTL_EXPIRED)))
+							opbx_set_flag_nonstd(trans->parent->hmd, DUNDI_HINT_TTL_EXPIRED);
+						if (opbx_test_flag_nonstd(ies.hint, htons(DUNDI_HINT_DONT_ASK))) { 
 							if (strlen((char *)ies.hint->data) > strlen(trans->parent->hmd->exten)) {
-								cw_copy_string(trans->parent->hmd->exten, (char *)ies.hint->data, 
+								opbx_copy_string(trans->parent->hmd->exten, (char *)ies.hint->data, 
 									sizeof(trans->parent->hmd->exten));
 							}
 						} else {
-							cw_clear_flag_nonstd(trans->parent->hmd, DUNDI_HINT_DONT_ASK);
+							opbx_clear_flag_nonstd(trans->parent->hmd, DUNDI_HINT_DONT_ASK);
 						}
 					}
 					if (ies.expiration > 0) {
@@ -1744,8 +1737,8 @@ static int handle_command_response(struct dundi_transaction *trans, struct dundi
 		/* A dialplan response, lets see what we got... */
 		if (ies.cause < 1) {
 			/* Success of some sort */
-			cw_log(LOG_DEBUG, "Looks like success of some sort (%d)\n", ies.cause);
-			if (cw_test_flag(trans, FLAG_ENCRYPT)) {
+			opbx_log(LOG_DEBUG, "Looks like success of some sort (%d)\n", ies.cause);
+			if (opbx_test_flag(trans, FLAG_ENCRYPT)) {
 				authpass = encrypted;
 			} else 
 				authpass = 1;
@@ -1755,30 +1748,30 @@ static int handle_command_response(struct dundi_transaction *trans, struct dundi
 					if (!trans->parent->respcount) {
 						trans->parent->respcount++;
 						if (ies.q_dept)
-							cw_copy_string(trans->parent->dei->orgunit, ies.q_dept, sizeof(trans->parent->dei->orgunit));
+							opbx_copy_string(trans->parent->dei->orgunit, ies.q_dept, sizeof(trans->parent->dei->orgunit));
 						if (ies.q_org)
-							cw_copy_string(trans->parent->dei->org, ies.q_org, sizeof(trans->parent->dei->org));
+							opbx_copy_string(trans->parent->dei->org, ies.q_org, sizeof(trans->parent->dei->org));
 						if (ies.q_locality)
-							cw_copy_string(trans->parent->dei->locality, ies.q_locality, sizeof(trans->parent->dei->locality));
+							opbx_copy_string(trans->parent->dei->locality, ies.q_locality, sizeof(trans->parent->dei->locality));
 						if (ies.q_stateprov)
-							cw_copy_string(trans->parent->dei->stateprov, ies.q_stateprov, sizeof(trans->parent->dei->stateprov));
+							opbx_copy_string(trans->parent->dei->stateprov, ies.q_stateprov, sizeof(trans->parent->dei->stateprov));
 						if (ies.q_country)
-							cw_copy_string(trans->parent->dei->country, ies.q_country, sizeof(trans->parent->dei->country));
+							opbx_copy_string(trans->parent->dei->country, ies.q_country, sizeof(trans->parent->dei->country));
 						if (ies.q_email)
-							cw_copy_string(trans->parent->dei->email, ies.q_email, sizeof(trans->parent->dei->email));
+							opbx_copy_string(trans->parent->dei->email, ies.q_email, sizeof(trans->parent->dei->email));
 						if (ies.q_phone)
-							cw_copy_string(trans->parent->dei->phone, ies.q_phone, sizeof(trans->parent->dei->phone));
+							opbx_copy_string(trans->parent->dei->phone, ies.q_phone, sizeof(trans->parent->dei->phone));
 						if (ies.q_ipaddr)
-							cw_copy_string(trans->parent->dei->ipaddr, ies.q_ipaddr, sizeof(trans->parent->dei->ipaddr));
+							opbx_copy_string(trans->parent->dei->ipaddr, ies.q_ipaddr, sizeof(trans->parent->dei->ipaddr));
 						if (!dundi_eid_cmp(&trans->them_eid, &trans->parent->query_eid)) {
 							/* If it's them, update our address */
-							cw_inet_ntoa(trans->parent->dei->ipaddr, sizeof(trans->parent->dei->ipaddr),
+							opbx_inet_ntoa(trans->parent->dei->ipaddr, sizeof(trans->parent->dei->ipaddr),
 								trans->addr.sin_addr);
 						}
 					}
 					if (ies.hint) {
-						if (cw_test_flag_nonstd(ies.hint, htons(DUNDI_HINT_TTL_EXPIRED)))
-							cw_set_flag_nonstd(trans->parent->hmd, DUNDI_HINT_TTL_EXPIRED);
+						if (opbx_test_flag_nonstd(ies.hint, htons(DUNDI_HINT_TTL_EXPIRED)))
+							opbx_set_flag_nonstd(trans->parent->hmd, DUNDI_HINT_TTL_EXPIRED);
 					}
 				}
 				/* Close connection if not final */
@@ -1799,19 +1792,19 @@ static int handle_command_response(struct dundi_transaction *trans, struct dundi
 		if (ies.cause < 1) {
 			int hasauth;
 			/* Success of some sort */
-			if (cw_test_flag(trans, FLAG_ENCRYPT)) {
+			if (opbx_test_flag(trans, FLAG_ENCRYPT)) {
 				hasauth = encrypted;
 			} else 
 				hasauth = 1;
 			
 			if (!hasauth) {
-				cw_log(LOG_NOTICE, "Reponse to register not authorized!\n");
+				opbx_log(LOG_NOTICE, "Reponse to register not authorized!\n");
 				if (!final) {
 					dundi_ie_append_cause(&ied, DUNDI_IE_CAUSE, DUNDI_CAUSE_NOAUTH, "Improper signature in answer");
 					dundi_send(trans, DUNDI_COMMAND_CANCEL, 0, 1, &ied);
 				}
 			} else {
-				cw_log(LOG_DEBUG, "Yay, we've registered as '%s' to '%s'\n", dundi_eid_to_str(eid_str, sizeof(eid_str), &trans->us_eid),
+				opbx_log(LOG_DEBUG, "Yay, we've registered as '%s' to '%s'\n", dundi_eid_to_str(eid_str, sizeof(eid_str), &trans->us_eid),
 							dundi_eid_to_str(eid_str2, sizeof(eid_str2), &trans->them_eid));
 				/* Close connection if not final */
 				if (!final) 
@@ -1832,13 +1825,13 @@ static int handle_command_response(struct dundi_transaction *trans, struct dundi
 			dundi_send(trans, DUNDI_COMMAND_CANCEL, 0, 1, NULL);
 		break;
 	case DUNDI_COMMAND_ENCREJ:
-		if ((cw_test_flag(trans, FLAG_SENDFULLKEY)) || !trans->lasttrans || !(peer = find_peer(&trans->them_eid))) {
+		if ((opbx_test_flag(trans, FLAG_SENDFULLKEY)) || !trans->lasttrans || !(peer = find_peer(&trans->them_eid))) {
 			/* No really, it's over at this point */
 			if (!final) 
 				dundi_send(trans, DUNDI_COMMAND_CANCEL, 0, 1, NULL);
 		} else {
 			/* Send with full key */
-			cw_set_flag(trans, FLAG_SENDFULLKEY);
+			opbx_set_flag(trans, FLAG_SENDFULLKEY);
 			if (final) {
 				/* Ooops, we got a final message, start by sending ACK... */
 				dundi_ack(trans, hdr->cmdresp & 0x80);
@@ -1880,7 +1873,7 @@ static int handle_command_response(struct dundi_transaction *trans, struct dundi
 				trans->ecx = peer->them_ecx;
 				trans->dcx = peer->them_dcx;
 			}
-			if (cw_test_flag(trans, FLAG_ENCRYPT) && ies.encblock && ies.enclen) {
+			if (opbx_test_flag(trans, FLAG_ENCRYPT) && ies.encblock && ies.enclen) {
 				struct dundi_hdr *dhdr;
 				unsigned char decoded[MAX_PACKET_SIZE];
 				int ddatalen;
@@ -1895,12 +1888,12 @@ static int handle_command_response(struct dundi_transaction *trans, struct dundi
 					hdr->cmdresp |= dhdr->cmdresp & 0x80;
 					break;
 				} else
-					cw_log(LOG_DEBUG, "Ouch, decrypt failed :(\n");
+					opbx_log(LOG_DEBUG, "Ouch, decrypt failed :(\n");
 			}
 		}
 		if (!final) {
 			/* Turn off encryption */
-			cw_clear_flag(trans, FLAG_ENCRYPT);
+			opbx_clear_flag(trans, FLAG_ENCRYPT);
 			dundi_send(trans, DUNDI_COMMAND_ENCREJ, 0, 1, NULL);
 		}
 		break;
@@ -1923,7 +1916,7 @@ static void destroy_packets(struct dundi_packet *p)
 		prev = p;
 		p = p->next;
 		if (prev->retransid > -1)
-			cw_sched_del(sched, prev->retransid);
+			opbx_sched_del(sched, prev->retransid);
 		free(prev);
 	}
 }
@@ -1938,12 +1931,12 @@ static int ack_trans(struct dundi_transaction *trans, int iseqno)
 		if ((pack->h->oseqno + 1) % 255 == iseqno) {
 			destroy_packet(pack, 0);
 			if (trans->lasttrans) {
-				cw_log(LOG_WARNING, "Whoa, there was still a last trans?\n");
+				opbx_log(LOG_WARNING, "Whoa, there was still a last trans?\n");
 				destroy_packets(trans->lasttrans);
 			}
 			trans->lasttrans = pack;
 			if (trans->autokillid > -1)
-				cw_sched_del(sched, trans->autokillid);
+				opbx_sched_del(sched, trans->autokillid);
 			trans->autokillid = -1;
 			return 1;
 		}
@@ -1963,7 +1956,7 @@ static int handle_frame(struct dundi_hdr *h, struct sockaddr_in *sin, int datale
 	/* Got a transaction, see where this header fits in */
 	if (h->oseqno == trans->iseqno) {
 		/* Just what we were looking for...  Anything but ack increments iseqno */
-		if (ack_trans(trans, h->iseqno) && cw_test_flag(trans, FLAG_FINAL)) {
+		if (ack_trans(trans, h->iseqno) && opbx_test_flag(trans, FLAG_FINAL)) {
 			/* If final, we're done */
 			destroy_trans(trans, 0);
 			return 0;
@@ -1989,7 +1982,7 @@ static int handle_frame(struct dundi_hdr *h, struct sockaddr_in *sin, int datale
 		dundi_ack(trans, 0);
 	} else {
 		/* Out of window -- simply drop */
-		cw_log(LOG_DEBUG, "Dropping packet out of window!\n");
+		opbx_log(LOG_DEBUG, "Dropping packet out of window!\n");
 	}
 	return 0;
 }
@@ -2005,20 +1998,20 @@ static int socket_read(int *id, int fd, short events, void *cbdata)
 	res = recvfrom(netsocket, buf, sizeof(buf) - 1, 0,(struct sockaddr *) &sin, &len);
 	if (res < 0) {
 		if (errno != ECONNREFUSED)
-			cw_log(LOG_WARNING, "Error: %s\n", strerror(errno));
+			opbx_log(LOG_WARNING, "Error: %s\n", strerror(errno));
 		return 1;
 	}
 	if (res < sizeof(struct dundi_hdr)) {
-		cw_log(LOG_WARNING, "midget packet received (%d of %d min)\n", res, (int)sizeof(struct dundi_hdr));
+		opbx_log(LOG_WARNING, "midget packet received (%d of %d min)\n", res, (int)sizeof(struct dundi_hdr));
 		return 1;
 	}
 	buf[res] = '\0';
 	h = (struct dundi_hdr *)buf;
 	if (dundidebug)
 		dundi_showframe(h, 1, &sin, res - sizeof(struct dundi_hdr));
-	cw_mutex_lock(&peerlock);
+	opbx_mutex_lock(&peerlock);
 	handle_frame(h, &sin, res - sizeof(struct dundi_hdr));
-	cw_mutex_unlock(&peerlock);
+	opbx_mutex_unlock(&peerlock);
 	return 1;
 }
 
@@ -2028,7 +2021,7 @@ static void build_secret(char *secret, int seclen)
 	char *s;
 	build_iv(tmp);
 	secret[0] = '\0';
-	cw_base64encode(secret, tmp, sizeof(tmp), seclen);
+	opbx_base64encode(secret, tmp, sizeof(tmp), seclen);
 	/* Eliminate potential bad characters */
 	while((s = strchr(secret, ';'))) *s = '+';
 	while((s = strchr(secret, '/'))) *s = '+';
@@ -2045,9 +2038,9 @@ static void save_secret(const char *newkey, const char *oldkey)
 	else
 		snprintf(tmp, sizeof(tmp), "%s", newkey);
 	rotatetime = time(NULL) + DUNDI_SECRET_TIME;
-	cw_db_put(secretpath, "secret", tmp);
+	opbx_db_put(secretpath, "secret", tmp);
 	snprintf(tmp, sizeof(tmp), "%ld", rotatetime);
-	cw_db_put(secretpath, "secretexpiry", tmp);
+	opbx_db_put(secretpath, "secretexpiry", tmp);
 }
 
 static void load_password(void)
@@ -2057,9 +2050,9 @@ static void load_password(void)
 	char tmp[256];
 	time_t expired;
 	
-	cw_db_get(secretpath, "secretexpiry", tmp, sizeof(tmp));
+	opbx_db_get(secretpath, "secretexpiry", tmp, sizeof(tmp));
 	if (sscanf(tmp, "%ld", &expired) == 1) {
-		cw_db_get(secretpath, "secret", tmp, sizeof(tmp));
+		opbx_db_get(secretpath, "secret", tmp, sizeof(tmp));
 		current = strchr(tmp, ';');
 		if (!current)
 			current = tmp;
@@ -2080,7 +2073,7 @@ static void load_password(void)
 	}
 	if (current) {
 		/* Current key is still valid, just setup rotatation properly */
-		cw_copy_string(cursecret, current, sizeof(cursecret));
+		opbx_copy_string(cursecret, current, sizeof(cursecret));
 		rotatetime = expired;
 	} else {
 		/* Current key is out of date, rotate or eliminate all together */
@@ -2100,7 +2093,7 @@ static void check_password(void)
 #endif
 	if ((now - rotatetime) >= 0) {
 		/* Time to rotate keys */
-		cw_copy_string(oldsecret, cursecret, sizeof(oldsecret));
+		opbx_copy_string(oldsecret, cursecret, sizeof(oldsecret));
 		build_secret(cursecret, sizeof(cursecret));
 		save_secret(cursecret, oldsecret);
 	}
@@ -2112,10 +2105,10 @@ static void *network_thread(void *ignore)
 	   from the network, and queue them for delivery to the channels */
 	int res;
 	/* Establish I/O callback for socket read */
-	cw_io_add(io, netsocket, socket_read, CW_IO_IN, NULL);
+	opbx_io_add(io, netsocket, socket_read, OPBX_IO_IN, NULL);
 	for(;;) {
 		/* 10s select timeout */
-		res = cw_io_wait(io, 10000);
+		res = opbx_io_wait(io, 10000);
 		check_password();
 	}
 	return NULL;
@@ -2131,7 +2124,7 @@ static void *process_precache(void *ign)
 	for (;;) {
 		time(&now);
 		run = 0;
-		cw_mutex_lock(&pclock);
+		opbx_mutex_lock(&pclock);
 		if (pcq) {
 			if (!pcq->expiration) {
 				/* Gone...  Remove... */
@@ -2141,12 +2134,12 @@ static void *process_precache(void *ign)
 			} else if (pcq->expiration < now) {
 				/* Process this entry */
 				pcq->expiration = 0;
-				cw_copy_string(context, pcq->context, sizeof(context));
-				cw_copy_string(number, pcq->number, sizeof(number));
+				opbx_copy_string(context, pcq->context, sizeof(context));
+				opbx_copy_string(number, pcq->number, sizeof(number));
 				run = 1;
 			}
 		}
-		cw_mutex_unlock(&pclock);
+		opbx_mutex_unlock(&pclock);
 		if (run) {
 			dundi_precache(context, number);
 		} else
@@ -2157,8 +2150,8 @@ static void *process_precache(void *ign)
 
 static int start_network_thread(void)
 {
-	cw_pthread_create(&netthreadid, NULL, network_thread, NULL);
-	cw_pthread_create(&precachethreadid, NULL, process_precache, NULL);
+	opbx_pthread_create(&netthreadid, NULL, network_thread, NULL);
+	opbx_pthread_create(&precachethreadid, NULL, process_precache, NULL);
 	return 0;
 }
 
@@ -2167,7 +2160,7 @@ static int dundi_do_debug(int fd, int argc, char *argv[])
 	if (argc != 2)
 		return RESULT_SHOWUSAGE;
 	dundidebug = 1;
-	cw_cli(fd, "DUNDi Debugging Enabled\n");
+	opbx_cli(fd, "DUNDi Debugging Enabled\n");
 	return RESULT_SUCCESS;
 }
 
@@ -2176,7 +2169,7 @@ static int dundi_do_store_history(int fd, int argc, char *argv[])
 	if (argc != 3)
 		return RESULT_SHOWUSAGE;
 	global_storehistory = 1;
-	cw_cli(fd, "DUNDi History Storage Enabled\n");
+	opbx_cli(fd, "DUNDi History Storage Enabled\n");
 	return RESULT_SUCCESS;
 }
 
@@ -2195,7 +2188,7 @@ static int dundi_flush(int fd, int argc, char *argv[])
 		/* Flush statistics */
 		struct dundi_peer *p;
 		int x;
-		cw_mutex_lock(&peerlock);
+		opbx_mutex_lock(&peerlock);
 		p = peers;
 		while(p) {
 			for (x=0;x<DUNDI_TIMING_HISTORY;x++) {
@@ -2207,10 +2200,10 @@ static int dundi_flush(int fd, int argc, char *argv[])
 			p->avgms = 0;
 			p = p->next;
 		}
-		cw_mutex_unlock(&peerlock);
+		opbx_mutex_unlock(&peerlock);
 	} else {
-		cw_db_deltree("dundi/cache", NULL);
-		cw_cli(fd, "DUNDi Cache Flushed\n");
+		opbx_db_deltree("dundi/cache", NULL);
+		opbx_cli(fd, "DUNDi Cache Flushed\n");
 	}
 	return RESULT_SUCCESS;
 }
@@ -2220,7 +2213,7 @@ static int dundi_no_debug(int fd, int argc, char *argv[])
 	if (argc != 3)
 		return RESULT_SHOWUSAGE;
 	dundidebug = 0;
-	cw_cli(fd, "DUNDi Debugging Disabled\n");
+	opbx_cli(fd, "DUNDi Debugging Disabled\n");
 	return RESULT_SUCCESS;
 }
 
@@ -2229,7 +2222,7 @@ static int dundi_no_store_history(int fd, int argc, char *argv[])
 	if (argc != 4)
 		return RESULT_SHOWUSAGE;
 	global_storehistory = 0;
-	cw_cli(fd, "DUNDi History Storage Disabled\n");
+	opbx_cli(fd, "DUNDi History Storage Disabled\n");
 	return RESULT_SUCCESS;
 }
 
@@ -2255,7 +2248,7 @@ static char *complete_peer_helper(char *line, char *word, int pos, int state, in
 	char eid_str[20];
 	if (pos != rpos)
 		return NULL;
-	cw_mutex_lock(&peerlock);
+	opbx_mutex_lock(&peerlock);
 	p = peers;
 	while(p) {
 		if (!strncasecmp(word, dundi_eid_to_str(eid_str, sizeof(eid_str), &p->eid), strlen(word))) {
@@ -2268,7 +2261,7 @@ static char *complete_peer_helper(char *line, char *word, int pos, int state, in
 		ret = strdup(dundi_eid_to_str(eid_str, sizeof(eid_str), &p->eid));
 	} else
 		ret = NULL;
-	cw_mutex_unlock(&peerlock);
+	opbx_mutex_unlock(&peerlock);
 	return ret;
 }
 
@@ -2312,26 +2305,26 @@ static int dundi_do_lookup(int fd, int argc, char *argv[])
 		else
 			return RESULT_SHOWUSAGE;
 	}
-	cw_copy_string(tmp, argv[2], sizeof(tmp));
+	opbx_copy_string(tmp, argv[2], sizeof(tmp));
 	context = strchr(tmp, '@');
 	if (context) {
 		*context = '\0';
 		context++;
 	}
-	start = cw_tvnow();
+	start = opbx_tvnow();
 	res = dundi_lookup(dr, MAX_RESULTS, NULL, context, tmp, bypass);
 	
 	if (res < 0) 
-		cw_cli(fd, "DUNDi lookup returned error.\n");
+		opbx_cli(fd, "DUNDi lookup returned error.\n");
 	else if (!res) 
-		cw_cli(fd, "DUNDi lookup returned no results.\n");
+		opbx_cli(fd, "DUNDi lookup returned no results.\n");
 	else
 		sort_results(dr, res);
 	for (x=0;x<res;x++) {
-		cw_cli(fd, "%3d. %5d %s/%s (%s)\n", x + 1, dr[x].weight, dr[x].tech, dr[x].dest, dundi_flags2str(fs, sizeof(fs), dr[x].flags));
-		cw_cli(fd, "     from %s, expires in %d s\n", dr[x].eid_str, dr[x].expiration);
+		opbx_cli(fd, "%3d. %5d %s/%s (%s)\n", x + 1, dr[x].weight, dr[x].tech, dr[x].dest, dundi_flags2str(fs, sizeof(fs), dr[x].flags));
+		opbx_cli(fd, "     from %s, expires in %d s\n", dr[x].eid_str, dr[x].expiration);
 	}
-	cw_cli(fd, "DUNDi lookup completed in %d ms\n", cw_tvdiff_ms(cw_tvnow(), start));
+	opbx_cli(fd, "DUNDi lookup completed in %d ms\n", opbx_tvdiff_ms(opbx_tvnow(), start));
 	return RESULT_SUCCESS;
 }
 
@@ -2343,20 +2336,20 @@ static int dundi_do_precache(int fd, int argc, char *argv[])
 	struct timeval start;
 	if ((argc < 3) || (argc > 3))
 		return RESULT_SHOWUSAGE;
-	cw_copy_string(tmp, argv[2], sizeof(tmp));
+	opbx_copy_string(tmp, argv[2], sizeof(tmp));
 	context = strchr(tmp, '@');
 	if (context) {
 		*context = '\0';
 		context++;
 	}
-	start = cw_tvnow();
+	start = opbx_tvnow();
 	res = dundi_precache(context, tmp);
 	
 	if (res < 0) 
-		cw_cli(fd, "DUNDi precache returned error.\n");
+		opbx_cli(fd, "DUNDi precache returned error.\n");
 	else if (!res) 
-		cw_cli(fd, "DUNDi precache returned no error.\n");
-	cw_cli(fd, "DUNDi lookup completed in %d ms\n", cw_tvdiff_ms(cw_tvnow(), start));
+		opbx_cli(fd, "DUNDi precache returned no error.\n");
+	opbx_cli(fd, "DUNDi lookup completed in %d ms\n", opbx_tvdiff_ms(opbx_tvnow(), start));
 	return RESULT_SUCCESS;
 }
 
@@ -2370,10 +2363,10 @@ static int dundi_do_query(int fd, int argc, char *argv[])
 	if ((argc < 3) || (argc > 3))
 		return RESULT_SHOWUSAGE;
 	if (dundi_str_to_eid(&eid, argv[2])) {
-		cw_cli(fd, "'%s' is not a valid EID!\n", argv[2]);
+		opbx_cli(fd, "'%s' is not a valid EID!\n", argv[2]);
 		return RESULT_SHOWUSAGE;
 	}
-	cw_copy_string(tmp, argv[2], sizeof(tmp));
+	opbx_copy_string(tmp, argv[2], sizeof(tmp));
 	context = strchr(tmp, '@');
 	if (context) {
 		*context = '\0';
@@ -2381,19 +2374,19 @@ static int dundi_do_query(int fd, int argc, char *argv[])
 	}
 	res = dundi_query_eid(&dei, context, eid);
 	if (res < 0) 
-		cw_cli(fd, "DUNDi Query EID returned error.\n");
+		opbx_cli(fd, "DUNDi Query EID returned error.\n");
 	else if (!res) 
-		cw_cli(fd, "DUNDi Query EID returned no results.\n");
+		opbx_cli(fd, "DUNDi Query EID returned no results.\n");
 	else {
-		cw_cli(fd, "DUNDi Query EID succeeded:\n");
-		cw_cli(fd, "Department:      %s\n", dei.orgunit);
-		cw_cli(fd, "Organization:    %s\n", dei.org);
-		cw_cli(fd, "City/Locality:   %s\n", dei.locality);
-		cw_cli(fd, "State/Province:  %s\n", dei.stateprov);
-		cw_cli(fd, "Country:         %s\n", dei.country);
-		cw_cli(fd, "E-mail:          %s\n", dei.email);
-		cw_cli(fd, "Phone:           %s\n", dei.phone);
-		cw_cli(fd, "IP Address:      %s\n", dei.ipaddr);
+		opbx_cli(fd, "DUNDi Query EID succeeded:\n");
+		opbx_cli(fd, "Department:      %s\n", dei.orgunit);
+		opbx_cli(fd, "Organization:    %s\n", dei.org);
+		opbx_cli(fd, "City/Locality:   %s\n", dei.locality);
+		opbx_cli(fd, "State/Province:  %s\n", dei.stateprov);
+		opbx_cli(fd, "Country:         %s\n", dei.country);
+		opbx_cli(fd, "E-mail:          %s\n", dei.email);
+		opbx_cli(fd, "Phone:           %s\n", dei.phone);
+		opbx_cli(fd, "IP Address:      %s\n", dei.ipaddr);
 	}
 	return RESULT_SUCCESS;
 }
@@ -2409,7 +2402,7 @@ static int dundi_show_peer(int fd, int argc, char *argv[])
 	
 	if (argc != 4)
 		return RESULT_SHOWUSAGE;
-	cw_mutex_lock(&peerlock);
+	opbx_mutex_lock(&peerlock);
 	peer = peers;
 	while(peer) {
 		if (!strcasecmp(dundi_eid_to_str(eid_str, sizeof(eid_str), &peer->eid), argv[3]))
@@ -2433,44 +2426,44 @@ static int dundi_show_peer(int fd, int argc, char *argv[])
 		default:
 			order = "Unknown";
 		}
-		cw_cli(fd, "Peer:    %s\n", dundi_eid_to_str(eid_str, sizeof(eid_str), &peer->eid));
-		cw_cli(fd, "Model:   %s\n", model2str(peer->model));
-		cw_cli(fd, "Host:    %s\n", peer->addr.sin_addr.s_addr ? cw_inet_ntoa(iabuf, sizeof(iabuf), peer->addr.sin_addr) : "<Unspecified>");
-		cw_cli(fd, "Dynamic: %s\n", peer->dynamic ? "yes" : "no");
-		cw_cli(fd, "KeyPend: %s\n", peer->keypending ? "yes" : "no");
-		cw_cli(fd, "Reg:     %s\n", peer->registerid < 0 ? "No" : "Yes");
-		cw_cli(fd, "In Key:  %s\n", cw_strlen_zero(peer->inkey) ? "<None>" : peer->inkey);
-		cw_cli(fd, "Out Key: %s\n", cw_strlen_zero(peer->outkey) ? "<None>" : peer->outkey);
+		opbx_cli(fd, "Peer:    %s\n", dundi_eid_to_str(eid_str, sizeof(eid_str), &peer->eid));
+		opbx_cli(fd, "Model:   %s\n", model2str(peer->model));
+		opbx_cli(fd, "Host:    %s\n", peer->addr.sin_addr.s_addr ? opbx_inet_ntoa(iabuf, sizeof(iabuf), peer->addr.sin_addr) : "<Unspecified>");
+		opbx_cli(fd, "Dynamic: %s\n", peer->dynamic ? "yes" : "no");
+		opbx_cli(fd, "KeyPend: %s\n", peer->keypending ? "yes" : "no");
+		opbx_cli(fd, "Reg:     %s\n", peer->registerid < 0 ? "No" : "Yes");
+		opbx_cli(fd, "In Key:  %s\n", opbx_strlen_zero(peer->inkey) ? "<None>" : peer->inkey);
+		opbx_cli(fd, "Out Key: %s\n", opbx_strlen_zero(peer->outkey) ? "<None>" : peer->outkey);
 		if (peer->include) {
-			cw_cli(fd, "Include logic%s:\n", peer->model & DUNDI_MODEL_OUTBOUND ? "" : " (IGNORED)");
+			opbx_cli(fd, "Include logic%s:\n", peer->model & DUNDI_MODEL_OUTBOUND ? "" : " (IGNORED)");
 		}
 		p = peer->include;
 		while(p) {
-			cw_cli(fd, "-- %s %s\n", p->allow ? "include" : "do not include", p->name);
+			opbx_cli(fd, "-- %s %s\n", p->allow ? "include" : "do not include", p->name);
 			p = p->next;
 		}
 		if (peer->permit) {
-			cw_cli(fd, "Query logic%s:\n", peer->model & DUNDI_MODEL_INBOUND ? "" : " (IGNORED)");
+			opbx_cli(fd, "Query logic%s:\n", peer->model & DUNDI_MODEL_INBOUND ? "" : " (IGNORED)");
 		}
 		p = peer->permit;
 		while(p) {
-			cw_cli(fd, "-- %s %s\n", p->allow ? "permit" : "deny", p->name);
+			opbx_cli(fd, "-- %s %s\n", p->allow ? "permit" : "deny", p->name);
 			p = p->next;
 		}
 		cnt = 0;
 		for (x=0;x<DUNDI_TIMING_HISTORY;x++) {
 			if (peer->lookups[x]) {
 				if (!cnt)
-					cw_cli(fd, "Last few query times:\n");
-				cw_cli(fd, "-- %d. %s (%d ms)\n", x + 1, peer->lookups[x], peer->lookuptimes[x]);
+					opbx_cli(fd, "Last few query times:\n");
+				opbx_cli(fd, "-- %d. %s (%d ms)\n", x + 1, peer->lookups[x], peer->lookuptimes[x]);
 				cnt++;
 			}
 		}
 		if (cnt)
-			cw_cli(fd, "Average query time: %d ms\n", peer->avgms);
+			opbx_cli(fd, "Average query time: %d ms\n", peer->avgms);
 	} else
-		cw_cli(fd, "No such peer '%s'\n", argv[3]);
-	cw_mutex_unlock(&peerlock);
+		opbx_cli(fd, "No such peer '%s'\n", argv[3]);
+	opbx_mutex_unlock(&peerlock);
 	return RESULT_SUCCESS;
 }
 
@@ -2496,8 +2489,8 @@ static int dundi_show_peers(int fd, int argc, char *argv[])
 		} else
 			return RESULT_SHOWUSAGE;
  	}
-	cw_mutex_lock(&peerlock);
-	cw_cli(fd, FORMAT2, "EID", "Host", "Model", "AvgTime", "Status");
+	opbx_mutex_lock(&peerlock);
+	opbx_cli(fd, FORMAT2, "EID", "Host", "Model", "AvgTime", "Status");
 	for (peer = peers;peer;peer = peer->next) {
 		char status[20];
 		int print_line = -1;
@@ -2531,7 +2524,7 @@ static int dundi_show_peers(int fd, int argc, char *argv[])
 		else
 			strcpy(avgms, "Unavail");
 		snprintf(srch, sizeof(srch), FORMAT, dundi_eid_to_str(eid_str, sizeof(eid_str), &peer->eid), 
-					peer->addr.sin_addr.s_addr ? cw_inet_ntoa(iabuf, sizeof(iabuf), peer->addr.sin_addr) : "(Unspecified)",
+					peer->addr.sin_addr.s_addr ? opbx_inet_ntoa(iabuf, sizeof(iabuf), peer->addr.sin_addr) : "(Unspecified)",
 					peer->dynamic ? "(D)" : "(S)", model2str(peer->model), avgms, status);
 
                 if (argc == 5) {
@@ -2547,13 +2540,13 @@ static int dundi_show_peers(int fd, int argc, char *argv[])
                 }
 		
         if (print_line) {
-			cw_cli(fd, FORMAT, dundi_eid_to_str(eid_str, sizeof(eid_str), &peer->eid), 
-					peer->addr.sin_addr.s_addr ? cw_inet_ntoa(iabuf, sizeof(iabuf), peer->addr.sin_addr) : "(Unspecified)",
+			opbx_cli(fd, FORMAT, dundi_eid_to_str(eid_str, sizeof(eid_str), &peer->eid), 
+					peer->addr.sin_addr.s_addr ? opbx_inet_ntoa(iabuf, sizeof(iabuf), peer->addr.sin_addr) : "(Unspecified)",
 					peer->dynamic ? "(D)" : "(S)", model2str(peer->model), avgms, status);
 		}
 	}
-	cw_cli(fd, "%d dundi peers [%d online, %d offline, %d unmonitored]\n", total_peers, online_peers, offline_peers, unmonitored_peers);
-	cw_mutex_unlock(&peerlock);
+	opbx_cli(fd, "%d dundi peers [%d online, %d offline, %d unmonitored]\n", total_peers, online_peers, offline_peers, unmonitored_peers);
+	opbx_mutex_unlock(&peerlock);
 	return RESULT_SUCCESS;
 #undef FORMAT
 #undef FORMAT2
@@ -2567,13 +2560,13 @@ static int dundi_show_trans(int fd, int argc, char *argv[])
 	char iabuf[INET_ADDRSTRLEN];
 	if (argc != 3)
 		return RESULT_SHOWUSAGE;
-	cw_mutex_lock(&peerlock);
-	cw_cli(fd, FORMAT2, "Remote", "Src", "Dst", "Tx", "Rx", "Ack");
+	opbx_mutex_lock(&peerlock);
+	opbx_cli(fd, FORMAT2, "Remote", "Src", "Dst", "Tx", "Rx", "Ack");
 	for (trans = alltrans;trans;trans = trans->allnext) {
-			cw_cli(fd, FORMAT, cw_inet_ntoa(iabuf, sizeof(iabuf), trans->addr.sin_addr), 
+			opbx_cli(fd, FORMAT, opbx_inet_ntoa(iabuf, sizeof(iabuf), trans->addr.sin_addr), 
 					ntohs(trans->addr.sin_port), trans->strans, trans->dtrans, trans->oseqno, trans->iseqno, trans->aseqno);
 	}
-	cw_mutex_unlock(&peerlock);
+	opbx_mutex_unlock(&peerlock);
 	return RESULT_SUCCESS;
 #undef FORMAT
 #undef FORMAT2
@@ -2584,10 +2577,10 @@ static int dundi_show_entityid(int fd, int argc, char *argv[])
 	char eid_str[20];
 	if (argc != 3)
 		return RESULT_SHOWUSAGE;
-	cw_mutex_lock(&peerlock);
+	opbx_mutex_lock(&peerlock);
 	dundi_eid_to_str(eid_str, sizeof(eid_str), &global_eid);
-	cw_mutex_unlock(&peerlock);
-	cw_cli(fd, "Global EID for this system is '%s'\n", eid_str);
+	opbx_mutex_unlock(&peerlock);
+	opbx_cli(fd, "Global EID for this system is '%s'\n", eid_str);
 	return RESULT_SUCCESS;
 }
 
@@ -2599,13 +2592,13 @@ static int dundi_show_requests(int fd, int argc, char *argv[])
 	char eidstr[20];
 	if (argc != 3)
 		return RESULT_SHOWUSAGE;
-	cw_mutex_lock(&peerlock);
-	cw_cli(fd, FORMAT2, "Number", "Context", "Root", "Max", "Rsp");
+	opbx_mutex_lock(&peerlock);
+	opbx_cli(fd, FORMAT2, "Number", "Context", "Root", "Max", "Rsp");
 	for (req = requests;req;req = req->next) {
-			cw_cli(fd, FORMAT, req->number, req->dcontext,
+			opbx_cli(fd, FORMAT, req->number, req->dcontext,
 						dundi_eid_zero(&req->root_eid) ? "<unspecified>" : dundi_eid_to_str(eidstr, sizeof(eidstr), &req->root_eid), req->maxcount, req->respcount);
 	}
-	cw_mutex_unlock(&peerlock);
+	opbx_mutex_unlock(&peerlock);
 	return RESULT_SUCCESS;
 #undef FORMAT
 #undef FORMAT2
@@ -2621,14 +2614,14 @@ static int dundi_show_mappings(int fd, int argc, char *argv[])
 	char fs[256];
 	if (argc != 3)
 		return RESULT_SHOWUSAGE;
-	cw_mutex_lock(&peerlock);
-	cw_cli(fd, FORMAT2, "DUNDi Cntxt", "Weight", "Local Cntxt", "Options", "Tech", "Destination");
+	opbx_mutex_lock(&peerlock);
+	opbx_cli(fd, FORMAT2, "DUNDi Cntxt", "Weight", "Local Cntxt", "Options", "Tech", "Destination");
 	for (map = mappings;map;map = map->next) {
-			cw_cli(fd, FORMAT, map->dcontext, map->weight, 
-			                    cw_strlen_zero(map->lcontext) ? "<none>" : map->lcontext, 
+			opbx_cli(fd, FORMAT, map->dcontext, map->weight, 
+			                    opbx_strlen_zero(map->lcontext) ? "<none>" : map->lcontext, 
 								dundi_flags2str(fs, sizeof(fs), map->options), tech2str(map->tech), map->dest);
 	}
-	cw_mutex_unlock(&peerlock);
+	opbx_mutex_unlock(&peerlock);
 	return RESULT_SUCCESS;
 #undef FORMAT
 #undef FORMAT2
@@ -2645,17 +2638,17 @@ static int dundi_show_precache(int fd, int argc, char *argv[])
 	if (argc != 3)
 		return RESULT_SHOWUSAGE;
 	time(&now);
-	cw_mutex_lock(&pclock);
-	cw_cli(fd, FORMAT2, "Number", "Context", "Expiration");
+	opbx_mutex_lock(&pclock);
+	opbx_cli(fd, FORMAT2, "Number", "Context", "Expiration");
 	for (qe = pcq;qe;qe = qe->next) {
 		s = qe->expiration - now;
 		h = s / 3600;
 		s = s % 3600;
 		m = s / 60;
 		s = s % 60;
-		cw_cli(fd, FORMAT, qe->number, qe->context, h,m,s);
+		opbx_cli(fd, FORMAT, qe->number, qe->context, h,m,s);
 	}
-	cw_mutex_unlock(&pclock);
+	opbx_mutex_unlock(&pclock);
 	return RESULT_SUCCESS;
 #undef FORMAT
 #undef FORMAT2
@@ -2731,49 +2724,49 @@ static char flush_usage[] =
 "'stats' is present, clears timer statistics instead of normal\n"
 "operation.\n";
 
-static struct cw_cli_entry  cli_debug =
+static struct opbx_cli_entry  cli_debug =
 	{ { "dundi", "debug", NULL }, dundi_do_debug, "Enable DUNDi debugging", debug_usage };
 
-static struct cw_cli_entry  cli_store_history =
+static struct opbx_cli_entry  cli_store_history =
 	{ { "dundi", "store", "history", NULL }, dundi_do_store_history, "Enable DUNDi historic records", store_history_usage };
 
-static struct cw_cli_entry  cli_no_store_history =
+static struct opbx_cli_entry  cli_no_store_history =
 	{ { "dundi", "no", "store", "history", NULL }, dundi_no_store_history, "Disable DUNDi historic records", no_store_history_usage };
 
-static struct cw_cli_entry  cli_flush =
+static struct opbx_cli_entry  cli_flush =
 	{ { "dundi", "flush", NULL }, dundi_flush, "Flush DUNDi cache", flush_usage };
 
-static struct cw_cli_entry  cli_no_debug =
+static struct opbx_cli_entry  cli_no_debug =
 	{ { "dundi", "no", "debug", NULL }, dundi_no_debug, "Disable DUNDi debugging", no_debug_usage };
 
-static struct cw_cli_entry  cli_show_peers =
+static struct opbx_cli_entry  cli_show_peers =
 	{ { "dundi", "show", "peers", NULL }, dundi_show_peers, "Show defined DUNDi peers", show_peers_usage };
 
-static struct cw_cli_entry  cli_show_trans =
+static struct opbx_cli_entry  cli_show_trans =
 	{ { "dundi", "show", "trans", NULL }, dundi_show_trans, "Show active DUNDi transactions", show_trans_usage };
 
-static struct cw_cli_entry  cli_show_entityid =
+static struct opbx_cli_entry  cli_show_entityid =
 	{ { "dundi", "show", "entityid", NULL }, dundi_show_entityid, "Display Global Entity ID", show_entityid_usage };
 
-static struct cw_cli_entry  cli_show_mappings =
+static struct opbx_cli_entry  cli_show_mappings =
 	{ { "dundi", "show", "mappings", NULL }, dundi_show_mappings, "Show DUNDi mappings", show_mappings_usage };
 
-static struct cw_cli_entry  cli_show_precache =
+static struct opbx_cli_entry  cli_show_precache =
 	{ { "dundi", "show", "precache", NULL }, dundi_show_precache, "Show DUNDi precache", show_precache_usage };
 
-static struct cw_cli_entry  cli_show_requests =
+static struct opbx_cli_entry  cli_show_requests =
 	{ { "dundi", "show", "requests", NULL }, dundi_show_requests, "Show DUNDi requests", show_requests_usage };
 
-static struct cw_cli_entry  cli_show_peer =
+static struct opbx_cli_entry  cli_show_peer =
 	{ { "dundi", "show", "peer", NULL }, dundi_show_peer, "Show info on a specific DUNDi peer", show_peer_usage, complete_peer_4 };
 
-static struct cw_cli_entry  cli_lookup =
+static struct opbx_cli_entry  cli_lookup =
 	{ { "dundi", "lookup", NULL }, dundi_do_lookup, "Lookup a number in DUNDi", lookup_usage };
 
-static struct cw_cli_entry  cli_precache =
+static struct opbx_cli_entry  cli_precache =
 	{ { "dundi", "precache", NULL }, dundi_do_precache, "Precache a number in DUNDi", precache_usage };
 
-static struct cw_cli_entry  cli_queryeid =
+static struct opbx_cli_entry  cli_queryeid =
 	{ { "dundi", "query", NULL }, dundi_do_query, "Query a DUNDi EID", query_usage };
 
 STANDARD_LOCAL_USER;
@@ -2795,15 +2788,15 @@ static struct dundi_transaction *create_transaction(struct dundi_peer *p)
 	if (trans) {
 		memset(trans, 0, sizeof(struct dundi_transaction));
 		if (global_storehistory) {
-			trans->start = cw_tvnow();
-			cw_set_flag(trans, FLAG_STOREHIST);
+			trans->start = opbx_tvnow();
+			opbx_set_flag(trans, FLAG_STOREHIST);
 		}
 		trans->retranstimer = DUNDI_DEFAULT_RETRANS_TIMER;
 		trans->autokillid = -1;
 		if (p) {
 			apply_peer(trans, p);
 			if (!p->sentfullkey)
-				cw_set_flag(trans, FLAG_SENDFULLKEY);
+				opbx_set_flag(trans, FLAG_SENDFULLKEY);
 		}
 		trans->strans = tid;
 		trans->allnext = alltrans;
@@ -2820,8 +2813,8 @@ static int dundi_xmit(struct dundi_packet *pack)
 		dundi_showframe(pack->h, 0, &pack->parent->addr, pack->datalen - sizeof(struct dundi_hdr));
 	res = sendto(netsocket, pack->data, pack->datalen, 0, (struct sockaddr *)&pack->parent->addr, sizeof(pack->parent->addr));
 	if (res < 0) {
-		cw_log(LOG_WARNING, "Failed to transmit to '%s:%d': %s\n", 
-			cw_inet_ntoa(iabuf, sizeof(iabuf), pack->parent->addr.sin_addr),
+		opbx_log(LOG_WARNING, "Failed to transmit to '%s:%d': %s\n", 
+			opbx_inet_ntoa(iabuf, sizeof(iabuf), pack->parent->addr.sin_addr),
 			ntohs(pack->parent->addr.sin_port), strerror(errno));
 	}
 	if (res > 0)
@@ -2848,7 +2841,7 @@ static void destroy_packet(struct dundi_packet *pack, int needfree)
 		}
 	}
 	if (pack->retransid > -1)
-		cw_sched_del(sched, pack->retransid);
+		opbx_sched_del(sched, pack->retransid);
 	if (needfree)
 		free(pack);
 	else {
@@ -2865,7 +2858,7 @@ static void destroy_trans(struct dundi_transaction *trans, int fromtimeout)
 	int x;
 	int cnt;
 	char eid_str[20];
-	if (cw_test_flag(trans, FLAG_ISREG | FLAG_ISQUAL | FLAG_STOREHIST)) {
+	if (opbx_test_flag(trans, FLAG_ISREG | FLAG_ISQUAL | FLAG_STOREHIST)) {
 		peer = peers;
 		while (peer) {
 			if (peer->regtrans == trans)
@@ -2875,24 +2868,24 @@ static void destroy_trans(struct dundi_transaction *trans, int fromtimeout)
 			if (peer->qualtrans == trans) {
 				if (fromtimeout) {
 					if (peer->lastms > -1)
-						cw_log(LOG_NOTICE, "Peer '%s' has become UNREACHABLE!\n", dundi_eid_to_str(eid_str, sizeof(eid_str), &peer->eid));
+						opbx_log(LOG_NOTICE, "Peer '%s' has become UNREACHABLE!\n", dundi_eid_to_str(eid_str, sizeof(eid_str), &peer->eid));
 					peer->lastms = -1;
 				} else {
-					ms = cw_tvdiff_ms(cw_tvnow(), peer->qualtx);
+					ms = opbx_tvdiff_ms(opbx_tvnow(), peer->qualtx);
 					if (ms < 1)
 						ms = 1;
 					if (ms < peer->maxms) {
 						if ((peer->lastms >= peer->maxms) || (peer->lastms < 0))
-							cw_log(LOG_NOTICE, "Peer '%s' has become REACHABLE!\n", dundi_eid_to_str(eid_str, sizeof(eid_str), &peer->eid));
+							opbx_log(LOG_NOTICE, "Peer '%s' has become REACHABLE!\n", dundi_eid_to_str(eid_str, sizeof(eid_str), &peer->eid));
 					} else if (peer->lastms < peer->maxms) {
-						cw_log(LOG_NOTICE, "Peer '%s' has become TOO LAGGED (%d ms)\n", dundi_eid_to_str(eid_str, sizeof(eid_str), &peer->eid), ms);
+						opbx_log(LOG_NOTICE, "Peer '%s' has become TOO LAGGED (%d ms)\n", dundi_eid_to_str(eid_str, sizeof(eid_str), &peer->eid), ms);
 					}
 					peer->lastms = ms;
 				}
 				peer->qualtrans = NULL;
 			}
-			if (cw_test_flag(trans, FLAG_STOREHIST)) {
-				if (trans->parent && !cw_strlen_zero(trans->parent->number)) {
+			if (opbx_test_flag(trans, FLAG_STOREHIST)) {
+				if (trans->parent && !opbx_strlen_zero(trans->parent->number)) {
 					if (!dundi_eid_cmp(&trans->them_eid, &peer->eid)) {
 						peer->avgms = 0;
 						cnt = 0;
@@ -2906,7 +2899,7 @@ static void destroy_trans(struct dundi_transaction *trans, int fromtimeout)
 								cnt++;
 							}
 						}
-						peer->lookuptimes[0] = cw_tvdiff_ms(cw_tvnow(), trans->start);
+						peer->lookuptimes[0] = opbx_tvdiff_ms(opbx_tvnow(), trans->start);
 						peer->lookups[0] = malloc(strlen(trans->parent->number) + strlen(trans->parent->dcontext) + 2);
 						if (peer->lookups[0]) {
 							sprintf(peer->lookups[0], "%s@%s", trans->parent->number, trans->parent->dcontext);
@@ -2962,11 +2955,11 @@ static void destroy_trans(struct dundi_transaction *trans, int fromtimeout)
 	trans->packets = NULL;
 	trans->lasttrans = NULL;
 	if (trans->autokillid > -1)
-		cw_sched_del(sched, trans->autokillid);
+		opbx_sched_del(sched, trans->autokillid);
 	trans->autokillid = -1;
 	if (trans->thread) {
 		/* If used by a thread, mark as dead and be done */
-		cw_set_flag(trans, FLAG_DEAD);
+		opbx_set_flag(trans, FLAG_DEAD);
 	} else
 		free(trans);
 }
@@ -2976,13 +2969,13 @@ static int dundi_rexmit(void *data)
 	struct dundi_packet *pack;
 	char iabuf[INET_ADDRSTRLEN];
 	int res;
-	cw_mutex_lock(&peerlock);
+	opbx_mutex_lock(&peerlock);
 	pack = data;
 	if (pack->retrans < 1) {
 		pack->retransid = -1;
-		if (!cw_test_flag(pack->parent, FLAG_ISQUAL))
-			cw_log(LOG_NOTICE, "Max retries exceeded to host '%s:%d' msg %d on call %d\n", 
-				cw_inet_ntoa(iabuf, sizeof(iabuf), pack->parent->addr.sin_addr), 
+		if (!opbx_test_flag(pack->parent, FLAG_ISQUAL))
+			opbx_log(LOG_NOTICE, "Max retries exceeded to host '%s:%d' msg %d on call %d\n", 
+				opbx_inet_ntoa(iabuf, sizeof(iabuf), pack->parent->addr.sin_addr), 
 				ntohs(pack->parent->addr.sin_port), pack->h->oseqno, ntohs(pack->h->strans));
 		destroy_trans(pack->parent, 1);
 		res = 0;
@@ -2992,7 +2985,7 @@ static int dundi_rexmit(void *data)
 		dundi_xmit(pack);
 		res = 1;
 	}
-	cw_mutex_unlock(&peerlock);
+	opbx_mutex_unlock(&peerlock);
 	return res;
 }
 
@@ -3004,14 +2997,14 @@ static int dundi_send(struct dundi_transaction *trans, int cmdresp, int flags, i
 	char eid_str[20];
 	len = sizeof(struct dundi_packet) + sizeof(struct dundi_hdr) + (ied ? ied->pos : 0);
 	/* Reserve enough space for encryption */
-	if (cw_test_flag(trans, FLAG_ENCRYPT))
+	if (opbx_test_flag(trans, FLAG_ENCRYPT))
 		len += 384;
 	pack = malloc(len);
 	if (pack) {
 		memset(pack, 0, len);
 		pack->h = (struct dundi_hdr *)(pack->data);
 		if (cmdresp != DUNDI_COMMAND_ACK) {
-			pack->retransid = cw_sched_add(sched, trans->retranstimer, dundi_rexmit, pack);
+			pack->retransid = opbx_sched_add(sched, trans->retranstimer, dundi_rexmit, pack);
 			pack->retrans = DUNDI_DEFAULT_RETRANS - 1;
 			pack->next = trans->packets;
 			trans->packets = pack;
@@ -3029,7 +3022,7 @@ static int dundi_send(struct dundi_transaction *trans, int cmdresp, int flags, i
 		} 
 		if (final) {
 			pack->h->cmdresp |= DUNDI_COMMAND_FINAL;
-			cw_set_flag(trans, FLAG_FINAL);
+			opbx_set_flag(trans, FLAG_FINAL);
 		}
 		pack->h->cmdflags = flags;
 		if (cmdresp != DUNDI_COMMAND_ACK) {
@@ -3038,7 +3031,7 @@ static int dundi_send(struct dundi_transaction *trans, int cmdresp, int flags, i
 		}
 		trans->aseqno = trans->iseqno;
 		/* If we have their public key, encrypt */
-		if (cw_test_flag(trans, FLAG_ENCRYPT)) {
+		if (opbx_test_flag(trans, FLAG_ENCRYPT)) {
 			switch(cmdresp) {
 			case DUNDI_COMMAND_REGREQ:
 			case DUNDI_COMMAND_REGRESPONSE:
@@ -3060,7 +3053,7 @@ static int dundi_send(struct dundi_transaction *trans, int cmdresp, int flags, i
 		if (!res) 
 			res = dundi_xmit(pack);
 		if (res)
-			cw_log(LOG_NOTICE, "Failed to send packet to '%s'\n", dundi_eid_to_str(eid_str, sizeof(eid_str), &trans->them_eid));
+			opbx_log(LOG_NOTICE, "Failed to send packet to '%s'\n", dundi_eid_to_str(eid_str, sizeof(eid_str), &trans->them_eid));
 				
 		if (cmdresp == DUNDI_COMMAND_ACK)
 			free(pack);
@@ -3073,12 +3066,12 @@ static int do_autokill(void *data)
 {
 	struct dundi_transaction *trans = data;
 	char eid_str[20];
-	cw_log(LOG_NOTICE, "Transaction to '%s' took too long to ACK, destroying\n", 
+	opbx_log(LOG_NOTICE, "Transaction to '%s' took too long to ACK, destroying\n", 
 		dundi_eid_to_str(eid_str, sizeof(eid_str), &trans->them_eid));
-	cw_mutex_lock(&peerlock);
+	opbx_mutex_lock(&peerlock);
 	trans->autokillid = -1;
 	destroy_trans(trans, 0); /* We could actually set it to 1 instead of 0, but we won't ;-) */
-	cw_mutex_unlock(&peerlock);
+	opbx_mutex_unlock(&peerlock);
 	return 0;
 }
 
@@ -3089,7 +3082,7 @@ static void dundi_ie_append_eid_appropriately(struct dundi_ie_data *ied, char *c
 		dundi_ie_append_eid(ied, DUNDI_IE_EID_DIRECT, eid);
 		return;
 	}
-	cw_mutex_lock(&peerlock);
+	opbx_mutex_lock(&peerlock);
 	p = peers;
 	while(p) {
 		if (!dundi_eid_cmp(&p->eid, eid)) {
@@ -3103,7 +3096,7 @@ static void dundi_ie_append_eid_appropriately(struct dundi_ie_data *ied, char *c
 	}
 	if (!p)
 		dundi_ie_append_eid(ied, DUNDI_IE_EID, eid);
-	cw_mutex_unlock(&peerlock);
+	opbx_mutex_unlock(&peerlock);
 }
 
 static int dundi_discover(struct dundi_transaction *trans)
@@ -3111,7 +3104,7 @@ static int dundi_discover(struct dundi_transaction *trans)
 	struct dundi_ie_data ied;
 	int x;
 	if (!trans->parent) {
-		cw_log(LOG_WARNING, "Tried to discover a transaction with no parent?!?\n");
+		opbx_log(LOG_WARNING, "Tried to discover a transaction with no parent?!?\n");
 		return -1;
 	}
 	memset(&ied, 0, sizeof(ied));
@@ -3126,7 +3119,7 @@ static int dundi_discover(struct dundi_transaction *trans)
 	if (trans->parent->cbypass)
 		dundi_ie_append(&ied, DUNDI_IE_CACHEBYPASS);
 	if (trans->autokilltimeout)
-		trans->autokillid = cw_sched_add(sched, trans->autokilltimeout, do_autokill, trans);
+		trans->autokillid = opbx_sched_add(sched, trans->autokilltimeout, do_autokill, trans);
 	return dundi_send(trans, DUNDI_COMMAND_DPDISCOVER, 0, 0, &ied);
 }
 
@@ -3142,7 +3135,7 @@ static int precache_trans(struct dundi_transaction *trans, struct dundi_mapping 
 	struct dundi_result dr[MAX_RESULTS];
 	struct dundi_hint_metadata hmd;
 	if (!trans->parent) {
-		cw_log(LOG_WARNING, "Tried to discover a transaction with no parent?!?\n");
+		opbx_log(LOG_WARNING, "Tried to discover a transaction with no parent?!?\n");
 		return -1;
 	}
 	memset(&hmd, 0, sizeof(hmd));
@@ -3185,7 +3178,7 @@ static int precache_trans(struct dundi_transaction *trans, struct dundi_mapping 
 		dundi_ie_append_hint(&ied, DUNDI_IE_HINT, hmd.flags, hmd.exten);
 		dundi_ie_append_short(&ied, DUNDI_IE_EXPIRATION, expiration);
 		if (trans->autokilltimeout)
-			trans->autokillid = cw_sched_add(sched, trans->autokilltimeout, do_autokill, trans);
+			trans->autokillid = opbx_sched_add(sched, trans->autokilltimeout, do_autokill, trans);
 		if (expiration < *minexp)
 			*minexp = expiration;
 		return dundi_send(trans, DUNDI_COMMAND_PRECACHERQ, 0, 0, &ied);
@@ -3201,7 +3194,7 @@ static int dundi_query(struct dundi_transaction *trans)
 	struct dundi_ie_data ied;
 	int x;
 	if (!trans->parent) {
-		cw_log(LOG_WARNING, "Tried to query a transaction with no parent?!?\n");
+		opbx_log(LOG_WARNING, "Tried to query a transaction with no parent?!?\n");
 		return -1;
 	}
 	memset(&ied, 0, sizeof(ied));
@@ -3214,20 +3207,20 @@ static int dundi_query(struct dundi_transaction *trans)
 	dundi_ie_append_str(&ied, DUNDI_IE_CALLED_CONTEXT, trans->parent->dcontext);
 	dundi_ie_append_short(&ied, DUNDI_IE_TTL, trans->ttl);
 	if (trans->autokilltimeout)
-		trans->autokillid = cw_sched_add(sched, trans->autokilltimeout, do_autokill, trans);
+		trans->autokillid = opbx_sched_add(sched, trans->autokilltimeout, do_autokill, trans);
 	return dundi_send(trans, DUNDI_COMMAND_EIDQUERY, 0, 0, &ied);
 }
 
 static int discover_transactions(struct dundi_request *dr)
 {
 	struct dundi_transaction *trans;
-	cw_mutex_lock(&peerlock);
+	opbx_mutex_lock(&peerlock);
 	trans = dr->trans;
 	while(trans) {
 		dundi_discover(trans);
 		trans = trans->next;
 	}
-	cw_mutex_unlock(&peerlock);
+	opbx_mutex_unlock(&peerlock);
 	return 0;
 }
 
@@ -3235,49 +3228,49 @@ static int precache_transactions(struct dundi_request *dr, struct dundi_mapping 
 {
 	struct dundi_transaction *trans, *transn;
 	/* Mark all as "in thread" so they don't disappear */
-	cw_mutex_lock(&peerlock);
+	opbx_mutex_lock(&peerlock);
 	trans = dr->trans;
 	while(trans) {
 		if (trans->thread)
-			cw_log(LOG_WARNING, "This shouldn't happen, really...\n");
+			opbx_log(LOG_WARNING, "This shouldn't happen, really...\n");
 		trans->thread = 1;
 		trans = trans->next;
 	}
-	cw_mutex_unlock(&peerlock);
+	opbx_mutex_unlock(&peerlock);
 
 	trans = dr->trans;
 	while(trans) {
-		if (!cw_test_flag(trans, FLAG_DEAD))
+		if (!opbx_test_flag(trans, FLAG_DEAD))
 			precache_trans(trans, maps, mapcount, expiration, foundanswers);
 		trans = trans->next;
 	}
 
 	/* Cleanup any that got destroyed in the mean time */
-	cw_mutex_lock(&peerlock);
+	opbx_mutex_lock(&peerlock);
 	trans = dr->trans;
 	while(trans) {
 		transn = trans->next;
 		trans->thread = 0;
-		if (cw_test_flag(trans, FLAG_DEAD)) {
-			cw_log(LOG_DEBUG, "Our transaction went away!\n");
+		if (opbx_test_flag(trans, FLAG_DEAD)) {
+			opbx_log(LOG_DEBUG, "Our transaction went away!\n");
 			destroy_trans(trans, 0);
 		}
 		trans = transn;
 	}
-	cw_mutex_unlock(&peerlock);
+	opbx_mutex_unlock(&peerlock);
 	return 0;
 }
 
 static int query_transactions(struct dundi_request *dr)
 {
 	struct dundi_transaction *trans;
-	cw_mutex_lock(&peerlock);
+	opbx_mutex_lock(&peerlock);
 	trans = dr->trans;
 	while(trans) {
 		dundi_query(trans);
 		trans = trans->next;
 	}
-	cw_mutex_unlock(&peerlock);
+	opbx_mutex_unlock(&peerlock);
 	return 0;
 }
 
@@ -3290,7 +3283,7 @@ static int optimize_transactions(struct dundi_request *dr, int order)
 	dundi_eid tmp;
 	int x;
 	int needpush;
-	cw_mutex_lock(&peerlock);
+	opbx_mutex_lock(&peerlock);
 	trans = dr->trans;
 	while(trans) {
 		/* Pop off the true root */
@@ -3335,7 +3328,7 @@ static int optimize_transactions(struct dundi_request *dr, int order)
 			trans->eids[trans->eidcount++] = tmp;
 		trans = trans->next;
 	}
-	cw_mutex_unlock(&peerlock);
+	opbx_mutex_unlock(&peerlock);
 	return 0;
 }
 
@@ -3350,10 +3343,10 @@ static int append_transaction(struct dundi_request *dr, struct dundi_peer *p, in
 		return 0;
 	if (p->maxms && ((p->lastms < 0) || (p->lastms >= p->maxms)))
 		return 0;
-	if (cw_strlen_zero(dr->number))
-		cw_log(LOG_DEBUG, "Will query peer '%s' for '%s' (context '%s')\n", dundi_eid_to_str(eid_str, sizeof(eid_str), &p->eid), dundi_eid_to_str(eid_str2, sizeof(eid_str2), &dr->query_eid), dr->dcontext);
+	if (opbx_strlen_zero(dr->number))
+		opbx_log(LOG_DEBUG, "Will query peer '%s' for '%s' (context '%s')\n", dundi_eid_to_str(eid_str, sizeof(eid_str), &p->eid), dundi_eid_to_str(eid_str2, sizeof(eid_str2), &dr->query_eid), dr->dcontext);
 	else
-		cw_log(LOG_DEBUG, "Will query peer '%s' for '%s@%s'\n", dundi_eid_to_str(eid_str, sizeof(eid_str), &p->eid), dr->number, dr->dcontext);
+		opbx_log(LOG_DEBUG, "Will query peer '%s' for '%s@%s'\n", dundi_eid_to_str(eid_str, sizeof(eid_str), &p->eid), dr->number, dr->dcontext);
 	trans = create_transaction(p);
 	if (!trans)
 		return -1;
@@ -3371,7 +3364,7 @@ static void cancel_request(struct dundi_request *dr)
 {
 	struct dundi_transaction *trans, *next;
 
-	cw_mutex_lock(&peerlock);
+	opbx_mutex_lock(&peerlock);
 	trans = dr->trans;
 	
 	while(trans) {
@@ -3383,15 +3376,15 @@ static void cancel_request(struct dundi_request *dr)
 		dundi_send(trans, DUNDI_COMMAND_CANCEL, 0, 1, NULL);
 		trans = next;
 	}
-	cw_mutex_unlock(&peerlock);
+	opbx_mutex_unlock(&peerlock);
 }
 
 static void abort_request(struct dundi_request *dr)
 {
-	cw_mutex_lock(&peerlock);
+	opbx_mutex_lock(&peerlock);
 	while(dr->trans) 
 		destroy_trans(dr->trans, 0);
-	cw_mutex_unlock(&peerlock);
+	opbx_mutex_unlock(&peerlock);
 }
 
 static void build_transactions(struct dundi_request *dr, int ttl, int order, int *foundcache, int *skipped, int blockempty, int nocache, int modeselect, dundi_eid *skip, dundi_eid *avoid[], int directs[])
@@ -3402,7 +3395,7 @@ static void build_transactions(struct dundi_request *dr, int ttl, int order, int
 	int pass;
 	int allowconnect;
 	char eid_str[20];
-	cw_mutex_lock(&peerlock);
+	opbx_mutex_lock(&peerlock);
 	p = peers;
 	while(p) {
 		if (modeselect == 1) {
@@ -3431,7 +3424,7 @@ static void build_transactions(struct dundi_request *dr, int ttl, int order, int
 						if (!dundi_eid_cmp(avoid[x], &p->eid) || !dundi_eid_cmp(avoid[x], &p->us_eid)) {
 							/* If not a direct connection, it affects our answer */
 							if (directs && !directs[x]) 
-								cw_clear_flag_nonstd(dr->hmd, DUNDI_HINT_UNAFFECTED);
+								opbx_clear_flag_nonstd(dr->hmd, DUNDI_HINT_UNAFFECTED);
 							break;
 						}
 					}
@@ -3441,7 +3434,7 @@ static void build_transactions(struct dundi_request *dr, int ttl, int order, int
 							/* Check for a matching or 0 cache entry */
 							append_transaction(dr, p, ttl, avoid);
 						} else
-							cw_log(LOG_DEBUG, "Avoiding '%s' in transaction\n", dundi_eid_to_str(eid_str, sizeof(eid_str), avoid[x]));
+							opbx_log(LOG_DEBUG, "Avoiding '%s' in transaction\n", dundi_eid_to_str(eid_str, sizeof(eid_str), avoid[x]));
 					}
 				}
 				*foundcache |= res;
@@ -3450,7 +3443,7 @@ static void build_transactions(struct dundi_request *dr, int ttl, int order, int
 		}
 		p = p->next;
 	}
-	cw_mutex_unlock(&peerlock);
+	opbx_mutex_unlock(&peerlock);
 }
 
 static int register_request(struct dundi_request *dr, struct dundi_request **pending)
@@ -3458,16 +3451,16 @@ static int register_request(struct dundi_request *dr, struct dundi_request **pen
 	struct dundi_request *cur;
 	int res=0;
 	char eid_str[20];
-	cw_mutex_lock(&peerlock);
+	opbx_mutex_lock(&peerlock);
 	cur = requests;
 	while(cur) {
 		if (option_debug)
-			cw_log(LOG_DEBUG, "Checking '%s@%s' vs '%s@%s'\n", cur->dcontext, cur->number,
+			opbx_log(LOG_DEBUG, "Checking '%s@%s' vs '%s@%s'\n", cur->dcontext, cur->number,
 				dr->dcontext, dr->number);
 		if (!strcasecmp(cur->dcontext, dr->dcontext) &&
 		    !strcasecmp(cur->number, dr->number) &&
 			(!dundi_eid_cmp(&cur->root_eid, &dr->root_eid) || (cur->crc32 == dr->crc32))) {
-				cw_log(LOG_DEBUG, "Found existing query for '%s@%s' for '%s' crc '%08lx'\n", 
+				opbx_log(LOG_DEBUG, "Found existing query for '%s@%s' for '%s' crc '%08lx'\n", 
 					cur->dcontext, cur->number, dundi_eid_to_str(eid_str, sizeof(eid_str), &cur->root_eid), cur->crc32);
 				*pending = cur;
 			res = 1;
@@ -3476,21 +3469,21 @@ static int register_request(struct dundi_request *dr, struct dundi_request **pen
 		cur = cur->next;
 	}
 	if (!res) {
-		cw_log(LOG_DEBUG, "Registering request for '%s@%s' on behalf of '%s' crc '%08lx'\n", 
+		opbx_log(LOG_DEBUG, "Registering request for '%s@%s' on behalf of '%s' crc '%08lx'\n", 
 				dr->number, dr->dcontext, dundi_eid_to_str(eid_str, sizeof(eid_str), &dr->root_eid), dr->crc32);
 		/* Go ahead and link us in since nobody else is searching for this */
 		dr->next = requests;
 		requests = dr;
 		*pending = NULL;
 	}
-	cw_mutex_unlock(&peerlock);
+	opbx_mutex_unlock(&peerlock);
 	return res;
 }
 
 static void unregister_request(struct dundi_request *dr)
 {
 	struct dundi_request *cur, *prev;
-	cw_mutex_lock(&peerlock);
+	opbx_mutex_lock(&peerlock);
 	prev = NULL;
 	cur = requests;
 	while(cur) {
@@ -3504,14 +3497,14 @@ static void unregister_request(struct dundi_request *dr)
 		prev = cur;
 		cur = cur->next;
 	}
-	cw_mutex_unlock(&peerlock);
+	opbx_mutex_unlock(&peerlock);
 }
 
 static int check_request(struct dundi_request *dr)
 {
 	struct dundi_request *cur;
 	int res = 0;
-	cw_mutex_lock(&peerlock);
+	opbx_mutex_lock(&peerlock);
 	cur = requests;
 	while(cur) {
 		if (cur == dr) {
@@ -3520,7 +3513,7 @@ static int check_request(struct dundi_request *dr)
 		}
 		cur = cur->next;
 	}
-	cw_mutex_unlock(&peerlock);
+	opbx_mutex_unlock(&peerlock);
 	return res;
 }
 
@@ -3539,7 +3532,7 @@ static unsigned long avoid_crc32(dundi_eid *avoid[])
 	return acrc32;
 }
 
-static int dundi_lookup_internal(struct dundi_result *result, int maxret, struct cw_channel *chan, const char *dcontext, const char *number, int ttl, int blockempty, struct dundi_hint_metadata *hmd, int *expiration, int cbypass, int modeselect, dundi_eid *skip, dundi_eid *avoid[], int direct[])
+static int dundi_lookup_internal(struct dundi_result *result, int maxret, struct opbx_channel *chan, const char *dcontext, const char *number, int ttl, int blockempty, struct dundi_hint_metadata *hmd, int *expiration, int cbypass, int modeselect, dundi_eid *skip, dundi_eid *avoid[], int direct[])
 {
 	int res;
 	struct dundi_request dr, *pending;
@@ -3564,7 +3557,7 @@ static int dundi_lookup_internal(struct dundi_result *result, int maxret, struct
 	/* Now perform real check */
 	memset(&dr, 0, sizeof(dr));
 	if (pipe(dr.pfds)) {
-		cw_log(LOG_WARNING, "pipe failed: %s\n" , strerror(errno));
+		opbx_log(LOG_WARNING, "pipe failed: %s\n" , strerror(errno));
 		return -1;
 	}
 	dr.dr = result;
@@ -3573,8 +3566,8 @@ static int dundi_lookup_internal(struct dundi_result *result, int maxret, struct
 	dr.expiration = *expiration;
 	dr.cbypass = cbypass;
 	dr.crc32 = avoid_crc32(avoid);
-	cw_copy_string(dr.dcontext, dcontext ? dcontext : "e164", sizeof(dr.dcontext));
-	cw_copy_string(dr.number, number, sizeof(dr.number));
+	opbx_copy_string(dr.dcontext, dcontext ? dcontext : "e164", sizeof(dr.dcontext));
+	opbx_copy_string(dr.number, number, sizeof(dr.number));
 	if (rooteid)
 		dr.root_eid = *rooteid;
 	res = register_request(&dr, &pending);
@@ -3583,17 +3576,17 @@ static int dundi_lookup_internal(struct dundi_result *result, int maxret, struct
 		if (rooteid && !dundi_eid_cmp(&dr.root_eid, &pending->root_eid)) {
 			/* This is on behalf of someone else.  Go ahead and close this out since
 			   they'll get their answer anyway. */
-			cw_log(LOG_DEBUG, "Oooh, duplicate request for '%s@%s' for '%s'\n",
+			opbx_log(LOG_DEBUG, "Oooh, duplicate request for '%s@%s' for '%s'\n",
 				dr.number,dr.dcontext,dundi_eid_to_str(eid_str, sizeof(eid_str), &dr.root_eid));
 			close(dr.pfds[0]);
 			close(dr.pfds[1]);
 			return -2;
 		} else {
 			/* Wait for the cache to populate */
-			cw_log(LOG_DEBUG, "Waiting for similar request for '%s@%s' for '%s'\n",
+			opbx_log(LOG_DEBUG, "Waiting for similar request for '%s@%s' for '%s'\n",
 				dr.number,dr.dcontext,dundi_eid_to_str(eid_str, sizeof(eid_str), &pending->root_eid));
-			start = cw_tvnow();
-			while(check_request(pending) && (cw_tvdiff_ms(cw_tvnow(), start) < ttlms) && (!chan || !chan->_softhangup)) {
+			start = opbx_tvnow();
+			while(check_request(pending) && (opbx_tvdiff_ms(opbx_tvnow(), start) < ttlms) && (!chan || !chan->_softhangup)) {
 				/* XXX Would be nice to have a way to poll/select here XXX */
 				/* XXX this is a busy wait loop!!! */
 				usleep(1);
@@ -3612,7 +3605,7 @@ static int dundi_lookup_internal(struct dundi_result *result, int maxret, struct
 	   do this earlier because we didn't know if we were going to have transactions
 	   or not. */
 	if (!ttl) {
-		cw_set_flag_nonstd(hmd, DUNDI_HINT_TTL_EXPIRED);
+		opbx_set_flag_nonstd(hmd, DUNDI_HINT_TTL_EXPIRED);
 		abort_request(&dr);
 		unregister_request(&dr);
 		close(dr.pfds[0]);
@@ -3625,13 +3618,13 @@ static int dundi_lookup_internal(struct dundi_result *result, int maxret, struct
 	/* Actually perform transactions */
 	discover_transactions(&dr);
 	/* Wait for transaction to come back */
-	start = cw_tvnow();
-	while(dr.trans && (cw_tvdiff_ms(cw_tvnow(), start) < ttlms) && (!chan || !chan->_softhangup)) {
+	start = opbx_tvnow();
+	while(dr.trans && (opbx_tvdiff_ms(opbx_tvnow(), start) < ttlms) && (!chan || !chan->_softhangup)) {
 		ms = 100;
-		cw_waitfor_n_fd(dr.pfds, 1, &ms, NULL);
+		opbx_waitfor_n_fd(dr.pfds, 1, &ms, NULL);
 	}
 	if (chan && chan->_softhangup)
-		cw_log(LOG_DEBUG, "Hrm, '%s' hungup before their query for %s@%s finished\n", chan->name, dr.number, dr.dcontext);
+		opbx_log(LOG_DEBUG, "Hrm, '%s' hungup before their query for %s@%s finished\n", chan->name, dr.number, dr.dcontext);
 	cancel_request(&dr);
 	unregister_request(&dr);
 	res = dr.respcount;
@@ -3641,7 +3634,7 @@ static int dundi_lookup_internal(struct dundi_result *result, int maxret, struct
 	return res;
 }
 
-int dundi_lookup(struct dundi_result *result, int maxret, struct cw_channel *chan, const char *dcontext, const char *number, int cbypass)
+int dundi_lookup(struct dundi_result *result, int maxret, struct opbx_channel *chan, const char *dcontext, const char *number, int cbypass)
 {
 	struct dundi_hint_metadata hmd;
 	dundi_eid *avoid[1] = { NULL, };
@@ -3656,7 +3649,7 @@ static void reschedule_precache(const char *number, const char *context, int exp
 {
 	int len;
 	struct dundi_precache_queue *qe, *prev=NULL;
-	cw_mutex_lock(&pclock);
+	opbx_mutex_lock(&pclock);
 	qe = pcq;
 	while(qe) {
 		if (!strcmp(number, qe->number) && !strcasecmp(context, qe->context)) {
@@ -3692,34 +3685,34 @@ static void reschedule_precache(const char *number, const char *context, int exp
 		prev->next = qe;
 	} else
 		pcq = qe;
-	cw_mutex_unlock(&pclock);
+	opbx_mutex_unlock(&pclock);
 	
 }
 
 static void dundi_precache_full(void)
 {
 	struct dundi_mapping *cur;
-	struct cw_context *con;
-	struct cw_exten *e;
+	struct opbx_context *con;
+	struct opbx_exten *e;
 	cur = mappings;
 	while(cur) {
-		cw_log(LOG_NOTICE, "Should precache context '%s'\n", cur->dcontext);
-		cw_lock_contexts();
-		con = cw_walk_contexts(NULL);
+		opbx_log(LOG_NOTICE, "Should precache context '%s'\n", cur->dcontext);
+		opbx_lock_contexts();
+		con = opbx_walk_contexts(NULL);
 		while(con) {
-			if (!strcasecmp(cur->lcontext, cw_get_context_name(con))) {
+			if (!strcasecmp(cur->lcontext, opbx_get_context_name(con))) {
 				/* Found the match, now queue them all up */
-				cw_lock_context(con);
-				e = cw_walk_context_extensions(con, NULL);
+				opbx_lock_context(con);
+				e = opbx_walk_context_extensions(con, NULL);
 				while(e) {
-					reschedule_precache(cw_get_extension_name(e), cur->dcontext, 0);
-					e = cw_walk_context_extensions(con, e);
+					reschedule_precache(opbx_get_extension_name(e), cur->dcontext, 0);
+					e = opbx_walk_context_extensions(con, e);
 				}
-				cw_unlock_context(con);
+				opbx_unlock_context(con);
 			}
-			con = cw_walk_contexts(con);
+			con = opbx_walk_contexts(con);
 		}
-		cw_unlock_contexts();
+		opbx_unlock_contexts();
 		cur = cur->next;
 	}
 }
@@ -3736,9 +3729,9 @@ static int dundi_precache_internal(const char *context, const char *number, int 
 	int foundcache, skipped, ttlms, ms;
 	if (!context)
 		context = "e164";
-	cw_log(LOG_DEBUG, "Precache internal (%s@%s)!\n", number, context);
+	opbx_log(LOG_DEBUG, "Precache internal (%s@%s)!\n", number, context);
 
-	cw_mutex_lock(&peerlock);
+	opbx_mutex_lock(&peerlock);
 	nummaps = 0;
 	cur = mappings;
 	while(cur) {
@@ -3749,14 +3742,16 @@ static int dundi_precache_internal(const char *context, const char *number, int 
 	if (nummaps) {
 		maps = alloca(nummaps * sizeof(struct dundi_mapping));
 		nummaps = 0;
-		cur = mappings;
-		while(cur) {
-			if (!strcasecmp(cur->dcontext, context))
-				maps[nummaps++] = *cur;
-			cur = cur->next;
+		if (maps) {
+			cur = mappings;
+			while(cur) {
+				if (!strcasecmp(cur->dcontext, context))
+					maps[nummaps++] = *cur;
+				cur = cur->next;
+			}
 		}
 	}
-	cw_mutex_unlock(&peerlock);
+	opbx_mutex_unlock(&peerlock);
 	if (!nummaps || !maps)
 		return -1;
 	ttlms = DUNDI_FLUFF_TIME + ttl * DUNDI_TTL_TIME;
@@ -3764,8 +3759,8 @@ static int dundi_precache_internal(const char *context, const char *number, int 
 	memset(&dr, 0, sizeof(dr));
 	memset(&hmd, 0, sizeof(hmd));
 	dr.dr = dr2;
-	cw_copy_string(dr.number, number, sizeof(dr.number));
-	cw_copy_string(dr.dcontext, context ? context : "e164", sizeof(dr.dcontext));
+	opbx_copy_string(dr.number, number, sizeof(dr.number));
+	opbx_copy_string(dr.dcontext, context ? context : "e164", sizeof(dr.dcontext));
 	dr.maxcount = MAX_RESULTS;
 	dr.expiration = dundi_cache_time;
 	dr.hmd = &hmd;
@@ -3779,13 +3774,13 @@ static int dundi_precache_internal(const char *context, const char *number, int 
 		if (dr.expiration > 0) 
 			reschedule_precache(dr.number, dr.dcontext, dr.expiration);
 		else
-			cw_log(LOG_NOTICE, "Weird, expiration = %d, but need to precache for %s@%s?!\n", dr.expiration, dr.number, dr.dcontext);
+			opbx_log(LOG_NOTICE, "Weird, expiration = %d, but need to precache for %s@%s?!\n", dr.expiration, dr.number, dr.dcontext);
 	}
-	start = cw_tvnow();
-	while(dr.trans && (cw_tvdiff_ms(cw_tvnow(), start) < ttlms)) {
+	start = opbx_tvnow();
+	while(dr.trans && (opbx_tvdiff_ms(opbx_tvnow(), start) < ttlms)) {
 		if (dr.pfds[0] > -1) {
 			ms = 100;
-			cw_waitfor_n_fd(dr.pfds, 1, &ms, NULL);
+			opbx_waitfor_n_fd(dr.pfds, 1, &ms, NULL);
 		} else
 			usleep(1);
 	}
@@ -3823,7 +3818,7 @@ static int dundi_query_eid_internal(struct dundi_entity_info *dei, const char *d
 	dr.hmd = hmd;
 	dr.dei = dei;
 	dr.pfds[0] = dr.pfds[1] = -1;
-	cw_copy_string(dr.dcontext, dcontext ? dcontext : "e164", sizeof(dr.dcontext));
+	opbx_copy_string(dr.dcontext, dcontext ? dcontext : "e164", sizeof(dr.dcontext));
 	memcpy(&dr.query_eid, eid, sizeof(dr.query_eid));
 	if (rooteid)
 		dr.root_eid = *rooteid;
@@ -3834,7 +3829,7 @@ static int dundi_query_eid_internal(struct dundi_entity_info *dei, const char *d
 	   do this earlier because we didn't know if we were going to have transactions
 	   or not. */
 	if (!ttl) {
-		cw_set_flag_nonstd(hmd, DUNDI_HINT_TTL_EXPIRED);
+		opbx_set_flag_nonstd(hmd, DUNDI_HINT_TTL_EXPIRED);
 		return 0;
 	}
 		
@@ -3843,8 +3838,8 @@ static int dundi_query_eid_internal(struct dundi_entity_info *dei, const char *d
 	/* Actually perform transactions */
 	query_transactions(&dr);
 	/* Wait for transaction to come back */
-	start = cw_tvnow();
-	while(dr.trans && (cw_tvdiff_ms(cw_tvnow(), start) < ttlms))
+	start = opbx_tvnow();
+	while(dr.trans && (opbx_tvdiff_ms(opbx_tvnow(), start) < ttlms))
 		usleep(1);
 	res = dr.respcount;
 	return res;
@@ -3858,97 +3853,121 @@ int dundi_query_eid(struct dundi_entity_info *dei, const char *dcontext, dundi_e
 	return dundi_query_eid_internal(dei, dcontext, &eid, &hmd, dundi_ttl, 0, avoid);
 }
 
-static int dundi_lookup_exec(struct cw_channel *chan, int argc, char **argv)
+static int dundi_lookup_exec(struct opbx_channel *chan, void *data)
 {
+	char *num;
 	char *context;
+	char *opts;
 	int results;
 	int x;
 	int bypass = 0;
 	struct localuser *u;
 	struct dundi_result dr[MAX_RESULTS];
 	static int dep_warning = 0;
-	int success = 0;
 
 	LOCAL_USER_ADD(u);
 
 	if (!dep_warning) {
-		cw_log(LOG_WARNING, "This application has been deprecated in favor of the DUNDILOOKUP dialplan function.\n");
+		opbx_log(LOG_WARNING, "This application has been deprecated in favor of the DUNDILOOKUP dialplan function.\n");
 		dep_warning = 1;
 	}
 
-	if (argc < 1 || !argv[0][0]) {
-		cw_log(LOG_ERROR, "Syntax: %s\n", dundi_lookup_syntax);
+	if (!data || opbx_strlen_zero(data)) {
+		opbx_log(LOG_WARNING, "DUNDiLookup requires an argument (number)\n");
 		LOCAL_USER_REMOVE(u);
-		return -1;
+		return 0;
 	}
 
-	context = (argc > 1 && argv[1][0] ? argv[1] : "e164");
+	num = opbx_strdupa(data);
+	if (!num) {
+		opbx_log(LOG_ERROR, "Out of memory!\n");
+		LOCAL_USER_REMOVE(u);
+		return 0;
+	}
 
-	if (argc > 2) {
-		for (; argv[2][0]; argv[2]++) {
-			switch (argv[2][0]) {
-				case 'b': bypass = 1; break;
-			}
+	context = strchr(num, '|');
+	if (context) {
+		*context = '\0';
+		context++;
+		opts = strchr(context, '|');
+		if (opts) {
+			*opts = '\0';
+			opts++;
+			if (strchr(opts, 'b'))
+				bypass = 1;
 		}
 	}
 
-	results = dundi_lookup(dr, MAX_RESULTS, NULL, context, argv[0], bypass);
+	if (!context || opbx_strlen_zero(context))
+		context = "e164";
+	
+	results = dundi_lookup(dr, MAX_RESULTS, NULL, context, num, bypass);
 	if (results > 0) {
 		sort_results(dr, results);
 		for (x = 0; x < results; x++) {
-			if (cw_test_flag(dr + x, DUNDI_FLAG_EXISTS)) {
-				success = 1;
+			if (opbx_test_flag(dr + x, DUNDI_FLAG_EXISTS)) {
 				pbx_builtin_setvar_helper(chan, "DUNDTECH", dr[x].tech);
 				pbx_builtin_setvar_helper(chan, "DUNDDEST", dr[x].dest);
 				break;
 			}
 		}
 	} else if (option_priority_jumping)
-		cw_goto_if_exists(chan, chan->context, chan->exten, chan->priority + 101);
-
-	if (success) {
-		pbx_builtin_setvar_helper(chan, "SUCCESS", dr[x].dest);
-	} else {
-		pbx_builtin_setvar_helper(chan, "FAIL", dr[x].dest);
-	}
+		opbx_goto_if_exists(chan, chan->context, chan->exten, chan->priority + 101);
 
 	LOCAL_USER_REMOVE(u);
 
 	return 0;
 }
 
-static char *dundifunc_read(struct cw_channel *chan, int argc, char **argv, char *buf, size_t len)
+static char *dundifunc_read(struct opbx_channel *chan, char *cmd, char *data, char *buf, size_t len)
 {
+	char *num;
 	char *context;
+	char *opts;
 	int results;
 	int x;
 	int bypass = 0;
 	struct localuser *u;
 	struct dundi_result dr[MAX_RESULTS];
 
-	if (argc < 1 || argc > 3 || !argv[0][0]) {
-		cw_log(LOG_ERROR, "Syntax: %s\n", dundifunc_syntax);
-		return NULL;
-	}
-
 	LOCAL_USER_ACF_ADD(u);
 
-	context = (argc > 1 && argv[1][0] ? argv[1] : "e164");
+	buf[0] = '\0';
 
-	if (argc > 2) {
-		for (; argv[2]; argv[2]++) {
-			switch (argv[2][0]) {
-				case 'b': bypass = 1; break;
-			}
+	if (!data || opbx_strlen_zero(data)) {
+		opbx_log(LOG_WARNING, "DUNDILOOKUP requires an argument (number)\n");
+		LOCAL_USER_REMOVE(u);
+		return buf;
+	}
+
+	num = opbx_strdupa(data);
+	if (!num) {
+		opbx_log(LOG_ERROR, "Out of memory!\n");
+		LOCAL_USER_REMOVE(u);
+		return buf;
+	}
+
+	context = strchr(num, '|');
+	if (context) {
+		*context = '\0';
+		context++;
+		opts = strchr(context, '|');
+		if (opts) {
+			*opts = '\0';
+			opts++;
+			if (strchr(opts, 'b'))
+				bypass = 1;
 		}
 	}
 
-	buf[0] = '\0';
-	results = dundi_lookup(dr, MAX_RESULTS, NULL, context, argv[0], bypass);
+	if (!context || opbx_strlen_zero(context))
+		context = "e164";
+	
+	results = dundi_lookup(dr, MAX_RESULTS, NULL, context, num, bypass);
 	if (results > 0) {
 		sort_results(dr, results);
 		for (x = 0; x < results; x++) {
-			if (cw_test_flag(dr + x, DUNDI_FLAG_EXISTS)) {
+			if (opbx_test_flag(dr + x, DUNDI_FLAG_EXISTS)) {
 				snprintf(buf, len, "%s/%s", dr[x].tech, dr[x].dest);
 				break;
 			}
@@ -3960,28 +3979,41 @@ static char *dundifunc_read(struct cw_channel *chan, int argc, char **argv, char
 	return buf;
 }
 
+static struct opbx_custom_function dundi_function = {
+	.name = "DUNDILOOKUP",
+	.synopsis = "Do a DUNDi lookup of a phone number.",
+	.syntax = "DUNDILOOKUP(number[|context[|options]])",
+	.desc = "This will do a DUNDi lookup of the given phone number.\n"
+	"If no context is given, the default will be e164. The result of\n"
+	"this function will the Technology/Resource found in the DUNDi\n"
+	"lookup. If no results were found, the result will be blank.\n"
+	"If the 'b' option is specified, the internal DUNDi cache will\n"
+	"be bypassed.\n",
+	.read = dundifunc_read,
+};
+
 static void mark_peers(void)
 {
 	struct dundi_peer *peer;
-	cw_mutex_lock(&peerlock);
+	opbx_mutex_lock(&peerlock);
 	peer = peers;
 	while(peer) {
 		peer->dead = 1;
 		peer = peer->next;
 	}
-	cw_mutex_unlock(&peerlock);
+	opbx_mutex_unlock(&peerlock);
 }
 
 static void mark_mappings(void)
 {
 	struct dundi_mapping *map;
-	cw_mutex_lock(&peerlock);
+	opbx_mutex_lock(&peerlock);
 	map = mappings;
 	while(map) {
 		map->dead = 1;
 		map = map->next;
 	}
-	cw_mutex_unlock(&peerlock);
+	opbx_mutex_unlock(&peerlock);
 }
 
 static void destroy_permissions(struct permission *p)
@@ -3997,13 +4029,13 @@ static void destroy_permissions(struct permission *p)
 static void destroy_peer(struct dundi_peer *peer)
 {
 	if (peer->registerid > -1)
-		cw_sched_del(sched, peer->registerid);
+		opbx_sched_del(sched, peer->registerid);
 	if (peer->regtrans)
 		destroy_trans(peer->regtrans, 0);
 	if (peer->keypending)
 		destroy_trans(peer->keypending, 0);
 	if (peer->qualifyid > -1)
-		cw_sched_del(sched, peer->qualifyid);
+		opbx_sched_del(sched, peer->qualifyid);
 	destroy_permissions(peer->permit);
 	destroy_permissions(peer->include);
 	free(peer);
@@ -4017,7 +4049,7 @@ static void destroy_map(struct dundi_mapping *map)
 static void prune_peers(void)
 {
 	struct dundi_peer *peer, *prev, *next;
-	cw_mutex_lock(&peerlock);
+	opbx_mutex_lock(&peerlock);
 	peer = peers;
 	prev = NULL;
 	while(peer) {
@@ -4032,13 +4064,13 @@ static void prune_peers(void)
 			prev = peer;
 		peer = next;
 	}
-	cw_mutex_unlock(&peerlock);
+	opbx_mutex_unlock(&peerlock);
 }
 
 static void prune_mappings(void)
 {
 	struct dundi_mapping *map, *prev, *next;
-	cw_mutex_lock(&peerlock);
+	opbx_mutex_lock(&peerlock);
 	map = mappings;
 	prev = NULL;
 	while(map) {
@@ -4053,7 +4085,7 @@ static void prune_mappings(void)
 			prev = map;
 		map = next;
 	}
-	cw_mutex_unlock(&peerlock);
+	opbx_mutex_unlock(&peerlock);
 }
 
 static struct permission *append_permission(struct permission *p, char *s, int allow)
@@ -4086,71 +4118,73 @@ static void build_mapping(char *name, char *value)
 	struct dundi_mapping *map;
 	int x;
 	int y;
-	t = cw_strdupa(value);
-	map = mappings;
-	while(map) {
-		/* Find a double match */
-		if (!strcasecmp(map->dcontext, name) && 
-			(!strncasecmp(map->lcontext, value, strlen(map->lcontext)) && 
-			  (!value[strlen(map->lcontext)] || 
-			   (value[strlen(map->lcontext)] == ','))))
-			break;
-		map = map->next;
-	}
-	if (!map) {
-		map = malloc(sizeof(struct dundi_mapping));
-		if (map) {
-			memset(map, 0, sizeof(struct dundi_mapping));
-			map->next = mappings;
-			mappings = map;
-			map->dead = 1;
+	t = opbx_strdupa(value);
+	if (t) {
+		map = mappings;
+		while(map) {
+			/* Find a double match */
+			if (!strcasecmp(map->dcontext, name) && 
+				(!strncasecmp(map->lcontext, value, strlen(map->lcontext)) && 
+				  (!value[strlen(map->lcontext)] || 
+				   (value[strlen(map->lcontext)] == ','))))
+				break;
+			map = map->next;
 		}
-	}
-	if (map) {
-		map->options = 0;
-		memset(fields, 0, sizeof(fields));
-		x = 0;
-		while(t && x < MAX_OPTS) {
-			fields[x++] = t;
-			t = strchr(t, ',');
-			if (t) {
-				*t = '\0';
-				t++;
+		if (!map) {
+			map = malloc(sizeof(struct dundi_mapping));
+			if (map) {
+				memset(map, 0, sizeof(struct dundi_mapping));
+				map->next = mappings;
+				mappings = map;
+				map->dead = 1;
 			}
-		} /* Russell was here, arrrr! */
-		if ((x == 1) && cw_strlen_zero(fields[0])) {
-			/* Placeholder mapping */
-			cw_copy_string(map->dcontext, name, sizeof(map->dcontext));
-			map->dead = 0;
-		} else if (x >= 4) {
-			cw_copy_string(map->dcontext, name, sizeof(map->dcontext));
-			cw_copy_string(map->lcontext, fields[0], sizeof(map->lcontext));
-			if ((sscanf(fields[1], "%d", &map->weight) == 1) && (map->weight >= 0) && (map->weight < 60000)) {
-				cw_copy_string(map->dest, fields[3], sizeof(map->dest));
-				if ((map->tech = str2tech(fields[2]))) {
-					map->dead = 0;
+		}
+		if (map) {
+			map->options = 0;
+			memset(fields, 0, sizeof(fields));
+			x = 0;
+			while(t && x < MAX_OPTS) {
+				fields[x++] = t;
+				t = strchr(t, ',');
+				if (t) {
+					*t = '\0';
+					t++;
 				}
-			} else {
-				cw_log(LOG_WARNING, "Invalid weight '%s' specified, deleting entry '%s/%s'\n", fields[1], map->dcontext, map->lcontext);
-			}
-			for (y=4;y<x;y++) {
-				if (!strcasecmp(fields[y], "nounsolicited"))
-					map->options |= DUNDI_FLAG_NOUNSOLICITED;
-				else if (!strcasecmp(fields[y], "nocomunsolicit"))
-					map->options |= DUNDI_FLAG_NOCOMUNSOLICIT;
-				else if (!strcasecmp(fields[y], "residential"))
-					map->options |= DUNDI_FLAG_RESIDENTIAL;
-				else if (!strcasecmp(fields[y], "commercial"))
-					map->options |= DUNDI_FLAG_COMMERCIAL;
-				else if (!strcasecmp(fields[y], "mobile"))
-					map->options |= DUNDI_FLAG_MOBILE;
-				else if (!strcasecmp(fields[y], "nopartial"))
-					map->options |= DUNDI_FLAG_INTERNAL_NOPARTIAL;
-				else
-					cw_log(LOG_WARNING, "Don't know anything about option '%s'\n", fields[y]);
-			}
-		} else 
-			cw_log(LOG_WARNING, "Expected at least %d arguments in map, but got only %d\n", 4, x);
+			} /* Russell was here, arrrr! */
+			if ((x == 1) && opbx_strlen_zero(fields[0])) {
+				/* Placeholder mapping */
+				opbx_copy_string(map->dcontext, name, sizeof(map->dcontext));
+				map->dead = 0;
+			} else if (x >= 4) {
+				opbx_copy_string(map->dcontext, name, sizeof(map->dcontext));
+				opbx_copy_string(map->lcontext, fields[0], sizeof(map->lcontext));
+				if ((sscanf(fields[1], "%d", &map->weight) == 1) && (map->weight >= 0) && (map->weight < 60000)) {
+					opbx_copy_string(map->dest, fields[3], sizeof(map->dest));
+					if ((map->tech = str2tech(fields[2]))) {
+						map->dead = 0;
+					}
+				} else {
+					opbx_log(LOG_WARNING, "Invalid weight '%s' specified, deleting entry '%s/%s'\n", fields[1], map->dcontext, map->lcontext);
+				}
+				for (y=4;y<x;y++) {
+					if (!strcasecmp(fields[y], "nounsolicited"))
+						map->options |= DUNDI_FLAG_NOUNSOLICITED;
+					else if (!strcasecmp(fields[y], "nocomunsolicit"))
+						map->options |= DUNDI_FLAG_NOCOMUNSOLICIT;
+					else if (!strcasecmp(fields[y], "residential"))
+						map->options |= DUNDI_FLAG_RESIDENTIAL;
+					else if (!strcasecmp(fields[y], "commercial"))
+						map->options |= DUNDI_FLAG_COMMERCIAL;
+					else if (!strcasecmp(fields[y], "mobile"))
+						map->options |= DUNDI_FLAG_MOBILE;
+					else if (!strcasecmp(fields[y], "nopartial"))
+						map->options |= DUNDI_FLAG_INTERNAL_NOPARTIAL;
+					else
+						opbx_log(LOG_WARNING, "Don't know anything about option '%s'\n", fields[y]);
+				}
+			} else 
+				opbx_log(LOG_WARNING, "Expected at least %d arguments in map, but got only %d\n", 4, x);
+		}
 	}
 }
 
@@ -4161,16 +4195,16 @@ static int do_register(void *data)
 	char eid_str[20];
 	char eid_str2[20];
 
-	cw_mutex_lock(&peerlock);
+	opbx_mutex_lock(&peerlock);
 
-	cw_log(LOG_DEBUG, "Register us as '%s' to '%s'\n", dundi_eid_to_str(eid_str, sizeof(eid_str), &peer->us_eid), dundi_eid_to_str(eid_str2, sizeof(eid_str2), &peer->eid));
-	peer->registerid = cw_sched_add(sched, default_expiration * 1000, do_register, data);
+	opbx_log(LOG_DEBUG, "Register us as '%s' to '%s'\n", dundi_eid_to_str(eid_str, sizeof(eid_str), &peer->us_eid), dundi_eid_to_str(eid_str2, sizeof(eid_str2), &peer->eid));
+	peer->registerid = opbx_sched_add(sched, default_expiration * 1000, do_register, data);
 	/* Destroy old transaction if there is one */
 	if (peer->regtrans)
 		destroy_trans(peer->regtrans, 0);
 	peer->regtrans = create_transaction(peer);
 	if (peer->regtrans) {
-		cw_set_flag(peer->regtrans, FLAG_ISREG);
+		opbx_set_flag(peer->regtrans, FLAG_ISREG);
 		memset(&ied, 0, sizeof(ied));
 		dundi_ie_append_short(&ied, DUNDI_IE_VERSION, DUNDI_DEFAULT_VERSION);
 		dundi_ie_append_eid(&ied, DUNDI_IE_EID, &peer->regtrans->us_eid);
@@ -4178,9 +4212,9 @@ static int do_register(void *data)
 		dundi_send(peer->regtrans, DUNDI_COMMAND_REGREQ, 0, 0, &ied);
 		
 	} else
-		cw_log(LOG_NOTICE, "Unable to create new transaction for registering to '%s'!\n", dundi_eid_to_str(eid_str, sizeof(eid_str), &peer->eid));
+		opbx_log(LOG_NOTICE, "Unable to create new transaction for registering to '%s'!\n", dundi_eid_to_str(eid_str, sizeof(eid_str), &peer->eid));
 
-	cw_mutex_unlock(&peerlock);
+	opbx_mutex_unlock(&peerlock);
 
 	return 0;
 }
@@ -4190,9 +4224,9 @@ static int do_qualify(void *data)
 	struct dundi_peer *peer;
 	peer = data;
 	peer->qualifyid = -1;
-	cw_mutex_lock(&peerlock);
+	opbx_mutex_lock(&peerlock);
 	qualify_peer(peer, 0);
-	cw_mutex_unlock(&peerlock);
+	opbx_mutex_unlock(&peerlock);
 	return 0;
 }
 
@@ -4200,10 +4234,10 @@ static void qualify_peer(struct dundi_peer *peer, int schedonly)
 {
 	int when;
 
-	cw_mutex_lock(&peerlock);
+	opbx_mutex_lock(&peerlock);
 
 	if (peer->qualifyid > -1)
-		cw_sched_del(sched, peer->qualifyid);
+		opbx_sched_del(sched, peer->qualifyid);
 	peer->qualifyid = -1;
 	if (peer->qualtrans)
 		destroy_trans(peer->qualtrans, 0);
@@ -4214,17 +4248,17 @@ static void qualify_peer(struct dundi_peer *peer, int schedonly)
 			when = 10000;
 		if (schedonly)
 			when = 5000;
-		peer->qualifyid = cw_sched_add(sched, when, do_qualify, peer);
+		peer->qualifyid = opbx_sched_add(sched, when, do_qualify, peer);
 		if (!schedonly)
 			peer->qualtrans = create_transaction(peer);
 		if (peer->qualtrans) {
-			peer->qualtx = cw_tvnow();
-			cw_set_flag(peer->qualtrans, FLAG_ISQUAL);
+			peer->qualtx = opbx_tvnow();
+			opbx_set_flag(peer->qualtrans, FLAG_ISQUAL);
 			dundi_send(peer->qualtrans, DUNDI_COMMAND_NULL, 0, 1, NULL);
 		}
 	}
 
-	cw_mutex_unlock(&peerlock);
+	opbx_mutex_unlock(&peerlock);
 
 }
 static void populate_addr(struct dundi_peer *peer, dundi_eid *eid)
@@ -4234,7 +4268,7 @@ static void populate_addr(struct dundi_peer *peer, dundi_eid *eid)
 	int port, expire;
 	char eid_str[20];
 	dundi_eid_to_str(eid_str, sizeof(eid_str), eid);
-	if (!cw_db_get("dundi/dpeers", eid_str, data, sizeof(data))) {
+	if (!opbx_db_get("dundi/dpeers", eid_str, data, sizeof(data))) {
 		c = strchr(data, ':');
 		if (c) {
 			*c = '\0';
@@ -4244,23 +4278,23 @@ static void populate_addr(struct dundi_peer *peer, dundi_eid *eid)
 				inet_aton(data, &peer->addr.sin_addr);
 				peer->addr.sin_family = AF_INET;
 				peer->addr.sin_port = htons(port);
-				peer->registerexpire = cw_sched_add(sched, (expire + 10) * 1000, do_register_expire, peer);
+				peer->registerexpire = opbx_sched_add(sched, (expire + 10) * 1000, do_register_expire, peer);
 			}
 		}
 	}
 }
 
 
-static void build_peer(dundi_eid *eid, struct cw_variable *v, int *globalpcmode)
+static void build_peer(dundi_eid *eid, struct opbx_variable *v, int *globalpcmode)
 {
 	struct dundi_peer *peer;
-	struct cw_hostent he;
+	struct opbx_hostent he;
 	struct hostent *hp;
 	dundi_eid testeid;
 	int needregister=0;
 	char eid_str[20];
 
-	cw_mutex_lock(&peerlock);
+	opbx_mutex_lock(&peerlock);
 	peer = peers;
 	while(peer) {
 		if (!dundi_eid_cmp(&peer->eid, eid)) {	
@@ -4292,23 +4326,23 @@ static void build_peer(dundi_eid *eid, struct cw_variable *v, int *globalpcmode)
 		peer->permit = NULL;
 		peer->include = NULL;
 		if (peer->registerid > -1)
-			cw_sched_del(sched, peer->registerid);
+			opbx_sched_del(sched, peer->registerid);
 		peer->registerid = -1;
 		while(v) {
 			if (!strcasecmp(v->name, "inkey")) {
-				cw_copy_string(peer->inkey, v->value, sizeof(peer->inkey));
+				opbx_copy_string(peer->inkey, v->value, sizeof(peer->inkey));
 			} else if (!strcasecmp(v->name, "outkey")) {
-				cw_copy_string(peer->outkey, v->value, sizeof(peer->outkey));
+				opbx_copy_string(peer->outkey, v->value, sizeof(peer->outkey));
 			} else if (!strcasecmp(v->name, "host")) {
 				if (!strcasecmp(v->value, "dynamic")) {
 					peer->dynamic = 1;
 				} else {
-					hp = cw_gethostbyname(v->value, &he);
+					hp = opbx_gethostbyname(v->value, &he);
 					if (hp) {
 						memcpy(&peer->addr.sin_addr, hp->h_addr, sizeof(peer->addr.sin_addr));
 						peer->dynamic = 0;
 					} else {
-						cw_log(LOG_WARNING, "Unable to find host '%s' at line %d\n", v->value, v->lineno);
+						opbx_log(LOG_WARNING, "Unable to find host '%s' at line %d\n", v->value, v->lineno);
 						peer->dead = 1;
 					}
 				}
@@ -4316,7 +4350,7 @@ static void build_peer(dundi_eid *eid, struct cw_variable *v, int *globalpcmode)
 				if (!dundi_str_to_eid(&testeid, v->value))
 					peer->us_eid = testeid;
 				else
-					cw_log(LOG_WARNING, "'%s' is not a valid DUNDi Entity Identifier at line %d\n", v->value, v->lineno);
+					opbx_log(LOG_WARNING, "'%s' is not a valid DUNDi Entity Identifier at line %d\n", v->value, v->lineno);
 			} else if (!strcasecmp(v->name, "include")) {
 				peer->include = append_permission(peer->include, v->value, 1);
 			} else if (!strcasecmp(v->name, "permit")) {
@@ -4326,7 +4360,7 @@ static void build_peer(dundi_eid *eid, struct cw_variable *v, int *globalpcmode)
 			} else if (!strcasecmp(v->name, "deny")) {
 				peer->permit = append_permission(peer->permit, v->value, 0);
 			} else if (!strcasecmp(v->name, "register")) {
-				needregister = cw_true(v->value);
+				needregister = opbx_true(v->value);
 			} else if (!strcasecmp(v->name, "order")) {
 				if (!strcasecmp(v->value, "primary"))
 					peer->order = 0;
@@ -4337,7 +4371,7 @@ static void build_peer(dundi_eid *eid, struct cw_variable *v, int *globalpcmode)
 				else if (!strcasecmp(v->value, "quartiary"))
 					peer->order = 3;
 				else {
-					cw_log(LOG_WARNING, "'%s' is not a valid order, should be primary, secondary, tertiary or quartiary at line %d\n", v->value, v->lineno);
+					opbx_log(LOG_WARNING, "'%s' is not a valid order, should be primary, secondary, tertiary or quartiary at line %d\n", v->value, v->lineno);
 				}
 			} else if (!strcasecmp(v->name, "qualify")) {
 				if (!strcasecmp(v->value, "no")) {
@@ -4345,7 +4379,7 @@ static void build_peer(dundi_eid *eid, struct cw_variable *v, int *globalpcmode)
 				} else if (!strcasecmp(v->value, "yes")) {
 					peer->maxms = DEFAULT_MAXMS;
 				} else if (sscanf(v->value, "%d", &peer->maxms) != 1) {
-					cw_log(LOG_WARNING, "Qualification of peer '%s' should be 'yes', 'no', or a number of milliseconds at line %d of dundi.conf\n", 
+					opbx_log(LOG_WARNING, "Qualification of peer '%s' should be 'yes', 'no', or a number of milliseconds at line %d of dundi.conf\n", 
 						dundi_eid_to_str(eid_str, sizeof(eid_str), &peer->eid), v->lineno);
 					peer->maxms = 0;
 				}
@@ -4359,7 +4393,7 @@ static void build_peer(dundi_eid *eid, struct cw_variable *v, int *globalpcmode)
 				else if (!strcasecmp(v->value, "none"))
 					peer->model = 0;
 				else {
-					cw_log(LOG_WARNING, "Unknown model '%s', should be 'none', 'outbound', 'inbound', or 'symmetric' at line %d\n", 
+					opbx_log(LOG_WARNING, "Unknown model '%s', should be 'none', 'outbound', 'inbound', or 'symmetric' at line %d\n", 
 						v->value, v->lineno);
 				}
 			} else if (!strcasecmp(v->name, "precache")) {
@@ -4372,7 +4406,7 @@ static void build_peer(dundi_eid *eid, struct cw_variable *v, int *globalpcmode)
 				else if (!strcasecmp(v->value, "none"))
 					peer->pcmodel = 0;
 				else {
-					cw_log(LOG_WARNING, "Unknown pcmodel '%s', should be 'none', 'outbound', 'inbound', or 'symmetric' at line %d\n", 
+					opbx_log(LOG_WARNING, "Unknown pcmodel '%s', should be 'none', 'outbound', 'inbound', or 'symmetric' at line %d\n", 
 						v->value, v->lineno);
 				}
 			}
@@ -4380,65 +4414,65 @@ static void build_peer(dundi_eid *eid, struct cw_variable *v, int *globalpcmode)
 		}
 		(*globalpcmode) |= peer->pcmodel;
 		if (!peer->model && !peer->pcmodel) {
-			cw_log(LOG_WARNING, "Peer '%s' lacks a model or pcmodel, discarding!\n", 
+			opbx_log(LOG_WARNING, "Peer '%s' lacks a model or pcmodel, discarding!\n", 
 				dundi_eid_to_str(eid_str, sizeof(eid_str), &peer->eid));
 			peer->dead = 1;
 		} else if ((peer->model & DUNDI_MODEL_INBOUND) && (peer->pcmodel & DUNDI_MODEL_OUTBOUND)) {
-			cw_log(LOG_WARNING, "Peer '%s' may not be both inbound/symmetric model and outbound/symmetric precache model, discarding!\n", 
+			opbx_log(LOG_WARNING, "Peer '%s' may not be both inbound/symmetric model and outbound/symmetric precache model, discarding!\n", 
 				dundi_eid_to_str(eid_str, sizeof(eid_str), &peer->eid));
 			peer->dead = 1;
 		} else if ((peer->model & DUNDI_MODEL_OUTBOUND) && (peer->pcmodel & DUNDI_MODEL_INBOUND)) {
-			cw_log(LOG_WARNING, "Peer '%s' may not be both outbound/symmetric model and inbound/symmetric precache model, discarding!\n", 
+			opbx_log(LOG_WARNING, "Peer '%s' may not be both outbound/symmetric model and inbound/symmetric precache model, discarding!\n", 
 				dundi_eid_to_str(eid_str, sizeof(eid_str), &peer->eid));
 			peer->dead = 1;
 		} else if (peer->include && !(peer->model & DUNDI_MODEL_OUTBOUND) && !(peer->pcmodel & DUNDI_MODEL_INBOUND)) {
-			cw_log(LOG_WARNING, "Peer '%s' is supposed to be included in outbound searches but isn't an outbound peer or inbound precache!\n", 
+			opbx_log(LOG_WARNING, "Peer '%s' is supposed to be included in outbound searches but isn't an outbound peer or inbound precache!\n", 
 				dundi_eid_to_str(eid_str, sizeof(eid_str), &peer->eid));
 		} else if (peer->permit && !(peer->model & DUNDI_MODEL_INBOUND) && !(peer->pcmodel & DUNDI_MODEL_OUTBOUND)) {
-			cw_log(LOG_WARNING, "Peer '%s' is supposed to have permission for some inbound searches but isn't an inbound peer or outbound precache!\n", 
+			opbx_log(LOG_WARNING, "Peer '%s' is supposed to have permission for some inbound searches but isn't an inbound peer or outbound precache!\n", 
 				dundi_eid_to_str(eid_str, sizeof(eid_str), &peer->eid));
 		} else { 
 			if (needregister) {
-				peer->registerid = cw_sched_add(sched, 2000, do_register, peer);
+				peer->registerid = opbx_sched_add(sched, 2000, do_register, peer);
 			}
 			qualify_peer(peer, 1);
 		}
 	}
-	cw_mutex_unlock(&peerlock);
+	opbx_mutex_unlock(&peerlock);
 }
 
-static int dundi_helper(struct cw_channel *chan, const char *context, const char *exten, int priority, const char *data, int flag)
+static int dundi_helper(struct opbx_channel *chan, const char *context, const char *exten, int priority, const char *data, int flag)
 {
 	struct dundi_result results[MAX_RESULTS];
 	int res;
 	int x;
 	int found = 0;
-	if (!strncasecmp(context, "proc-", 5)) {
+	if (!strncasecmp(context, "macro-", 6)) {
 		if (!chan) {	
-			cw_log(LOG_NOTICE, "Can't use Proc mode without a channel!\n");
+			opbx_log(LOG_NOTICE, "Can't use macro mode without a channel!\n");
 			return -1;
 		}
-		/* If done as a proc, use proc extension */
+		/* If done as a macro, use macro extension */
 		if (!strcasecmp(exten, "s")) {
 			exten = pbx_builtin_getvar_helper(chan, "ARG1");
-			if (!exten || cw_strlen_zero(exten))
-				exten = chan->proc_exten;
-			if (!exten || cw_strlen_zero(exten))
+			if (!exten || opbx_strlen_zero(exten))
+				exten = chan->macroexten;
+			if (!exten || opbx_strlen_zero(exten))
 				exten = chan->exten;
-			if (!exten || cw_strlen_zero(exten)) {	
-				cw_log(LOG_WARNING, "Called in Proc mode with no ARG1 or PROC_EXTEN?\n");
+			if (!exten || opbx_strlen_zero(exten)) {	
+				opbx_log(LOG_WARNING, "Called in Macro mode with no ARG1 or MACRO_EXTEN?\n");
 				return -1;
 			}
 		}
-		if (!data || cw_strlen_zero(data))
+		if (!data || opbx_strlen_zero(data))
 			data = "e164";
 	} else {
-		if (!data || cw_strlen_zero(data))
+		if (!data || opbx_strlen_zero(data))
 			data = context;
 	}
 	res = dundi_lookup(results, MAX_RESULTS, chan, data, exten, 0);
 	for (x=0;x<res;x++) {
-		if (cw_test_flag(results + x, flag))
+		if (opbx_test_flag(results + x, flag))
 			found++;
 	}
 	if (found >= priority)
@@ -4446,52 +4480,52 @@ static int dundi_helper(struct cw_channel *chan, const char *context, const char
 	return 0;
 }
 
-static int dundi_exists(struct cw_channel *chan, const char *context, const char *exten, int priority, const char *callerid, const char *data)
+static int dundi_exists(struct opbx_channel *chan, const char *context, const char *exten, int priority, const char *callerid, const char *data)
 {
 	return dundi_helper(chan, context, exten, priority, data, DUNDI_FLAG_EXISTS);
 }
 
-static int dundi_canmatch(struct cw_channel *chan, const char *context, const char *exten, int priority, const char *callerid, const char *data)
+static int dundi_canmatch(struct opbx_channel *chan, const char *context, const char *exten, int priority, const char *callerid, const char *data)
 {
 	return dundi_helper(chan, context, exten, priority, data, DUNDI_FLAG_CANMATCH);
 }
 
-static int dundi_exec(struct cw_channel *chan, const char *context, const char *exten, int priority, const char *callerid, const char *data)
+static int dundi_exec(struct opbx_channel *chan, const char *context, const char *exten, int priority, const char *callerid, int newstack, const char *data)
 {
 	struct dundi_result results[MAX_RESULTS];
 	int res;
 	int x=0;
 	char req[1024];
-	struct cw_app *dial;
+	struct opbx_app *dial;
 	
-	if (!strncasecmp(context, "proc-", 5)) {
+	if (!strncasecmp(context, "macro-", 6)) {
 		if (!chan) {	
-			cw_log(LOG_NOTICE, "Can't use Proc mode without a channel!\n");
+			opbx_log(LOG_NOTICE, "Can't use macro mode without a channel!\n");
 			return -1;
 		}
-		/* If done as a proc, use proc extension */
+		/* If done as a macro, use macro extension */
 		if (!strcasecmp(exten, "s")) {
 			exten = pbx_builtin_getvar_helper(chan, "ARG1");
-			if (!exten || cw_strlen_zero(exten))
-				exten = chan->proc_exten;
-			if (!exten || cw_strlen_zero(exten))
+			if (!exten || opbx_strlen_zero(exten))
+				exten = chan->macroexten;
+			if (!exten || opbx_strlen_zero(exten))
 				exten = chan->exten;
-			if (!exten || cw_strlen_zero(exten)) {	
-				cw_log(LOG_WARNING, "Called in Proc mode with no ARG1 or PROC_EXTEN?\n");
+			if (!exten || opbx_strlen_zero(exten)) {	
+				opbx_log(LOG_WARNING, "Called in Macro mode with no ARG1 or MACRO_EXTEN?\n");
 				return -1;
 			}
 		}
-		if (!data || cw_strlen_zero(data))
+		if (!data || opbx_strlen_zero(data))
 			data = "e164";
 	} else {
-		if (!data || cw_strlen_zero(data))
+		if (!data || opbx_strlen_zero(data))
 			data = context;
 	}
 	res = dundi_lookup(results, MAX_RESULTS, chan, data, exten, 0);
 	if (res > 0) {
 		sort_results(results, res);
 		for (x=0;x<res;x++) {
-			if (cw_test_flag(results + x, DUNDI_FLAG_EXISTS)) {
+			if (opbx_test_flag(results + x, DUNDI_FLAG_EXISTS)) {
 				if (!--priority)
 					break;
 			}
@@ -4502,18 +4536,18 @@ static int dundi_exec(struct cw_channel *chan, const char *context, const char *
 		snprintf(req, sizeof(req), "%s/%s", results[x].tech, results[x].dest);
 		dial = pbx_findapp("Dial");
 		if (dial)
-			res = pbx_exec(chan, dial, req);
+			res = pbx_exec(chan, dial, req, newstack);
 	} else
 		res = -1;
 	return res;
 }
 
-static int dundi_matchmore(struct cw_channel *chan, const char *context, const char *exten, int priority, const char *callerid, const char *data)
+static int dundi_matchmore(struct opbx_channel *chan, const char *context, const char *exten, int priority, const char *callerid, const char *data)
 {
 	return dundi_helper(chan, context, exten, priority, data, DUNDI_FLAG_MATCHMORE);
 }
 
-static struct cw_switch dundi_switch =
+static struct opbx_switch dundi_switch =
 {
         name:                   "DUNDi",
         description:    		"DUNDi Discovered Dialplan Switch",
@@ -4525,65 +4559,65 @@ static struct cw_switch dundi_switch =
 
 static int set_config(char *config_file, struct sockaddr_in* sin)
 {
-	struct cw_config *cfg;
-	struct cw_variable *v;
+	struct opbx_config *cfg;
+	struct opbx_variable *v;
 	char *cat;
 	int format;
 	int x;
 	char hn[MAXHOSTNAMELEN] = "";
-	struct cw_hostent he;
+	struct opbx_hostent he;
 	struct hostent *hp;
 	struct sockaddr_in sin2;
-	static int last_port = 0;
+	static int lopbx_port = 0;
 	int globalpcmodel = 0;
 	dundi_eid testeid;
 
 	dundi_ttl = DUNDI_DEFAULT_TTL;
 	dundi_cache_time = DUNDI_DEFAULT_CACHE_TIME;
-	cfg = cw_config_load(config_file);
+	cfg = opbx_config_load(config_file);
 	
 	
 	if (!cfg) {
-		cw_log(LOG_ERROR, "Unable to load config %s\n", config_file);
+		opbx_log(LOG_ERROR, "Unable to load config %s\n", config_file);
 		return -1;
 	}
 	ipaddr[0] = '\0';
 	if (!gethostname(hn, sizeof(hn)-1)) {
-		hp = cw_gethostbyname(hn, &he);
+		hp = opbx_gethostbyname(hn, &he);
 		if (hp) {
 			memcpy(&sin2.sin_addr, hp->h_addr, sizeof(sin2.sin_addr));
-			cw_inet_ntoa(ipaddr, sizeof(ipaddr), sin2.sin_addr);
+			opbx_inet_ntoa(ipaddr, sizeof(ipaddr), sin2.sin_addr);
 		} else
-			cw_log(LOG_WARNING, "Unable to look up host '%s'\n", hn);
+			opbx_log(LOG_WARNING, "Unable to look up host '%s'\n", hn);
 	} else
-		cw_log(LOG_WARNING, "Unable to get host name!\n");
-	cw_mutex_lock(&peerlock);
+		opbx_log(LOG_WARNING, "Unable to get host name!\n");
+	opbx_mutex_lock(&peerlock);
 	reset_global_eid();
 	global_storehistory = 0;
-	cw_copy_string(secretpath, "dundi", sizeof(secretpath));
-	v = cw_variable_browse(cfg, "general");
+	opbx_copy_string(secretpath, "dundi", sizeof(secretpath));
+	v = opbx_variable_browse(cfg, "general");
 	while(v) {
 		if (!strcasecmp(v->name, "port")){ 
 			sin->sin_port = ntohs(atoi(v->value));
-			if(last_port==0){
-				last_port=sin->sin_port;
-			} else if(sin->sin_port != last_port)
-				cw_log(LOG_WARNING, "change to port ignored until next callweaver re-start\n");
+			if(lopbx_port==0){
+				lopbx_port=sin->sin_port;
+			} else if(sin->sin_port != lopbx_port)
+				opbx_log(LOG_WARNING, "change to port ignored until next openpbx re-start\n");
 		} else if (!strcasecmp(v->name, "bindaddr")) {
 			struct hostent *hp;
-			struct cw_hostent he;
-			hp = cw_gethostbyname(v->value, &he);
+			struct opbx_hostent he;
+			hp = opbx_gethostbyname(v->value, &he);
 			if (hp) {
 				memcpy(&sin->sin_addr, hp->h_addr, sizeof(sin->sin_addr));
 			} else
-				cw_log(LOG_WARNING, "Invalid host/IP '%s'\n", v->value);
+				opbx_log(LOG_WARNING, "Invalid host/IP '%s'\n", v->value);
 		} else if (!strcasecmp(v->name, "authdebug")) {
-			authdebug = cw_true(v->value);
+			authdebug = opbx_true(v->value);
 		} else if (!strcasecmp(v->name, "ttl")) {
 			if ((sscanf(v->value, "%d", &x) == 1) && (x > 0) && (x < DUNDI_DEFAULT_TTL)) {
 				dundi_ttl = x;
 			} else {
-				cw_log(LOG_WARNING, "'%s' is not a valid TTL at line %d, must be number from 1 to %d\n",
+				opbx_log(LOG_WARNING, "'%s' is not a valid TTL at line %d, must be number from 1 to %d\n",
 					v->value, v->lineno, DUNDI_DEFAULT_TTL);
 			}
 		} else if (!strcasecmp(v->name, "autokill")) {
@@ -4591,8 +4625,8 @@ static int set_config(char *config_file, struct sockaddr_in* sin)
 				if (x >= 0)
 					global_autokilltimeout = x;
 				else
-					cw_log(LOG_NOTICE, "Nice try, but autokill has to be >0 or 'yes' or 'no' at line %d\n", v->lineno);
-			} else if (cw_true(v->value)) {
+					opbx_log(LOG_NOTICE, "Nice try, but autokill has to be >0 or 'yes' or 'no' at line %d\n", v->lineno);
+			} else if (opbx_true(v->value)) {
 				global_autokilltimeout = DEFAULT_MAXMS;
 			} else {
 				global_autokilltimeout = 0;
@@ -4601,7 +4635,7 @@ static int set_config(char *config_file, struct sockaddr_in* sin)
 			if (!dundi_str_to_eid(&testeid, v->value))
 				global_eid = testeid;
 			else
-				cw_log(LOG_WARNING, "Invalid global endpoint identifier '%s' at line %d\n", v->value, v->lineno);
+				opbx_log(LOG_WARNING, "Invalid global endpoint identifier '%s' at line %d\n", v->value, v->lineno);
 		} else if (!strcasecmp(v->name, "tos")) {
 			if (sscanf(v->value, "%d", &format) == 1)
 				tos = format & 0xff;
@@ -4619,58 +4653,58 @@ static int set_config(char *config_file, struct sockaddr_in* sin)
 				tos = 0;
 			else
 #if !defined(__NetBSD__) && !defined(__OpenBSD__) && !defined(SOLARIS)
-				cw_log(LOG_WARNING, "Invalid tos value at line %d, should be 'lowdelay', 'throughput', 'reliability', 'mincost', or 'none'\n", v->lineno);
+				opbx_log(LOG_WARNING, "Invalid tos value at line %d, should be 'lowdelay', 'throughput', 'reliability', 'mincost', or 'none'\n", v->lineno);
 #else
-				cw_log(LOG_WARNING, "Invalid tos value at line %d, should be 'lowdelay', 'throughput', 'reliability', or 'none'\n", v->lineno);
+				opbx_log(LOG_WARNING, "Invalid tos value at line %d, should be 'lowdelay', 'throughput', 'reliability', or 'none'\n", v->lineno);
 #endif
 		} else if (!strcasecmp(v->name, "department")) {
-			cw_copy_string(dept, v->value, sizeof(dept));
+			opbx_copy_string(dept, v->value, sizeof(dept));
 		} else if (!strcasecmp(v->name, "organization")) {
-			cw_copy_string(org, v->value, sizeof(org));
+			opbx_copy_string(org, v->value, sizeof(org));
 		} else if (!strcasecmp(v->name, "locality")) {
-			cw_copy_string(locality, v->value, sizeof(locality));
+			opbx_copy_string(locality, v->value, sizeof(locality));
 		} else if (!strcasecmp(v->name, "stateprov")) {
-			cw_copy_string(stateprov, v->value, sizeof(stateprov));
+			opbx_copy_string(stateprov, v->value, sizeof(stateprov));
 		} else if (!strcasecmp(v->name, "country")) {
-			cw_copy_string(country, v->value, sizeof(country));
+			opbx_copy_string(country, v->value, sizeof(country));
 		} else if (!strcasecmp(v->name, "email")) {
-			cw_copy_string(email, v->value, sizeof(email));
+			opbx_copy_string(email, v->value, sizeof(email));
 		} else if (!strcasecmp(v->name, "phone")) {
-			cw_copy_string(phone, v->value, sizeof(phone));
+			opbx_copy_string(phone, v->value, sizeof(phone));
 		} else if (!strcasecmp(v->name, "storehistory")) {
-			global_storehistory = cw_true(v->value);
+			global_storehistory = opbx_true(v->value);
 		} else if (!strcasecmp(v->name, "cachetime")) {
 			if ((sscanf(v->value, "%d", &x) == 1)) {
 				dundi_cache_time = x;
 			} else {
-				cw_log(LOG_WARNING, "'%s' is not a valid cache time at line %d. Using default value '%d'.\n",
+				opbx_log(LOG_WARNING, "'%s' is not a valid cache time at line %d. Using default value '%d'.\n",
 					v->value, v->lineno, DUNDI_DEFAULT_CACHE_TIME);
 			}
 		}
 		v = v->next;
 	}
-	cw_mutex_unlock(&peerlock);
+	opbx_mutex_unlock(&peerlock);
 	mark_mappings();
-	v = cw_variable_browse(cfg, "mappings");
+	v = opbx_variable_browse(cfg, "mappings");
 	while(v) {
 		build_mapping(v->name, v->value);
 		v = v->next;
 	}
 	prune_mappings();
 	mark_peers();
-	cat = cw_category_browse(cfg, NULL);
+	cat = opbx_category_browse(cfg, NULL);
 	while(cat) {
 		if (strcasecmp(cat, "general") && strcasecmp(cat, "mappings")) {
 			/* Entries */
 			if (!dundi_str_to_eid(&testeid, cat))
-				build_peer(&testeid, cw_variable_browse(cfg, cat), &globalpcmodel);
+				build_peer(&testeid, opbx_variable_browse(cfg, cat), &globalpcmodel);
 			else
-				cw_log(LOG_NOTICE, "Ignoring invalid EID entry '%s'\n", cat);
+				opbx_log(LOG_NOTICE, "Ignoring invalid EID entry '%s'\n", cat);
 		}
-		cat = cw_category_browse(cfg, cat);
+		cat = opbx_category_browse(cfg, cat);
 	}
 	prune_peers();
-	cw_config_destroy(cfg);
+	opbx_config_destroy(cfg);
 	load_password();
 	if (globalpcmodel & DUNDI_MODEL_OUTBOUND)
 		dundi_precache_full();
@@ -4679,26 +4713,26 @@ static int set_config(char *config_file, struct sockaddr_in* sin)
 
 int unload_module(void)
 {
-	int res = 0;
+	int res;
 	STANDARD_HANGUP_LOCALUSERS;
-	cw_cli_unregister(&cli_debug);
-	cw_cli_unregister(&cli_store_history);
-	cw_cli_unregister(&cli_flush);
-	cw_cli_unregister(&cli_no_debug);
-	cw_cli_unregister(&cli_no_store_history);
-	cw_cli_unregister(&cli_show_peers);
-	cw_cli_unregister(&cli_show_entityid);
-	cw_cli_unregister(&cli_show_trans);
-	cw_cli_unregister(&cli_show_requests);
-	cw_cli_unregister(&cli_show_mappings);
-	cw_cli_unregister(&cli_show_precache);
-	cw_cli_unregister(&cli_show_peer);
-	cw_cli_unregister(&cli_lookup);
-	cw_cli_unregister(&cli_precache);
-	cw_cli_unregister(&cli_queryeid);
-	cw_unregister_switch(&dundi_switch);
-	res |= cw_unregister_function(dundi_func);
-	res |= cw_unregister_application(dundi_app);
+	opbx_cli_unregister(&cli_debug);
+	opbx_cli_unregister(&cli_store_history);
+	opbx_cli_unregister(&cli_flush);
+	opbx_cli_unregister(&cli_no_debug);
+	opbx_cli_unregister(&cli_no_store_history);
+	opbx_cli_unregister(&cli_show_peers);
+	opbx_cli_unregister(&cli_show_entityid);
+	opbx_cli_unregister(&cli_show_trans);
+	opbx_cli_unregister(&cli_show_requests);
+	opbx_cli_unregister(&cli_show_mappings);
+	opbx_cli_unregister(&cli_show_precache);
+	opbx_cli_unregister(&cli_show_peer);
+	opbx_cli_unregister(&cli_lookup);
+	opbx_cli_unregister(&cli_precache);
+	opbx_cli_unregister(&cli_queryeid);
+	opbx_unregister_switch(&dundi_switch);
+	opbx_custom_function_unregister(&dundi_function);
+	res = opbx_unregister_application(app);
 	return res;
 }
 
@@ -4727,7 +4761,7 @@ int load_module(void)
 	sched = sched_context_create();
 	
 	if (!io || !sched) {
-		cw_log(LOG_ERROR, "Out of memory\n");
+		opbx_log(LOG_ERROR, "Out of memory\n");
 		return -1;
 	}
 
@@ -4736,49 +4770,49 @@ int load_module(void)
 	netsocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
 	
 	if (netsocket < 0) {
-		cw_log(LOG_ERROR, "Unable to create network socket: %s\n", strerror(errno));
+		opbx_log(LOG_ERROR, "Unable to create network socket: %s\n", strerror(errno));
 		return -1;
 	}
 	if (bind(netsocket,(struct sockaddr *)&sin, sizeof(sin))) {
-		cw_log(LOG_ERROR, "Unable to bind to %s port %d: %s\n", cw_inet_ntoa(iabuf, sizeof(iabuf), sin.sin_addr), ntohs(sin.sin_port), strerror(errno));
+		opbx_log(LOG_ERROR, "Unable to bind to %s port %d: %s\n", opbx_inet_ntoa(iabuf, sizeof(iabuf), sin.sin_addr), ntohs(sin.sin_port), strerror(errno));
 		return -1;
 	}
 
 	if (option_verbose > 1)
-		cw_verbose(VERBOSE_PREFIX_2 "Using TOS bits %d\n", tos);
+		opbx_verbose(VERBOSE_PREFIX_2 "Using TOS bits %d\n", tos);
 
 	if (setsockopt(netsocket, IPPROTO_IP, IP_TOS, &tos, sizeof(tos))) 
-		cw_log(LOG_WARNING, "Unable to set TOS to %d\n", tos);
+		opbx_log(LOG_WARNING, "Unable to set TOS to %d\n", tos);
 	
 	res = start_network_thread();
 	if (res) {
-		cw_log(LOG_ERROR, "Unable to start network thread\n");
+		opbx_log(LOG_ERROR, "Unable to start network thread\n");
 		close(netsocket);
 		return -1;
 	}
 
 	if (option_verbose > 1)
-		cw_verbose(VERBOSE_PREFIX_2 "DUNDi Ready and Listening on %s port %d\n", cw_inet_ntoa(iabuf, sizeof(iabuf), sin.sin_addr), ntohs(sin.sin_port));
+		opbx_verbose(VERBOSE_PREFIX_2 "DUNDi Ready and Listening on %s port %d\n", opbx_inet_ntoa(iabuf, sizeof(iabuf), sin.sin_addr), ntohs(sin.sin_port));
 
-	cw_cli_register(&cli_debug);
-	cw_cli_register(&cli_store_history);
-	cw_cli_register(&cli_flush);
-	cw_cli_register(&cli_no_debug);
-	cw_cli_register(&cli_no_store_history);
-	cw_cli_register(&cli_show_peers);
-	cw_cli_register(&cli_show_entityid);
-	cw_cli_register(&cli_show_trans);
-	cw_cli_register(&cli_show_requests);
-	cw_cli_register(&cli_show_mappings);
-	cw_cli_register(&cli_show_precache);
-	cw_cli_register(&cli_show_peer);
-	cw_cli_register(&cli_lookup);
-	cw_cli_register(&cli_precache);
-	cw_cli_register(&cli_queryeid);
-	if (cw_register_switch(&dundi_switch))
-		cw_log(LOG_ERROR, "Unable to register DUNDi switch\n");
-	dundi_app = cw_register_application(dundi_lookup_name, dundi_lookup_exec, dundi_lookup_synopsis, dundi_lookup_syntax, dundi_lookup_descrip);
-	dundi_func = cw_register_function(dundifunc_name, dundifunc_read, NULL, dundifunc_synopsis, dundifunc_syntax, dundifunc_desc); 
+	opbx_cli_register(&cli_debug);
+	opbx_cli_register(&cli_store_history);
+	opbx_cli_register(&cli_flush);
+	opbx_cli_register(&cli_no_debug);
+	opbx_cli_register(&cli_no_store_history);
+	opbx_cli_register(&cli_show_peers);
+	opbx_cli_register(&cli_show_entityid);
+	opbx_cli_register(&cli_show_trans);
+	opbx_cli_register(&cli_show_requests);
+	opbx_cli_register(&cli_show_mappings);
+	opbx_cli_register(&cli_show_precache);
+	opbx_cli_register(&cli_show_peer);
+	opbx_cli_register(&cli_lookup);
+	opbx_cli_register(&cli_precache);
+	opbx_cli_register(&cli_queryeid);
+	if (opbx_register_switch(&dundi_switch))
+		opbx_log(LOG_ERROR, "Unable to register DUNDi switch\n");
+	opbx_register_application(app, dundi_lookup_exec, synopsis, descrip);
+	opbx_custom_function_register(&dundi_function); 
 	
 	return res;
 }

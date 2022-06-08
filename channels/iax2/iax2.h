@@ -1,7 +1,7 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- A telephony toolkit for Linux.
  *
- * Implementation of Inter-CallWeaver eXchange
+ * Implementation of Inter-OpenPBX eXchange
  * 
  * Copyright (C) 2003, Digium
  *
@@ -29,7 +29,7 @@
 
 #define IAX_WINDOW			64
 
-/* Subclass for CW_FRAME_IAX */
+/* Subclass for OPBX_FRAME_IAX */
 #define IAX_COMMAND_NEW		1
 #define IAX_COMMAND_PING	2
 #define IAX_COMMAND_PONG	3
@@ -155,7 +155,7 @@
 #define IAX_DPSTATUS_MATCHMORE		(1 << 15)
 
 /* Full frames are always delivered reliably */
-struct cw_iax2_full_hdr {
+struct opbx_iax2_full_hdr {
 	unsigned short scallno;	/* Source call number -- high bit must be 1 */
 	unsigned short dcallno;	/* Destination call number -- high bit is 1 if retransmission */
 	unsigned int ts;		/* 32-bit timestamp in milliseconds (from 1st transmission) */
@@ -167,60 +167,60 @@ struct cw_iax2_full_hdr {
 } __attribute__ ((__packed__));
 
 /* Full frames are always delivered reliably */
-struct cw_iax2_full_enc_hdr {
+struct opbx_iax2_full_enc_hdr {
 	unsigned short scallno;	/* Source call number -- high bit must be 1 */
 	unsigned short dcallno;	/* Destination call number -- high bit is 1 if retransmission */
 	unsigned char encdata[0];
 } __attribute__ ((__packed__));
 
 /* Mini header is used only for voice frames -- delivered unreliably */
-struct cw_iax2_mini_hdr {
+struct opbx_iax2_mini_hdr {
 	unsigned short callno;	/* Source call number -- high bit must be 0, rest must be non-zero */
-	unsigned short ts;		/* 16-bit Timestamp (high 16 bits from last cw_iax2_full_hdr) */
+	unsigned short ts;		/* 16-bit Timestamp (high 16 bits from last opbx_iax2_full_hdr) */
 							/* Frametype implicitly VOICE_FRAME */
-							/* subclass implicit from last cw_iax2_full_hdr */
+							/* subclass implicit from last opbx_iax2_full_hdr */
 	unsigned char data[0];
 } __attribute__ ((__packed__));
 
 /* Mini header is used only for voice frames -- delivered unreliably */
-struct cw_iax2_mini_enc_hdr {
+struct opbx_iax2_mini_enc_hdr {
 	unsigned short callno;	/* Source call number -- high bit must be 0, rest must be non-zero */
 	unsigned char encdata[0];
 } __attribute__ ((__packed__));
 
-struct cw_iax2_meta_hdr {
+struct opbx_iax2_meta_hdr {
 	unsigned short zeros;			/* Zeros field -- must be zero */
 	unsigned char metacmd;			/* Meta command */
 	unsigned char cmddata;			/* Command Data */
 	unsigned char data[0];
 } __attribute__ ((__packed__));
 
-struct cw_iax2_video_hdr {
+struct opbx_iax2_video_hdr {
 	unsigned short zeros;			/* Zeros field -- must be zero */
 	unsigned short callno;			/* Video call number */
 	unsigned short ts;				/* Timestamp and mark if present */
 	unsigned char data[0];
 } __attribute__ ((__packed__));
 
-struct cw_iax2_meta_trunk_hdr {
+struct opbx_iax2_meta_trunk_hdr {
 	unsigned int ts;				/* 32-bit timestamp for all messages */
 	unsigned char data[0];
 } __attribute__ ((__packed__));
 
-struct cw_iax2_meta_trunk_entry {
+struct opbx_iax2_meta_trunk_entry {
 	unsigned short callno;			/* Call number */
 	unsigned short len;				/* Length of data for this callno */
 } __attribute__ ((__packed__));
 
 /* When trunktimestamps are used, we use this format instead */
-struct cw_iax2_meta_trunk_mini {
+struct opbx_iax2_meta_trunk_mini {
 	unsigned short len;
-	struct cw_iax2_mini_hdr mini;		/* this is an actual miniframe */
+	struct opbx_iax2_mini_hdr mini;		/* this is an actual miniframe */
 } __attribute__ ((__packed__));
 
 #define IAX_FIRMWARE_MAGIC 0x69617879
 
-struct cw_iax2_firmware_header {
+struct opbx_iax2_firmware_header {
 	unsigned int magic;		/* Magic number */
 	unsigned short version;		/* Software version */
 	unsigned char devname[16];	/* Device */

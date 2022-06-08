@@ -11,13 +11,13 @@ lines of code, look at chan_sip for an example.
 Credits:
  Most of this implementation is written by Slav Klenov, and some of
   it has been paid for by IP24.no.
- Integration into CallWeaver.org and some additions and bugfixes made by 
+ Integration into OpenPBX.org and some additions and bugfixes made by 
   Bartek (eGnarF) Kania.
 
 
 Configuration info
 ------------------
-The jitter buffer currently has three actual buffers:
+The jitter buffer currently has two actual buffers:
  fixed - A fixed length implementation by Slav Klenov
  adaptive - An adaptive jitter buffer implemented by Steve Kann
    	    more info about this can be found in README.jitterbuffer
@@ -29,7 +29,7 @@ The configuration parameters are identical for each channel, and are
 documented here instead of in each channel. 
 NOTE: You must configure the jitterbuffer on the RECEIVING channel. So
 if you have something like:
-	Phone (SIP) -> CW -> (ZAP) Phone
+	Phone (SIP) -> OPBX -> (ZAP) Phone
 and get jitter on the SIP-connection then you must configure the
 jitterbuffer on the ZAP-channel for it to work.
 
@@ -64,13 +64,11 @@ jitterbuffer on the ZAP-channel for it to work.
                                ; to 1000.
 
 ; jb-impl = fixed              ; Jitterbuffer implementation, used on the
-                               ; receiving side of a SIP channel. Three
-                               ; implementations are currenlty available:
-                               ; * "fixed" (with size always equals to
-                               ;; jb-max-size)
-                               ; * "adaptive" (with variable size, actually the 
-                               ; new jb of IAX2).
-                               ; * "speakup" - contributed by SpeakUp.nl
+                               ; receiving side of a SIP channel. Two
+                               ; implementation are currenlty available -
+                               ; "fixed" (with size always equals to
+                               ; jb-max-size) and "adaptive" (with variable
+                               ; size, actually the new jb of IAX2).
                                ; Defaults to fixed.
 
 ; jb-log = no                  ; Enables jitterbuffer frame logging.
@@ -86,14 +84,14 @@ the actual jitterbuffer is still in use and can be selected with
 	jb-impl = adaptive
 
 
-The new Jitterbuffer in CallWeaver
+The new Jitterbuffer in OpenPBX
 --------------------------------
 Steve Kann
 
 
 
 The new jitterbuffer, PLC, and the IAX2-integration of the new jitterbuffer 
-have been integrated into CallWeaver. The jitterbuffer is generic and has 
+have been integrated into OpenPBX. The jitterbuffer is generic and has 
 been implemented in SIP/RTP as well.
 
 Also, we've added a feature called "trunktimestamps", which adds individual 
@@ -121,7 +119,7 @@ genericplc => true in the [plc] section of codecs.conf.
 
 3) Trunktimestamps:
 -------------------
-To use this, both sides must be using CallWeaver v1.1dev (or coming 1.2 stable).
+To use this, both sides must be using OpenPBX v1.1dev (or coming 1.2 stable).
 Setting "trunktimestamps=yes" in iax.conf will cause your box to send 16-bit timestamps 
 for each trunked frame inside of a trunk frame. This will enable you to use jitterbuffer
 for an IAX2 trunk, something that was not possible in the old architecture.
@@ -217,7 +215,7 @@ times of the frames you're receiving.  You can make such a tcpdump with:
 
 tcpdump -s 2048 -w /tmp/example.dump udp and port 4569 [and host <other-end>]
 
-Report bugs in the CallWeaver bugtracker, http://bugs.digium.com.
+Report bugs in the OpenPBX bugtracker, http://bugs.digium.com.
 Please read the bug guidelines before you post a bug.
 
 Have fun!

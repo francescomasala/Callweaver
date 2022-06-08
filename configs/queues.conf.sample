@@ -3,16 +3,16 @@
 ; Global settings for call queues
 ;
 ; Persistent Members
-;    Store each dynamic member in each queue in the cwdb so that
-;    when callweaver is restarted, each member will be automatically
-;    read into their recorded queues. Default is 'no'.
+;    Store each dynamic member in each queue in the opbxdb so that
+;    when openpbx is restarted, each member will be automatically
+;    readded into their recorded queues. Default is 'yes'.
 ;
 persistentmembers = yes
 ;
 ; Note that a timeout to fail out of a queue may be passed as part of
 ; an application call from extensions.conf:
-; Queue(queuename[, options[, optionalurl[, announceoverride[, timeout]]]])
-; example: Queue(dave, t, , , 45)
+; Queue(queuename|[options]|[optionalurl]|[announceoverride]|[timeout])
+; example: Queue(dave|t|||45)
 
 ;[markq]
 ;
@@ -122,7 +122,7 @@ persistentmembers = yes
 ;queue-reporthold = queue-reporthold		;       ("Hold time")
 ;periodic-announce = queue-periodic-announce    ;       ("All reps busy / wait for next")
 ;
-; Calls may be recorded using CallWeaver's monitor resource
+; Calls may be recorded using OpenPBX's monitor resource
 ; This can be enabled from within the Queue application, starting recording
 ; when the call is actually picked up; thus, only successful calls are
 ; recorded, and you are not recording while people are listening to MOH.
@@ -133,7 +133,7 @@ persistentmembers = yes
 ;    Set(MONITOR_FILENAME=foo)
 ; Otherwise it will use MONITOR_FILENAME=${UNIQUEID}
 ;
-;monitor-format = gsm,wav,wav49
+;monitor-format = gsm|wav|wav49
 ;
 ; If you wish to have the two files joined together when the call ends, set this
 ; to yes.
@@ -205,8 +205,4 @@ persistentmembers = yes
 ;member => Agent/@1		; Any agent in group 1
 ;member => Agent/:1,1		; Any agent in group 1, wait for first
                                 ; available, but consider with penalty
-;
-;
-[queue-1]
-eventwhencalled=yes
-strategy=fewestcalls
+

@@ -1,12 +1,12 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  *
  * Copyright (C) 1999 - 2005, Digium, Inc.
  *
  * Created by Olle E. Johansson, Edvina.net 
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -33,77 +33,70 @@
 #include <string.h>
 #include <sys/types.h>
 
-#include "callweaver.h"
+#include "openpbx.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/funcs/func_uri.c $", "$Revision: 4723 $")
+OPENPBX_FILE_VERSION("$HeadURL$", "$Revision$")
 
-#include "callweaver/channel.h"
-#include "callweaver/pbx.h"
-#include "callweaver/logger.h"
-#include "callweaver/utils.h"
-#include "callweaver/app.h"
-#include "callweaver/module.h"
-
-
-static void *urldecode_function;
-static const char *urldecode_func_name = "URIDECODE";
-static const char *urldecode_func_synopsis = "Decodes an URI-encoded string.";
-static const char *urldecode_func_syntax = "URIDECODE(data)";
-static const char *urldecode_func_desc = "";
-
-static void *urlencode_function;
-static const char *urlencode_func_name = "URIENCODE";
-static const char *urlencode_func_synopsis = "Encodes a string to URI-safe encoding.";
-static const char *urlencode_func_syntax = "URIENCODE(data)";
-static const char *urlencode_func_desc = "";
-
+#include "openpbx/channel.h"
+#include "openpbx/pbx.h"
+#include "openpbx/logger.h"
+#include "openpbx/utils.h"
+#include "openpbx/app.h"
+#include "openpbx/module.h"
 
 /*! \brief builtin_function_uriencode: Encode URL according to RFC 2396 */
-static char *builtin_function_uriencode(struct cw_channel *chan, int argc, char **argv, char *buf, size_t len) 
+static char *builtin_function_uriencode(struct opbx_channel *chan, char *cmd, char *data, char *buf, size_t len) 
 {
 	char uri[BUFSIZ];
 
-	if (argc != 1 || !argv[0][0]) {
-		cw_log(LOG_ERROR, "Syntax: %s\n", urlencode_func_syntax);
+	if (!data || opbx_strlen_zero(data)) {
+		opbx_log(LOG_WARNING, "Syntax: URIENCODE(<data>) - missing argument!\n");
 		return NULL;
 	}
 
-	cw_uri_encode(argv[0], uri, sizeof(uri), 1);
-	cw_copy_string(buf, uri, len);
+	opbx_uri_encode(data, uri, sizeof(uri), 1);
+	opbx_copy_string(buf, uri, len);
 
 	return buf;
 }
 
 /*!\brief builtin_function_uridecode: Decode URI according to RFC 2396 */
-static char *builtin_function_uridecode(struct cw_channel *chan, int argc, char **argv, char *buf, size_t len) 
+static char *builtin_function_uridecode(struct opbx_channel *chan, char *cmd, char *data, char *buf, size_t len) 
 {
-	if (argc != 1 || !argv[0][0]) {
-		cw_log(LOG_ERROR, "Syntax: %s\n", urldecode_func_syntax);
+	if (!data || opbx_strlen_zero(data)) {
+		opbx_log(LOG_WARNING, "Syntax: URIDECODE(<data>) - missing argument!\n");
 		return NULL;
 	}
 	
-	cw_copy_string(buf, argv[0], len);
-	cw_uri_decode(buf);
+	opbx_copy_string(buf, data, len);
+	opbx_uri_decode(buf);
 	return buf;
 }
 
+static struct opbx_custom_function urldecode_function = {
+	.name = "URIDECODE",
+	.synopsis = "Decodes an URI-encoded string.",
+	.syntax = "URIDECODE(<data>)",
+	.read = builtin_function_uridecode,
+};
+
+static struct opbx_custom_function urlencode_function = {
+	.name = "URIENCODE",
+	.synopsis = "Encodes a string to URI-safe encoding.",
+	.syntax = "URIENCODE(<data>)",
+	.read = builtin_function_uriencode,
+};
 
 static char *tdesc = "URI encode/decode functions";
 
 int unload_module(void)
 {
-	int res = 0;
-
-        res |= cw_unregister_function(urldecode_function);
-	res |= cw_unregister_function(urlencode_function);
-	return res;
+        return opbx_custom_function_unregister(&urldecode_function) || opbx_custom_function_unregister(&urlencode_function);
 }
 
 int load_module(void)
 {
-        urldecode_function = cw_register_function(urldecode_func_name, builtin_function_uridecode, NULL, urldecode_func_synopsis, urldecode_func_syntax, urldecode_func_desc);
-	urlencode_function = cw_register_function(urlencode_func_name, builtin_function_uriencode, NULL, urlencode_func_synopsis, urlencode_func_syntax, urlencode_func_desc);
-	return 0;
+        return opbx_custom_function_register(&urldecode_function) || opbx_custom_function_register(&urlencode_function);
 }
 
 char *description(void)

@@ -1,12 +1,12 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  *
  * Copyright (C) 2005, Anthony Minessale II.
  *
  * Anthony Minessale <anthmct@yahoo.com>
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -30,163 +30,157 @@
 
 #include <string.h>
 
-#include "callweaver.h"
+#include "openpbx.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/corelib/slinfactory.c $", "$Revision: 4723 $")
+OPENPBX_FILE_VERSION("$HeadURL: svn://svn.openpbx.org/openpbx/trunk/corelib/ $", "$Revision$")
 
-#include "callweaver/slinfactory.h"
-#include "callweaver/logger.h"
-#include "callweaver/translate.h"
+#include "openpbx/slinfactory.h"
+#include "openpbx/logger.h"
+#include "openpbx/translate.h"
 
 
-void cw_slinfactory_init(struct cw_slinfactory *sf) 
+void opbx_slinfactory_init(struct opbx_slinfactory *sf) 
 {
-    memset(sf, 0, sizeof(struct cw_slinfactory));
-    sf->offset = sf->hold;
-    sf->queue = NULL;
-    cw_mutex_init(&(sf->lock));
+	memset(sf, 0, sizeof(struct opbx_slinfactory));
+	sf->offset = sf->hold;
+	sf->queue = NULL;
+	opbx_mutex_init(&(sf->lock));
 }
 
-void cw_slinfactory_destroy(struct cw_slinfactory *sf) 
+void opbx_slinfactory_destroy(struct opbx_slinfactory *sf) 
 {
-    struct cw_frame *f;
+	struct opbx_frame *f;
 
-    if (sf->trans)
+	if (sf->trans)
     {
-        cw_translator_free_path(sf->trans);
-        sf->trans = NULL;
-    }
+		opbx_translator_free_path(sf->trans);
+		sf->trans = NULL;
+	}
 
-    while ((f = sf->queue))
+	while ((f = sf->queue))
     {
-        sf->queue = f->next;
-        cw_fr_free(f);
-    }
-    cw_mutex_destroy(&(sf->lock));
+		sf->queue = f->next;
+		opbx_frfree(f);
+	}
+	opbx_mutex_destroy(&(sf->lock));
 
 }
 
-int cw_slinfactory_feed(struct cw_slinfactory *sf, struct cw_frame *f)
+int opbx_slinfactory_feed(struct opbx_slinfactory *sf, struct opbx_frame *f)
 {
-    struct cw_frame *frame;
-    struct cw_frame *frame_ptr;
+	struct opbx_frame *frame, *frame_ptr;
 
-    if (f == NULL)
-        return 0;
-    cw_mutex_lock(&(sf->lock));
-    if (f->subclass != CW_FORMAT_SLINEAR)
+	if (!f)
+		return 0;
+	opbx_mutex_lock(&(sf->lock));
+	if (f->subclass != OPBX_FORMAT_SLINEAR)
     {
-        if (sf->trans  &&  f->subclass != sf->format)
+		if (sf->trans  &&  f->subclass != sf->format)
         {
-            cw_translator_free_path(sf->trans);
-            sf->trans = NULL;
-        }
-        if (sf->trans == NULL)
+			opbx_translator_free_path(sf->trans);
+			sf->trans = NULL;
+		}
+		if (!sf->trans)
         {
-            if ((sf->trans = cw_translator_build_path(CW_FORMAT_SLINEAR, 8000, f->subclass, 8000)) == NULL)
+			if ((sf->trans = opbx_translator_build_path(OPBX_FORMAT_SLINEAR, f->subclass)) == NULL)
             {
-                cw_log(LOG_WARNING, "Cannot build a path from %s to slin\n", cw_getformatname(f->subclass));
-                cw_mutex_unlock(&(sf->lock));
-                return 0;
-            }
-            sf->format = f->subclass;
-        }
-    }
+				opbx_log(LOG_WARNING, "Cannot build a path from %s to slin\n", opbx_getformatname(f->subclass));
+				opbx_mutex_unlock(&(sf->lock));
+				return 0;
+			}
+			sf->format = f->subclass;
+		}
+	}
 
-    if (sf->trans)
+	if (sf->trans)
+		frame = opbx_frdup(opbx_translate(sf->trans, f, 0));
+	else
+		frame = opbx_frdup(f);
+	if (frame)
     {
-        if ((frame = cw_translate(sf->trans, f, 0)))
-            frame = cw_frdup(frame);
-    }
-    else
-    {
-        frame = cw_frdup(f);
-    }
-    if (frame)
-    {
-        int x = 0;
+		int x = 0;
 
-        frame->next = NULL;
+		frame->next = NULL;
 
-        for (frame_ptr = sf->queue;  frame_ptr  &&  frame_ptr->next;  frame_ptr=frame_ptr->next)
-            x++;
-        if (frame_ptr)
-            frame_ptr->next = frame;
-        else
-            sf->queue = frame;
-        frame->next = NULL;
-        sf->size += frame->datalen;
-        cw_mutex_unlock(&(sf->lock));
-        return x;
-    }
-    cw_mutex_unlock(&(sf->lock));
+		for (frame_ptr = sf->queue; frame_ptr && frame_ptr->next; frame_ptr=frame_ptr->next)
+			x++;
+		if (frame_ptr)
+			frame_ptr->next = frame;
+		else
+			sf->queue = frame;
+		frame->next = NULL;
+		sf->size += frame->datalen;
+		opbx_mutex_unlock(&(sf->lock));
+		return x;
+	}
+	opbx_mutex_unlock(&(sf->lock));
 
-    return 0;
+	return 0;
 }
 
-int cw_slinfactory_read(struct cw_slinfactory *sf, int16_t *buf, size_t bytes) 
+int opbx_slinfactory_read(struct opbx_slinfactory *sf, short *buf, size_t bytes) 
 {
-    struct cw_frame *frame_ptr;
-    int sofar;
-    int ineed;
-    int remain;
-    int16_t *frame_data;
-    int16_t *offset = buf;
-    
-    cw_mutex_lock(&(sf->lock));
+	struct opbx_frame *frame_ptr;
+	int sofar = 0, ineed, remain;
+	short *frame_data, *offset = buf;
+	
+	opbx_mutex_lock(&(sf->lock));
 
-    sofar = 0;
-    while (sofar < bytes)
+	while (sofar < bytes)
     {
-        ineed = bytes - sofar;
+		ineed = bytes - sofar;
 
-        if (sf->holdlen)
+		if (sf->holdlen)
         {
-            if ((sf->holdlen) <= ineed)
+			if ((sf->holdlen) <= ineed)
             {
-                memcpy(offset, sf->hold, sf->holdlen);
-                sofar += sf->holdlen;
-                offset += (sf->holdlen/sizeof(int16_t));
-                sf->holdlen = 0;
-                sf->offset = sf->hold;
-            }
+				memcpy(offset, sf->hold, sf->holdlen);
+				sofar += sf->holdlen;
+				offset += (sf->holdlen/sizeof(short));
+				sf->holdlen = 0;
+				sf->offset = sf->hold;
+			}
             else
             {
-                remain = sf->holdlen - ineed;
-                memcpy(offset, sf->offset, ineed);
-                sofar += ineed;
-                sf->offset += (ineed/sizeof(int16_t));
-                sf->holdlen = remain;
-            }
-            continue;
-        }
-        
-        if (sofar >= bytes  ||  (frame_ptr = sf->queue) == NULL)
-            break;
-
-        sf->queue = frame_ptr->next;
-        frame_data = frame_ptr->data;
-
-        if (frame_ptr->datalen <= ineed)
+				remain = sf->holdlen - ineed;
+				memcpy(offset, sf->offset, ineed);
+				sofar += ineed;
+				sf->offset += (ineed / sizeof(short));
+				sf->holdlen = remain;
+			}
+			continue;
+		}
+		
+		if (sofar < bytes  &&  (frame_ptr = sf->queue))
         {
-            memcpy(offset, frame_data, frame_ptr->datalen);
-            sofar += frame_ptr->datalen;
-            offset += (frame_ptr->datalen/sizeof(int16_t));
-        }
+			sf->queue = frame_ptr->next;
+			frame_data = frame_ptr->data;
+			
+			if ((frame_ptr->datalen) <= ineed)
+            {
+				memcpy(offset, frame_data, frame_ptr->datalen);
+				sofar += frame_ptr->datalen;
+				offset += (frame_ptr->datalen/sizeof(short));
+			}
+            else
+            {
+				remain = frame_ptr->datalen - ineed;
+
+				memcpy(offset, frame_data, ineed);
+				sofar += ineed;
+				frame_data += (ineed / sizeof(short));
+				memcpy(sf->hold, frame_data, remain);
+				sf->holdlen = remain;
+			}
+			opbx_frfree(frame_ptr);
+		}
         else
         {
-            remain = frame_ptr->datalen - ineed;
+			break;
+		}
+	}
 
-            memcpy(offset, frame_data, ineed);
-            sofar += ineed;
-            frame_data += (ineed/sizeof(int16_t));
-            memcpy(sf->hold, frame_data, remain);
-            sf->holdlen = remain;
-        }
-        cw_fr_free(frame_ptr);
-    }
-
-    sf->size -= sofar;
-    cw_mutex_unlock(&(sf->lock));
-    return sofar;
+	sf->size -= sofar;
+	opbx_mutex_unlock(&(sf->lock));
+	return sofar;
 }

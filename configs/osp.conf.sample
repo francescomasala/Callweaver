@@ -3,7 +3,7 @@
 ;
 ;
 ; This file contains configuration of providers that
-; are used by the OSP subsystem of CallWeaver.  The section
+; are used by the OSP subsystem of OpenPBX.  The section
 ; "general" is reserved for global options.  Each other 
 ; section declares an OSP Provider.  The provider "default"
 ; is used when no provider is otherwise specified.
@@ -15,17 +15,17 @@
 ;
 ;accelerate=yes
 ;
-; Defines the token format that CallWeaver can validate. 
+; Defines the token format that OpenPBX can validate. 
 ; 0 - signed tokens only 
 ; 1 - unsigned tokens only 
 ; 2 - both signed and unsigned
-; The defaults to 0, i.e. the CallWeaver can validate signed tokens only.
+; The defaults to 0, i.e. the OpenPBX can validate signed tokens only.
 ;
 ;tokenformat=0
 
 ;[default]
 ;
-; All paths are presumed to be under /var/lib/callweaver/keys unless
+; All paths are presumed to be under /var/lib/openpbx/keys unless
 ; the path begins with '/'
 ;
 ; Specify the private keyfile.  If unspecified, defaults to the name

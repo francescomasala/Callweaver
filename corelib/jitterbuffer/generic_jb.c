@@ -6,8 +6,10 @@
  * Contributors:
  * Slav Klenov <slav@securax.org>
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * Copyright on this file is disclaimed to Digium for inclusion in Asterisk
+ *
+ * See http://www.asterisk.org for more information about
+ * the Asterisk project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -31,18 +33,18 @@
 #include <stdlib.h>
 #include <limits.h>
 
-#include "callweaver.h"
+#include "openpbx.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/corelib/jitterbuffer/generic_jb.c $", "$Revision: 4723 $")
+OPENPBX_FILE_VERSION(__FILE__, "$Revision: 1.1 $")
 
-#include "callweaver/frame.h"
-#include "callweaver/channel.h"
-#include "callweaver/logger.h"
-#include "callweaver/term.h"
-#include "callweaver/options.h"
-#include "callweaver/utils.h"
+#include "openpbx/frame.h"
+#include "openpbx/channel.h"
+#include "openpbx/logger.h"
+#include "openpbx/term.h"
+#include "openpbx/options.h"
+#include "openpbx/utils.h"
 
-#include "callweaver/generic_jb.h"
+#include "openpbx/generic_jb.h"
 #include "jitterbuf_scx.h"
 #include "jitterbuf_stevek.h"
 #include "jitterbuf_speakup.h"
@@ -57,30 +59,30 @@ CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branche
 /* Hooks for the abstract jb implementation */
 
 /* Create */
-typedef void * (*jb_create_impl)(struct cw_jb_conf *general_config, long resynch_threshold);
+typedef void * (*jb_create_impl)(struct opbx_jb_conf *general_config, long resynch_threshold);
 /* Destroy */
 typedef void (*jb_destroy_impl)(void *jb);
 /* Put first frame */
-typedef int (*jb_put_first_impl)(void *jb, struct cw_frame *fin, long now, int codec);
+typedef int (*jb_put_first_impl)(void *jb, struct opbx_frame *fin, long now, int codec);
 /* Put frame */
-typedef int (*jb_put_impl)(void *jb, struct cw_frame *fin, long now, int codec);
+typedef int (*jb_put_impl)(void *jb, struct opbx_frame *fin, long now, int codec);
 /* Get frame for now */
-typedef int (*jb_get_impl)(void *jb, struct cw_frame **fout, long now, long interpl);
+typedef int (*jb_get_impl)(void *jb, struct opbx_frame **fout, long now, long interpl);
 /* Get next */
 typedef long (*jb_next_impl)(void *jb);
 /* Remove first frame */
-typedef int (*jb_remove_impl)(void *jb, struct cw_frame **fout);
+typedef int (*jb_remove_impl)(void *jb, struct opbx_frame **fout);
 /* Force resynch */
 typedef void (*jb_force_resynch_impl)(void *jb);
 /* Get information */
-typedef void (*jb_info_impl)(void *jb, cw_jb_info *info);
+typedef void (*jb_info_impl)(void *jb, opbx_jb_info *info);
 
 /*!
  * \brief Jitterbuffer implementation private struct.
  */
-struct cw_jb_impl
+struct opbx_jb_impl
 {
-	char name[CW_GENERIC_JB_IMPL_NAME_SIZE];
+	char name[OPBX_GENERIC_JB_IMPL_NAME_SIZE];
 	jb_create_impl create;
 	jb_destroy_impl destroy;
 	jb_put_first_impl put_first;
@@ -94,38 +96,38 @@ struct cw_jb_impl
 
 /* Implementation functions */
 /* scx */
-static void * jb_create_scx(struct cw_jb_conf *general_config, long resynch_threshold);
+static void * jb_create_scx(struct opbx_jb_conf *general_config, long resynch_threshold);
 static void jb_destroy_scx(void *jb);
-static int jb_put_first_scx(void *jb, struct cw_frame *fin, long now, int codec);
-static int jb_put_scx(void *jb, struct cw_frame *fin, long now, int codec);
-static int jb_get_scx(void *jb, struct cw_frame **fout, long now, long interpl);
+static int jb_put_first_scx(void *jb, struct opbx_frame *fin, long now, int codec);
+static int jb_put_scx(void *jb, struct opbx_frame *fin, long now, int codec);
+static int jb_get_scx(void *jb, struct opbx_frame **fout, long now, long interpl);
 static long jb_next_scx(void *jb);
-static int jb_remove_scx(void *jb, struct cw_frame **fout);
+static int jb_remove_scx(void *jb, struct opbx_frame **fout);
 static void jb_force_resynch_scx(void *jb);
-static void jb_info_scx(void *jb, cw_jb_info *info);
+static void jb_info_scx(void *jb, opbx_jb_info *info);
 /* stevek */
-static void * jb_create_stevek(struct cw_jb_conf *general_config, long resynch_threshold);
+static void * jb_create_stevek(struct opbx_jb_conf *general_config, long resynch_threshold);
 static void jb_destroy_stevek(void *jb);
-static int jb_put_first_stevek(void *jb, struct cw_frame *fin, long now, int codec);
-static int jb_put_stevek(void *jb, struct cw_frame *fin, long now, int codec);
-static int jb_get_stevek(void *jb, struct cw_frame **fout, long now, long interpl);
+static int jb_put_first_stevek(void *jb, struct opbx_frame *fin, long now, int codec);
+static int jb_put_stevek(void *jb, struct opbx_frame *fin, long now, int codec);
+static int jb_get_stevek(void *jb, struct opbx_frame **fout, long now, long interpl);
 static long jb_next_stevek(void *jb);
-static int jb_remove_stevek(void *jb, struct cw_frame **fout);
+static int jb_remove_stevek(void *jb, struct opbx_frame **fout);
 static void jb_force_resynch_stevek(void *jb);
-static void jb_info_stevek(void *jb, cw_jb_info *info);
+static void jb_info_stevek(void *jb, opbx_jb_info *info);
 /* SpeakUp */
-static void * jb_create_speakup(struct cw_jb_conf *general_config, long resynch_threshold);
+static void * jb_create_speakup(struct opbx_jb_conf *general_config, long resynch_threshold);
 static void jb_destroy_speakup(void *jb);
-static int jb_put_first_speakup(void *jb, struct cw_frame *fin, long now, int codec);
-static int jb_put_speakup(void *jb, struct cw_frame *fin, long now, int codec);
-static int jb_get_speakup(void *jb, struct cw_frame **fout, long now, long interpl);
+static int jb_put_first_speakup(void *jb, struct opbx_frame *fin, long now, int codec);
+static int jb_put_speakup(void *jb, struct opbx_frame *fin, long now, int codec);
+static int jb_get_speakup(void *jb, struct opbx_frame **fout, long now, long interpl);
 static long jb_next_speakup(void *jb);
-static int jb_remove_speakup(void *jb, struct cw_frame **fout);
+static int jb_remove_speakup(void *jb, struct opbx_frame **fout);
 static void jb_force_resynch_speakup(void *jb);
-static void jb_info_speakup(void *jb, cw_jb_info *info);
+static void jb_info_speakup(void *jb, opbx_jb_info *info);
 
 /* Available jb implementations */
-static struct cw_jb_impl avail_impl[] = 
+static struct opbx_jb_impl avail_impl[] = 
 {
 	{
 		.name = "fixed",
@@ -184,12 +186,12 @@ static int stevek_to_abstract_code[] =
 static char *jb_get_actions[] = {"Delivered", "Dropped", "Interpolated", "No"};
 
 /* Macros for JB logs */
-/*#define jb_verbose(...) cw_verbose(VERBOSE_PREFIX_3 " ***[JB LOG]*** " __VA_ARGS__)*/
+/*#define jb_verbose(...) opbx_verbose(VERBOSE_PREFIX_3 " ***[JB LOG]*** " __VA_ARGS__)*/
 #define jb_verbose(...) if(1){\
 	char tmp[192];\
 	char msg[128];\
 	snprintf(msg, sizeof(msg), VERBOSE_PREFIX_3 "***[JB LOG]*** " __VA_ARGS__);\
-	cw_verbose("%s\n", cw_term_color(tmp, msg, COLOR_BRGREEN, 0, sizeof(tmp)));}
+	opbx_verbose("%s\n", opbx_term_color(tmp, msg, COLOR_BRGREEN, 0, sizeof(tmp)));}
 
 /* Macros for the frame log files */
 #define jb_framelog(...) \
@@ -201,20 +203,20 @@ if(jb->logfile) \
 
 
 /* Internal utility functions */
-static void jb_choose_impl(struct cw_channel *chan);
-static void jb_get_and_deliver(struct cw_channel *chan);
-static int create_jb(struct cw_channel *chan, struct cw_frame *first_frame, int codec);
-static long get_now(struct cw_jb *jb, struct timeval *tv);
+static void jb_choose_impl(struct opbx_channel *chan);
+static void jb_get_and_deliver(struct opbx_channel *chan);
+static int create_jb(struct opbx_channel *chan, struct opbx_frame *first_frame, int codec);
+static long get_now(struct opbx_jb *jb, struct timeval *tv);
 
 
 /* Interface ast jb functions impl */
 
 
-static void jb_choose_impl(struct cw_channel *chan)
+static void jb_choose_impl(struct opbx_channel *chan)
 {
-	struct cw_jb *jb = &chan->jb;
-	struct cw_jb_conf *jbconf = &jb->conf;
-	struct cw_jb_impl *test_impl;
+	struct opbx_jb *jb = &chan->jb;
+	struct opbx_jb_conf *jbconf = &jb->conf;
+	struct opbx_jb_impl *test_impl;
 	int i, avail_impl_count = sizeof(avail_impl) / sizeof(avail_impl[0]);
 	
 	jb->impl = &avail_impl[default_impl];
@@ -236,28 +238,28 @@ static void jb_choose_impl(struct cw_channel *chan)
 }
 
 
-void cw_jb_do_usecheck(struct cw_channel *c0, struct cw_channel *c1)
+void opbx_jb_do_usecheck(struct opbx_channel *c0, struct opbx_channel *c1)
 {
-	struct cw_jb *jb0 = &c0->jb;
-	struct cw_jb *jb1 = &c1->jb;
-	struct cw_jb_conf *conf0 = &jb0->conf;
-	struct cw_jb_conf *conf1 = &jb1->conf;
-	int c0_wants_jitter = c0->tech->properties & CW_CHAN_TP_WANTSJITTER;
-	int c0_creates_jitter = c0->tech->properties & CW_CHAN_TP_CREATESJITTER;
-	int c0_jb_enabled = cw_test_flag(conf0, CW_GENERIC_JB_ENABLED);
-	int c0_force_jb = cw_test_flag(conf0, CW_GENERIC_JB_FORCED);
-	int c0_jb_timebase_initialized = cw_test_flag(jb0, JB_TIMEBASE_INITIALIZED);
-	int c0_jb_created = cw_test_flag(jb0, JB_CREATED);
-	int c1_wants_jitter = c1->tech->properties & CW_CHAN_TP_WANTSJITTER;
-	int c1_creates_jitter = c1->tech->properties & CW_CHAN_TP_CREATESJITTER;
-	int c1_jb_enabled = cw_test_flag(conf1, CW_GENERIC_JB_ENABLED);
-	int c1_force_jb = cw_test_flag(conf1, CW_GENERIC_JB_FORCED);
-	int c1_jb_timebase_initialized = cw_test_flag(jb1, JB_TIMEBASE_INITIALIZED);
-	int c1_jb_created = cw_test_flag(jb1, JB_CREATED);
+	struct opbx_jb *jb0 = &c0->jb;
+	struct opbx_jb *jb1 = &c1->jb;
+	struct opbx_jb_conf *conf0 = &jb0->conf;
+	struct opbx_jb_conf *conf1 = &jb1->conf;
+	int c0_wants_jitter = c0->tech->properties & OPBX_CHAN_TP_WANTSJITTER;
+	int c0_creates_jitter = c0->tech->properties & OPBX_CHAN_TP_CREATESJITTER;
+	int c0_jb_enabled = opbx_test_flag(conf0, OPBX_GENERIC_JB_ENABLED);
+	int c0_force_jb = opbx_test_flag(conf0, OPBX_GENERIC_JB_FORCED);
+	int c0_jb_timebase_initialized = opbx_test_flag(jb0, JB_TIMEBASE_INITIALIZED);
+	int c0_jb_created = opbx_test_flag(jb0, JB_CREATED);
+	int c1_wants_jitter = c1->tech->properties & OPBX_CHAN_TP_WANTSJITTER;
+	int c1_creates_jitter = c1->tech->properties & OPBX_CHAN_TP_CREATESJITTER;
+	int c1_jb_enabled = opbx_test_flag(conf1, OPBX_GENERIC_JB_ENABLED);
+	int c1_force_jb = opbx_test_flag(conf1, OPBX_GENERIC_JB_FORCED);
+	int c1_jb_timebase_initialized = opbx_test_flag(jb1, JB_TIMEBASE_INITIALIZED);
+	int c1_jb_created = opbx_test_flag(jb1, JB_CREATED);
 	
 	if(((!c0_wants_jitter && c1_creates_jitter) || c0_force_jb) && c0_jb_enabled)
 	{
-		cw_set_flag(jb0, JB_USE);
+		opbx_set_flag(jb0, JB_USE);
 		if(!c0_jb_timebase_initialized)
 		{
 			if(c1_jb_timebase_initialized)
@@ -268,7 +270,7 @@ void cw_jb_do_usecheck(struct cw_channel *c0, struct cw_channel *c1)
 			{
 				gettimeofday(&jb0->timebase, NULL);
 			}
-			cw_set_flag(jb0, JB_TIMEBASE_INITIALIZED);
+			opbx_set_flag(jb0, JB_TIMEBASE_INITIALIZED);
 		}
 		
 		if(!c0_jb_created)
@@ -279,7 +281,7 @@ void cw_jb_do_usecheck(struct cw_channel *c0, struct cw_channel *c1)
 	
 	if(((!c1_wants_jitter && c0_creates_jitter) || c1_force_jb) && c1_jb_enabled)
 	{
-		cw_set_flag(jb1, JB_USE);
+		opbx_set_flag(jb1, JB_USE);
 		if(!c1_jb_timebase_initialized)
 		{
 			if(c0_jb_timebase_initialized)
@@ -290,7 +292,7 @@ void cw_jb_do_usecheck(struct cw_channel *c0, struct cw_channel *c1)
 			{
 				gettimeofday(&jb1->timebase, NULL);
 			}
-			cw_set_flag(jb1, JB_TIMEBASE_INITIALIZED);
+			opbx_set_flag(jb1, JB_TIMEBASE_INITIALIZED);
 		}
 		
 		if(!c1_jb_created)
@@ -302,14 +304,14 @@ void cw_jb_do_usecheck(struct cw_channel *c0, struct cw_channel *c1)
 }
 
 
-int cw_jb_get_when_to_wakeup(struct cw_channel *c0, struct cw_channel *c1, int time_left)
+int opbx_jb_get_when_to_wakeup(struct opbx_channel *c0, struct opbx_channel *c1, int time_left)
 {
-	struct cw_jb *jb0 = &c0->jb;
-	struct cw_jb *jb1 = &c1->jb;
-	int c0_use_jb = cw_test_flag(jb0, JB_USE);
-	int c0_jb_is_created = cw_test_flag(jb0, JB_CREATED);
-	int c1_use_jb = cw_test_flag(jb1, JB_USE);
-	int c1_jb_is_created = cw_test_flag(jb1, JB_CREATED);
+	struct opbx_jb *jb0 = &c0->jb;
+	struct opbx_jb *jb1 = &c1->jb;
+	int c0_use_jb = opbx_test_flag(jb0, JB_USE);
+	int c0_jb_is_created = opbx_test_flag(jb0, JB_CREATED);
+	int c1_use_jb = opbx_test_flag(jb1, JB_USE);
+	int c1_jb_is_created = opbx_test_flag(jb1, JB_CREATED);
 	int wait, wait0, wait1;
 	struct timeval tv_now;
 	
@@ -347,22 +349,22 @@ int cw_jb_get_when_to_wakeup(struct cw_channel *c0, struct cw_channel *c1, int t
 }
 
 
-int cw_jb_put(struct cw_channel *chan, struct cw_frame *f, int codec)
+int opbx_jb_put(struct opbx_channel *chan, struct opbx_frame *f, int codec)
 {
-	struct cw_jb *jb = &chan->jb;
-	struct cw_jb_impl *jbimpl = jb->impl;
+	struct opbx_jb *jb = &chan->jb;
+	struct opbx_jb_impl *jbimpl = jb->impl;
 	void *jbobj = jb->jbobj;
-	struct cw_frame *frr;
+	struct opbx_frame *frr;
 	long now = 0;
 	
-	if(!cw_test_flag(jb, JB_USE))
+	if(!opbx_test_flag(jb, JB_USE))
 	{
 		return -1;
 	}
 	
-	if(f->frametype != CW_FRAME_VOICE)
+	if(f->frametype != OPBX_FRAME_VOICE)
 	{
-		if(f->frametype == CW_FRAME_DTMF && cw_test_flag(jb, JB_CREATED))
+		if(f->frametype == OPBX_FRAME_DTMF && opbx_test_flag(jb, JB_CREATED))
 		{
 			jb_framelog("JB_PUT {now=%ld}: Received DTMF frame. Force resynching jb...\n", now);
 			jbimpl->force_resync(jbobj);
@@ -381,24 +383,24 @@ int cw_jb_put(struct cw_channel *chan, struct cw_frame *f, int codec)
 	/* Get us our own copy of the frame.
 	 * We dup it since frisolate makes it hard to 
 	 * manage memory */
-	frr = cw_frdup(f);
+	frr = opbx_frdup(f);
 	if(frr == NULL)
 	{
-		cw_log(LOG_ERROR, "Failed to isolate frame for the jitterbuffer on channel '%s'\n", chan->name);
+		opbx_log(LOG_ERROR, "Failed to isolate frame for the jitterbuffer on channel '%s'\n", chan->name);
 		return -1;
 	}
 	
-	if(!cw_test_flag(jb, JB_CREATED))
+	if(!opbx_test_flag(jb, JB_CREATED))
 	{
 		if(create_jb(chan, frr, codec))
 		{
-			cw_fr_free(frr);
+			opbx_frfree(frr);
 			/* Disable the jitterbuffer */
-			cw_clear_flag(jb, JB_USE);
+			opbx_clear_flag(jb, JB_USE);
 			return -1;
 		}
 
-		cw_set_flag(jb, JB_CREATED);
+		opbx_set_flag(jb, JB_CREATED);
 		return 0;
 	}
 	else
@@ -407,7 +409,7 @@ int cw_jb_put(struct cw_channel *chan, struct cw_frame *f, int codec)
 		if(jbimpl->put(jbobj, frr, now, codec) != JB_IMPL_OK)
 		{
 			jb_framelog("JB_PUT {now=%ld}: Dropped frame with ts=%ld and len=%ld\n", now, frr->ts, frr->len);
-			cw_fr_free(frr);
+			opbx_frfree(frr);
 			/*return -1;*/
 			/* TODO: Check this fix - should return 0 here, because the dropped frame shouldn't 
 			   be delivered at all */
@@ -423,14 +425,14 @@ int cw_jb_put(struct cw_channel *chan, struct cw_frame *f, int codec)
 }
 
 
-void cw_jb_get_and_deliver(struct cw_channel *c0, struct cw_channel *c1)
+void opbx_jb_get_and_deliver(struct opbx_channel *c0, struct opbx_channel *c1)
 {
-	struct cw_jb *jb0 = &c0->jb;
-	struct cw_jb *jb1 = &c1->jb;
-	int c0_use_jb = cw_test_flag(jb0, JB_USE);
-	int c0_jb_is_created = cw_test_flag(jb0, JB_CREATED);
-	int c1_use_jb = cw_test_flag(jb1, JB_USE);
-	int c1_jb_is_created = cw_test_flag(jb1, JB_CREATED);
+	struct opbx_jb *jb0 = &c0->jb;
+	struct opbx_jb *jb1 = &c1->jb;
+	int c0_use_jb = opbx_test_flag(jb0, JB_USE);
+	int c0_jb_is_created = opbx_test_flag(jb0, JB_CREATED);
+	int c1_use_jb = opbx_test_flag(jb1, JB_USE);
+	int c1_jb_is_created = opbx_test_flag(jb1, JB_CREATED);
 	
 	if(c0_use_jb && c0_jb_is_created)
 	{
@@ -444,12 +446,12 @@ void cw_jb_get_and_deliver(struct cw_channel *c0, struct cw_channel *c1)
 }
 
 
-static void jb_get_and_deliver(struct cw_channel *chan)
+static void jb_get_and_deliver(struct opbx_channel *chan)
 {
-	struct cw_jb *jb = &chan->jb;
-	struct cw_jb_impl *jbimpl = jb->impl;
+	struct opbx_jb *jb = &chan->jb;
+	struct opbx_jb_impl *jbimpl = jb->impl;
 	void *jbobj = jb->jbobj;
-	struct cw_frame *f, finterp;
+	struct opbx_frame *f, finterp;
 	long now;
 	int interpolation_len, res;
 	
@@ -471,43 +473,49 @@ static void jb_get_and_deliver(struct cw_channel *chan)
 	
 	while(now >= jb->next)
 	{
-		interpolation_len = cw_codec_interp_len(jb->last_format);
+		interpolation_len = opbx_codec_interp_len(jb->last_format);
 		res = jbimpl->get(jbobj, &f, now, interpolation_len);
 		
 		switch(res)
 		{
 		case JB_IMPL_OK:
 			/* deliver the frame */
-			cw_write(chan, f);
+			opbx_write(chan, f);
 		case JB_IMPL_DROP:
 			jb_framelog("\tJB_GET {now=%ld, next=%ld}: %s frame"
 				    "with ts=%ld and len=%ld\n",
 				    now, jb->next, jb_get_actions[res], 
 				    f->ts, f->len);
 			jb->last_format = f->subclass;
-			cw_fr_free(f);
+			opbx_frfree(f);
 			break;
 		case JB_IMPL_INTERP:
 			/* interpolate a frame */
 			f = &finterp;
-			cw_fr_init_ex(f, CW_FRAME_VOICE, jb->last_format, "JB interpolation");
-			f->samples = interpolation_len * 8;
-			f->delivery = cw_tvadd(jb->timebase, cw_samp2tv(jb->next, 1000));
-			f->offset=CW_FRIENDLY_OFFSET;
+			memset(f, 0, sizeof(finterp));
+			f->frametype = OPBX_FRAME_VOICE;
+			f->subclass = jb->last_format;
+			f->datalen  = 0;
+			f->samples  = interpolation_len * 8;
+			f->mallocd  = 0;
+			f->src  = "JB interpolation";
+			f->data  = NULL;
+			f->delivery = opbx_tvadd(jb->timebase, opbx_samp2tv(jb->next, 1000));
+			f->offset=OPBX_FRIENDLY_OFFSET;
 			/* deliver the interpolated frame */
-			cw_write(chan, f);
+			opbx_write(chan, f);
 			jb_framelog("\tJB_GET {now=%ld}: Interpolated frame with len=%d\n", now, interpolation_len);
 			break;
 		case JB_IMPL_NOFRAME:
 #ifdef DEBUG			
-			cw_log(LOG_DEBUG,
+			opbx_log(LOG_DEBUG,
 				"JB_IMPL_NOFRAME is retuned from the %s jb when now=%ld >= next=%ld, jbnext=%ld!\n",
 				jbimpl->name, now, jb->next, jbimpl->next(jbobj));
 #endif
 			jb_framelog("\tJB_GET {now=%ld}: No frame for now!?\n", now);
 			return;
 		default:
-			cw_log(LOG_ERROR, "This should never happen!\n");
+			opbx_log(LOG_ERROR, "This should never happen!\n");
 			CRASH;
 			break;
 		}
@@ -517,16 +525,16 @@ static void jb_get_and_deliver(struct cw_channel *chan)
 }
 
 
-static int create_jb(struct cw_channel *chan, struct cw_frame *frr, int codec)
+static int create_jb(struct opbx_channel *chan, struct opbx_frame *frr, int codec)
 {
-	struct cw_jb *jb;
-	struct cw_jb_conf *jbconf;
-	struct cw_jb_impl *jbimpl;
+	struct opbx_jb *jb;
+	struct opbx_jb_conf *jbconf;
+	struct opbx_jb_impl *jbimpl;
 	void *jbobj;
-	struct cw_channel *bridged;
+	struct opbx_channel *bridged;
 	long now;
-	char logfile_pathname[20 + CW_GENERIC_JB_IMPL_NAME_SIZE + 2*CW_CHANNEL_NAME + 1];
-	char name1[CW_CHANNEL_NAME], name2[CW_CHANNEL_NAME], *tmp;
+	char logfile_pathname[20 + OPBX_GENERIC_JB_IMPL_NAME_SIZE + 2*OPBX_CHANNEL_NAME + 1];
+	char name1[OPBX_CHANNEL_NAME], name2[OPBX_CHANNEL_NAME], *tmp;
 	int res;
 
 	if (chan) {
@@ -534,7 +542,7 @@ static int create_jb(struct cw_channel *chan, struct cw_frame *frr, int codec)
 		jbimpl = jb->impl;
 		jbconf = &jb->conf;
 	} else {
-		cw_log(LOG_ERROR, "No channel provided!\n");
+		opbx_log(LOG_ERROR, "No channel provided!\n");
 		return 0;
 	}
 
@@ -542,7 +550,7 @@ static int create_jb(struct cw_channel *chan, struct cw_frame *frr, int codec)
 	jbobj = jb->jbobj = jbimpl->create(jbconf, jbconf->resync_threshold);
 	if(jbobj == NULL)
 	{
-		cw_log(LOG_WARNING, "Failed to create jitterbuffer on channel '%s'\n", chan->name);
+		opbx_log(LOG_WARNING, "Failed to create jitterbuffer on channel '%s'\n", chan->name);
 		return -1;
 	}
 	
@@ -553,7 +561,7 @@ static int create_jb(struct cw_channel *chan, struct cw_frame *frr, int codec)
 	   some implementations (i.e. stevek's when resynch_threshold is specified) to drop it. */
 	if(res != JB_IMPL_OK)
 	{
-		cw_log(LOG_WARNING, "Failed to put first frame in the jitterbuffer on channel '%s'\n", chan->name);
+		opbx_log(LOG_WARNING, "Failed to put first frame in the jitterbuffer on channel '%s'\n", chan->name);
 		/*
 		jbimpl->destroy(jbobj);
 		return -1;
@@ -567,7 +575,7 @@ static int create_jb(struct cw_channel *chan, struct cw_frame *frr, int codec)
 	jb->last_format = frr->subclass;
 	
 	/* Create a frame log file */
-	if(cw_test_flag(jbconf, CW_GENERIC_JB_LOG))
+	if(opbx_test_flag(jbconf, OPBX_GENERIC_JB_LOG))
 	{
 		snprintf(name2, sizeof(name2), "%s", chan->name);
 		tmp = strchr(name2, '/');
@@ -575,7 +583,7 @@ static int create_jb(struct cw_channel *chan, struct cw_frame *frr, int codec)
 		{
 			*tmp = '#';
 		}
-		bridged = cw_bridged_channel(chan);
+		bridged = opbx_bridged_channel(chan);
 		if(bridged == NULL)
 		{
 			/* We should always have bridged chan if a jitterbuffer is in use */
@@ -588,12 +596,12 @@ static int create_jb(struct cw_channel *chan, struct cw_frame *frr, int codec)
 			*tmp = '#';
 		}
 		snprintf(logfile_pathname, sizeof(logfile_pathname),
-			"/tmp/cw_%s_jb_%s--%s.log", jbimpl->name, name1, name2);
+			"/tmp/opbx_%s_jb_%s--%s.log", jbimpl->name, name1, name2);
 		jb->logfile = fopen(logfile_pathname, "w+b");
 		
 		if(jb->logfile == NULL)
 		{
-			cw_log(LOG_WARNING, "Failed to create frame log file with pathname '%s'\n", logfile_pathname);
+			opbx_log(LOG_WARNING, "Failed to create frame log file with pathname '%s'\n", logfile_pathname);
 		}
 		
 		if(res == JB_IMPL_OK)
@@ -613,26 +621,26 @@ static int create_jb(struct cw_channel *chan, struct cw_frame *frr, int codec)
 	/* Free the frame if it has not been queued in the jb */
 	if(res != JB_IMPL_OK)
 	{
-	    cw_fr_free(frr);
+	    opbx_frfree(frr);
 	}
 	
 	return 0;
 }
 
 
-void cw_jb_destroy(struct cw_channel *chan)
+void opbx_jb_destroy(struct opbx_channel *chan)
 {
-	struct cw_jb *jb;
-	struct cw_jb_impl *jbimpl;
+	struct opbx_jb *jb;
+	struct opbx_jb_impl *jbimpl;
 	void *jbobj;
-	struct cw_frame *f;
+	struct opbx_frame *f;
 
 	if (chan) {
 		jb = &chan->jb;	
 		jbimpl = jb->impl;
 		jbobj = jb->jbobj;
 	} else {
-		cw_log(LOG_ERROR, "Channel/jitterbuffer data is broken!\n");
+		opbx_log(LOG_ERROR, "Channel/jitterbuffer data is broken!\n");
 		return;
 	}
 
@@ -642,25 +650,25 @@ void cw_jb_destroy(struct cw_channel *chan)
 		jb->logfile = NULL;
 	}
 	
-	if(cw_test_flag(jb, JB_CREATED))
+	if(opbx_test_flag(jb, JB_CREATED))
 	{
 		/* Remove and free all frames still queued in jb */
 		while(jbimpl->remove(jbobj, &f) == JB_IMPL_OK)
 		{
-			cw_fr_free(f);
+			opbx_frfree(f);
 		}
 		
 		jbimpl->destroy(jbobj);
 		jb->jbobj = NULL;
 		
-		cw_clear_flag(jb, JB_CREATED);
+		opbx_clear_flag(jb, JB_CREATED);
 		
 		jb_verbose("%s jitterbuffer destroyed on channel %s", jbimpl->name, chan->name);
 	}
 }
 
 
-static long get_now(struct cw_jb *jb, struct timeval *tv)
+static long get_now(struct opbx_jb *jb, struct timeval *tv)
 {
 	struct timeval now;
 	
@@ -673,74 +681,74 @@ static long get_now(struct cw_jb *jb, struct timeval *tv)
 	return (long) ((tv->tv_sec - jb->timebase.tv_sec) * 1000) +
 		(long) ((double) (tv->tv_usec - jb->timebase.tv_usec) / 1000.0);
 	
-	/* TODO: For callweaver complience, we should use: */
-	/* return cw_tvdiff_ms(*tv, jb->timebase); */
+	/* TODO: For openpbx complience, we should use: */
+	/* return opbx_tvdiff_ms(*tv, jb->timebase); */
 }
 
 
-int cw_jb_read_conf(struct cw_jb_conf *conf, char *varname, char *value)
+int opbx_jb_read_conf(struct opbx_jb_conf *conf, char *varname, char *value)
 {
-	int prefixlen = sizeof(CW_GENERIC_JB_CONF_PREFIX) - 1;
+	int prefixlen = sizeof(OPBX_GENERIC_JB_CONF_PREFIX) - 1;
 	char *name;
 	int tmp;
 	
-	if(memcmp(CW_GENERIC_JB_CONF_PREFIX, varname, prefixlen) != 0)
+	if(memcmp(OPBX_GENERIC_JB_CONF_PREFIX, varname, prefixlen) != 0)
 	{
 		return -1;
 	}
 	
 	name = varname + prefixlen;
 	
-	if(strcmp(name, CW_GENERIC_JB_CONF_ENABLE) == 0)
+	if(strcmp(name, OPBX_GENERIC_JB_CONF_ENABLE) == 0)
 	{
-		if(cw_true(value))
+		if(opbx_true(value))
 		{
-			conf->flags |= CW_GENERIC_JB_ENABLED;
+			conf->flags |= OPBX_GENERIC_JB_ENABLED;
 		}
 	}
-	else if(strcmp(name, CW_GENERIC_JB_CONF_FORCE) == 0)
+	else if(strcmp(name, OPBX_GENERIC_JB_CONF_FORCE) == 0)
 	{
-		if(cw_true(value))
+		if(opbx_true(value))
 		{
-			conf->flags |= CW_GENERIC_JB_FORCED;
+			conf->flags |= OPBX_GENERIC_JB_FORCED;
 		}
 	}
-	else if(strcmp(name, CW_GENERIC_JB_CONF_MIN_SIZE) == 0)
+	else if(strcmp(name, OPBX_GENERIC_JB_CONF_MIN_SIZE) == 0)
 	{
 		if((tmp = atoi(value)) > 0)
 		{
 			conf->min_size = tmp;
 		}
 	}
-	else if(strcmp(name, CW_GENERIC_JB_CONF_MAX_SIZE) == 0)
+	else if(strcmp(name, OPBX_GENERIC_JB_CONF_MAX_SIZE) == 0)
 	{
 		if((tmp = atoi(value)) > 0)
 		{
 			conf->max_size = tmp;
 		}
 	}
-	else if(strcmp(name, CW_GENERIC_JB_CONF_RESYNCH_THRESHOLD) == 0)
+	else if(strcmp(name, OPBX_GENERIC_JB_CONF_RESYNCH_THRESHOLD) == 0)
 	{
 		if((tmp = atoi(value)) > 0)
 		{
 			conf->resync_threshold = tmp;
 		}
 	}
-	else if(strcmp(name, CW_GENERIC_JB_CONF_IMPL) == 0)
+	else if(strcmp(name, OPBX_GENERIC_JB_CONF_IMPL) == 0)
 	{
 		if(*value)
 		{
 			snprintf(conf->impl, sizeof(conf->impl), "%s", value);
 		}
 	}
-	else if(strcmp(name, CW_GENERIC_JB_CONF_LOG) == 0)
+	else if(strcmp(name, OPBX_GENERIC_JB_CONF_LOG) == 0)
 	{
-		if(cw_true(value))
+		if(opbx_true(value))
 		{
-			conf->flags |= CW_GENERIC_JB_LOG;
+			conf->flags |= OPBX_GENERIC_JB_LOG;
 		}
 	}
-	else if(strcmp(name, CW_GENERIC_JB_CONF_TIMING_COMP) == 0)
+	else if(strcmp(name, OPBX_GENERIC_JB_CONF_TIMING_COMP) == 0)
 	{
 		conf->timing_compensation = atoi(value);
 	}
@@ -752,7 +760,7 @@ int cw_jb_read_conf(struct cw_jb_conf *conf, char *varname, char *value)
 	return 0;
 }
 
-void cw_jb_default_config(struct cw_jb_conf *conf)
+void opbx_jb_default_config(struct opbx_jb_conf *conf)
 {
 	if (conf) {
 		conf->flags = 0;
@@ -762,61 +770,61 @@ void cw_jb_default_config(struct cw_jb_conf *conf)
 		conf->timing_compensation = 5;
 		conf->impl[0] = 0;
 	} else
-		cw_log(LOG_ERROR, "No jitterbuffer conf struct provided!\n");
+		opbx_log(LOG_ERROR, "No jitterbuffer conf struct provided!\n");
 }
 
-void cw_jb_configure(struct cw_channel *chan, struct cw_jb_conf *conf)
+void opbx_jb_configure(struct opbx_channel *chan, struct opbx_jb_conf *conf)
 {
-	struct cw_jb *jb;
-	struct cw_jb_conf *jbconf;
+	struct opbx_jb *jb;
+	struct opbx_jb_conf *jbconf;
 	
 	if (chan) {
 		jb = &chan->jb;	
 		jbconf = &jb->conf;
-		memcpy(jbconf, conf, sizeof(struct cw_jb_conf));
+		memcpy(jbconf, conf, sizeof(struct opbx_jb_conf));
 	} else 
-		cw_log(LOG_ERROR, "Channel/jitterbuffer data is broken!\n");
+		opbx_log(LOG_ERROR, "Channel/jitterbuffer data is broken!\n");
 }
 
 
-void cw_jb_get_config(struct cw_channel *chan, struct cw_jb_conf *conf)
+void opbx_jb_get_config(struct opbx_channel *chan, struct opbx_jb_conf *conf)
 {
-	struct cw_jb *jb;
-	struct cw_jb_conf *jbconf;
+	struct opbx_jb *jb;
+	struct opbx_jb_conf *jbconf;
 
 	if (chan) {
 		jb = &chan->jb;	
 		jbconf = &jb->conf;
-		memcpy(conf, jbconf, sizeof(struct cw_jb_conf));
+		memcpy(conf, jbconf, sizeof(struct opbx_jb_conf));
 	} else 
-		cw_log(LOG_ERROR, "Channel/jitterbuffer data is broken!\n");
+		opbx_log(LOG_ERROR, "Channel/jitterbuffer data is broken!\n");
 }
 
-void cw_jb_get_info(struct cw_channel *chan, cw_jb_info *info)
+void opbx_jb_get_info(struct opbx_channel *chan, opbx_jb_info *info)
 {
-	struct cw_jb *jb;
-	struct cw_jb_impl *jbimpl = NULL;
-	void *jbobj = NULL;
+	struct opbx_jb *jb;
+	struct opbx_jb_impl *jbimpl;
+	void *jbobj;
 
 	if (chan) {
 		jb = &chan->jb;	
 		jbimpl = jb->impl;
 		jbobj = jb->jbobj;
-	        jbimpl->info(jbobj, info);
 	} else 
-		cw_log(LOG_ERROR, "Channel/jitterbuffer data is broken!\n");
+		opbx_log(LOG_ERROR, "Channel/jitterbuffer data is broken!\n");
 
+	jbimpl->info(jbobj, info);
 }
 
-int cw_jb_is_active(struct cw_channel *chan)
+int opbx_jb_is_active(struct opbx_channel *chan)
 {
-	struct cw_jb *jb;
+	struct opbx_jb *jb;
 
 	if (chan) {
 		jb = &chan->jb;
-		return cw_test_flag(jb, JB_CREATED);
+		return opbx_test_flag(jb, JB_CREATED);
 	} else {
-		cw_log(LOG_ERROR, "Trying to retreive flag but structs are freed");	
+		opbx_log(LOG_ERROR, "Trying to retreive flag but structs are freed");	
 		return 0;
 	}
 }
@@ -826,7 +834,7 @@ int cw_jb_is_active(struct cw_channel *chan)
 
 /* scx */
 
-static void * jb_create_scx(struct cw_jb_conf *general_config, long resynch_threshold)
+static void * jb_create_scx(struct opbx_jb_conf *general_config, long resynch_threshold)
 {
 	struct scx_jb_conf conf;
 	
@@ -846,7 +854,7 @@ static void jb_destroy_scx(void *jb)
 }
 
 
-static int jb_put_first_scx(void *jb, struct cw_frame *fin, long now, int codec)
+static int jb_put_first_scx(void *jb, struct opbx_frame *fin, long now, int codec)
 {
 	struct scx_jb *scxjb = (struct scx_jb *) jb;
 	int res;
@@ -857,7 +865,7 @@ static int jb_put_first_scx(void *jb, struct cw_frame *fin, long now, int codec)
 }
 
 
-static int jb_put_scx(void *jb, struct cw_frame *fin, long now, int codec)
+static int jb_put_scx(void *jb, struct opbx_frame *fin, long now, int codec)
 {
 	struct scx_jb *scxjb = (struct scx_jb *) jb;
 	int res;
@@ -868,7 +876,7 @@ static int jb_put_scx(void *jb, struct cw_frame *fin, long now, int codec)
 }
 
 
-static int jb_get_scx(void *jb, struct cw_frame **fout, long now, long interpl)
+static int jb_get_scx(void *jb, struct opbx_frame **fout, long now, long interpl)
 {
 	struct scx_jb *scxjb = (struct scx_jb *) jb;
 	struct scx_jb_frame frame;
@@ -889,7 +897,7 @@ static long jb_next_scx(void *jb)
 }
 
 
-static int jb_remove_scx(void *jb, struct cw_frame **fout)
+static int jb_remove_scx(void *jb, struct opbx_frame **fout)
 {
 	struct scx_jb *scxjb = (struct scx_jb *) jb;
 	struct scx_jb_frame frame;
@@ -909,10 +917,10 @@ static void jb_force_resynch_scx(void *jb)
 	scx_jb_set_force_resynch(scxjb);
 }
 
-static void jb_info_scx(void *jb, cw_jb_info *info)
+static void jb_info_scx(void *jb, opbx_jb_info *info)
 {
 	/* Not yet implemented */
-	memset(info, 0, sizeof(cw_jb_info));
+	memset(info, 0, sizeof(opbx_jb_info));
 }
 
 
@@ -926,7 +934,7 @@ static void stevek_error_output(const char *fmt, ...)
 	vsnprintf(buf, 1024, fmt, args);
 	va_end(args);
 
-	cw_log(LOG_ERROR, buf);
+	opbx_log(LOG_ERROR, buf);
 }
 
 static void stevek_warning_output(const char *fmt, ...)
@@ -938,10 +946,10 @@ static void stevek_warning_output(const char *fmt, ...)
 	vsnprintf(buf, 1024, fmt, args);
 	va_end(args);
 
-	cw_log(LOG_WARNING, buf);
+	opbx_log(LOG_WARNING, buf);
 }
 
-static void * jb_create_stevek(struct cw_jb_conf *general_config, long resynch_threshold)
+static void * jb_create_stevek(struct opbx_jb_conf *general_config, long resynch_threshold)
 {
 	jb_conf jbconf;
 	jitterbuf *stevekjb;
@@ -973,13 +981,13 @@ static void jb_destroy_stevek(void *jb)
 }
 
 
-static int jb_put_first_stevek(void *jb, struct cw_frame *fin, long now, int codec)
+static int jb_put_first_stevek(void *jb, struct opbx_frame *fin, long now, int codec)
 {
 	return jb_put_stevek(jb, fin, now, codec);
 }
 
 
-static int jb_put_stevek(void *jb, struct cw_frame *fin, long now, int codec)
+static int jb_put_stevek(void *jb, struct opbx_frame *fin, long now, int codec)
 {
 	jitterbuf *stevekjb = (jitterbuf *) jb;
 	int res;
@@ -990,7 +998,7 @@ static int jb_put_stevek(void *jb, struct cw_frame *fin, long now, int codec)
 }
 
 
-static int jb_get_stevek(void *jb, struct cw_frame **fout, long now, long interpl)
+static int jb_get_stevek(void *jb, struct opbx_frame **fout, long now, long interpl)
 {
 	jitterbuf *stevekjb = (jitterbuf *) jb;
 	jb_frame frame;
@@ -1011,7 +1019,7 @@ static long jb_next_stevek(void *jb)
 }
 
 
-static int jb_remove_stevek(void *jb, struct cw_frame **fout)
+static int jb_remove_stevek(void *jb, struct opbx_frame **fout)
 {
 	jitterbuf *stevekjb = (jitterbuf *) jb;
 	jb_frame frame;
@@ -1030,14 +1038,14 @@ static void jb_force_resynch_stevek(void *jb)
 	stevekjb->force_resync = 1;
 }
 
-static void jb_info_stevek(void *jb, cw_jb_info *info)
+static void jb_info_stevek(void *jb, opbx_jb_info *info)
 {
 	jitterbuf *stevekjb = (jitterbuf *) jb;
 	jb_getinfo(stevekjb, info);
 }
 
 
-static void * jb_create_speakup(struct cw_jb_conf *general_config, long resynch_threshold)
+static void * jb_create_speakup(struct opbx_jb_conf *general_config, long resynch_threshold)
 {
 	jb_speakup_settings jbconf;
 	speakup_jitterbuffer *speakupjb;
@@ -1068,15 +1076,18 @@ static void jb_destroy_speakup(void *jb)
 }
 
 
-static int jb_put_first_speakup(void *jb, struct cw_frame *fin, long now, int codec)
+static int jb_put_first_speakup(void *jb, struct opbx_frame *fin, long now, int codec)
 {
+	speakup_jitterbuffer *speakupjb = (speakup_jitterbuffer *) jb;
+
 	return jb_put_speakup(jb, fin, now, codec);
 }
 
 
-static int jb_put_speakup(void *jb, struct cw_frame *fin, long now, int codec)
+static int jb_put_speakup(void *jb, struct opbx_frame *fin, long now, int codec)
 {
 	speakup_jitterbuffer *speakupjb = (speakup_jitterbuffer *) jb;
+	int res;
 	
 	jb_speakup_put(speakupjb, fin, JB_TYPE_VOICE, fin->len, fin->ts, now,
 		       codec);
@@ -1085,9 +1096,10 @@ static int jb_put_speakup(void *jb, struct cw_frame *fin, long now, int codec)
 }
 
 
-static int jb_get_speakup(void *jb, struct cw_frame **fout, long now, long interpl)
+static int jb_get_speakup(void *jb, struct opbx_frame **fout, long now, long interpl)
 {
 	speakup_jitterbuffer *speakupjb = (speakup_jitterbuffer *) jb;
+	jb_frame frame;
 	int res;
 	
 	res = jb_speakup_get(speakupjb, (void**)fout, now, interpl);
@@ -1106,7 +1118,7 @@ static long jb_next_speakup(void *jb)
 }
 
 
-static int jb_remove_speakup(void *jb, struct cw_frame **fout)
+static int jb_remove_speakup(void *jb, struct opbx_frame **fout)
 {
 	speakup_jitterbuffer *speakupjb = (speakup_jitterbuffer *) jb;
 	int res;
@@ -1121,7 +1133,7 @@ static void jb_force_resynch_speakup(void *jb)
 {
 }
 
-static void jb_info_speakup(void *jb, cw_jb_info *info)
+static void jb_info_speakup(void *jb, opbx_jb_info *info)
 {
 	speakup_jitterbuffer *speakupjb = (speakup_jitterbuffer *) jb;
 	jb_speakup_get_info(speakupjb, info);

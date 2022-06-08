@@ -1,5 +1,5 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  *
  * Copyright (c) 2004 - 2005 Tilghman Lesher.  All rights reserved.
  *
@@ -7,8 +7,8 @@
  *
  * This code is released by the author with no restrictions on usage.
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -24,30 +24,30 @@
 #include "confdefs.h"
 #endif
 
-#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
 
-#include "callweaver.h"
+#include "openpbx.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/apps/app_verbose.c $", "$Revision: 4723 $")
+OPENPBX_FILE_VERSION("$HeadURL$", "$Revision$")
 
-#include "callweaver/options.h"
-#include "callweaver/logger.h"
-#include "callweaver/channel.h"
-#include "callweaver/pbx.h"
-#include "callweaver/module.h"
+#include "openpbx/options.h"
+#include "openpbx/logger.h"
+#include "openpbx/channel.h"
+#include "openpbx/pbx.h"
+#include "openpbx/module.h"
 
 
 static char *tdesc = "Send verbose output";
 
-static void *verbose_app;
-static const char *verbose_name = "Verbose";
-static const char *verbose_synopsis = "Send arbitrary text to verbose output";
-static const char *verbose_syntax = "Verbose([level, ]message)";
-static const char *verbose_descrip =
+static char *app_verbose = "Verbose";
+
+static char *verbose_synopsis = "Send arbitrary text to verbose output";
+
+static char *verbose_descrip =
+"Verbose([<level>|]<message>)\n"
 "  level must be an integer value.  If not specified, defaults to 0."
 "  Always returns 0.\n";
 
@@ -55,31 +55,50 @@ STANDARD_LOCAL_USER;
 
 LOCAL_USER_DECL;
 
-static int verbose_exec(struct cw_channel *chan, int argc, char **argv)
+static int verbose_exec(struct opbx_channel *chan, void *data)
 {
-	static char *prefix[] = {
-		"",
-		VERBOSE_PREFIX_1,
-		VERBOSE_PREFIX_2,
-		VERBOSE_PREFIX_3,
-		VERBOSE_PREFIX_4,
-	};
-	int level;
+	char *vtext;
+	int vsize;
 	struct localuser *u;
 
-	level = 0;
-	if (argc == 2 && isdigit(argv[0][0])) {
-		level = atoi(argv[0]);
-		argv++, argc--;
-	}
-
-	if (argc != 1 || level < 0 || level >= arraysize(prefix)) {
-		cw_log(LOG_ERROR, "Syntax: %s\n", verbose_syntax);
-		return -1;
-	}
-
 	LOCAL_USER_ADD(u);
-	cw_verbose("%s%s\n", prefix[level], argv[0]);
+
+	if (data) {
+		vtext = opbx_strdupa((char *)data);
+		if (vtext) {
+			char *tmp = strsep(&vtext, "|,");
+			if (vtext) {
+				if (sscanf(tmp, "%d", &vsize) != 1) {
+					vsize = 0;
+					opbx_log(LOG_WARNING, "'%s' is not a verboser number\n", vtext);
+				}
+			} else {
+				vtext = tmp;
+				vsize = 0;
+			}
+			if (option_verbose >= vsize) {
+				switch (vsize) {
+				case 0:
+					opbx_verbose("%s\n", vtext);
+					break;
+				case 1:
+					opbx_verbose(VERBOSE_PREFIX_1 "%s\n", vtext);
+					break;
+				case 2:
+					opbx_verbose(VERBOSE_PREFIX_2 "%s\n", vtext);
+					break;
+				case 3:
+					opbx_verbose(VERBOSE_PREFIX_3 "%s\n", vtext);
+					break;
+				default:
+					opbx_verbose(VERBOSE_PREFIX_4 "%s\n", vtext);
+				}
+			}
+		} else {
+			opbx_log(LOG_ERROR, "Out of memory\n");
+		}
+	}
+
 	LOCAL_USER_REMOVE(u);
 
 	return 0;
@@ -87,16 +106,13 @@ static int verbose_exec(struct cw_channel *chan, int argc, char **argv)
 
 int unload_module(void)
 {
-	int res = 0;
 	STANDARD_HANGUP_LOCALUSERS;
-	res |= cw_unregister_application(verbose_app);
-	return res;
+	return opbx_unregister_application(app_verbose);
 }
 
 int load_module(void)
 {
-	verbose_app = cw_register_application(verbose_name, verbose_exec, verbose_synopsis, verbose_syntax, verbose_descrip);
-	return 0;
+	return opbx_register_application(app_verbose, verbose_exec, verbose_synopsis, verbose_descrip);
 }
 
 char *description(void)

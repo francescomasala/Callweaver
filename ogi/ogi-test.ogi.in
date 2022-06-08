@@ -50,7 +50,7 @@ my $result = <STDIN>;
 &checkresult($result);
 
 print STDERR "3.  Testing 'sendimage'...";
-print "SEND IMAGE callweaver-image\n";
+print "SEND IMAGE openpbx-image\n";
 my $result = <STDIN>;
 &checkresult($result);
 

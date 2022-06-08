@@ -1,12 +1,12 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- A telephony toolkit for Linux.
  *
  * This program is free software, distributed under the terms of
  * the GNU General Public License
  *
  * Mark Spencer <markster@linux-support.net>
  *
- * Valet Parking derived from original asterisk Parking
+ * Valet Parking derived from original openpbx Parking
  * Copyright (C) 2004, Anthony Minessale
  * Anthony Minessale <anthmct@yahoo.com>
  *
@@ -20,6 +20,26 @@
 #include "confdefs.h"
 #endif
 
+
+#include <openpbx/lock.h>
+#include <openpbx/utils.h>
+#include <openpbx/file.h>
+#include <openpbx/logger.h>
+#include <openpbx/channel.h>
+#include <openpbx/pbx.h>
+#include <openpbx/options.h>
+#include <openpbx/causes.h>
+#include <openpbx/module.h>
+#include <openpbx/translate.h>
+#include <openpbx/utils.h>
+#include <openpbx/say.h>
+#include <openpbx/phone_no_utils.h>
+#include <openpbx/features.h>
+#include <openpbx/musiconhold.h>
+#include <openpbx/config.h>
+#include <openpbx/cli.h>
+#include <openpbx/app.h>
+#include <openpbx/manager.h>
 #include <stdlib.h>
 #include <errno.h>
 #include <unistd.h>
@@ -29,51 +49,23 @@
 #include <sys/time.h>
 #include <sys/signal.h>
 #include <netinet/in.h>
-#include <ctype.h>
+
 #include <pthread.h>
 
-#include "callweaver.h"
+#include "openpbx.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/apps/app_valetparking.c $", "$Revision: 4723 $")
-
-#include "callweaver/lock.h"
-#include "callweaver/utils.h"
-#include "callweaver/file.h"
-#include "callweaver/logger.h"
-#include "callweaver/channel.h"
-#include "callweaver/pbx.h"
-#include "callweaver/options.h"
-#include "callweaver/causes.h"
-#include "callweaver/module.h"
-#include "callweaver/translate.h"
-#include "callweaver/utils.h"
-#include "callweaver/say.h"
-#include "callweaver/phone_no_utils.h"
-#include "callweaver/features.h"
-#include "callweaver/musiconhold.h"
-#include "callweaver/config.h"
-#include "callweaver/cli.h"
-#include "callweaver/app.h"
-#include "callweaver/manager.h"
-#include "callweaver/devicestate.h"
+OPENPBX_FILE_VERSION("$HeadURL$", "$Revision$")
 
 #define DEFAULT_VALETPARK_TIME 45000
 
-static struct cw_channel *valet_request(const char *type, int format, void *data, int *cause);
-static int valetparked_devicestate(void *data);
+static struct opbx_channel *valet_request(const char *type, int format, void *data, int *cause);
 
-static const struct cw_channel_tech valet_tech = {
+static const struct opbx_channel_tech valet_tech = {
 	.type = "Valet",
-	.description = "Valet Unpark",
+	.description = "Valet Unpark Come To ClueCon Aug-3-5 (http://www.cluecon.com)",
 	.requester = valet_request,
-	.capabilities = CW_FORMAT_SLINEAR,
- 	.devicestate = valetparked_devicestate,
+	.capabilities = OPBX_FORMAT_SLINEAR,
 };
-
-static void *valetparking_app;
-static void *valetparkedcall_app;
-static void *valetunparkedcall_app;
-static void *valetparklist_app;
 
 static char *valetparking = "ValetParking";
 static char *valetparkedcall = "ValetParkCall";
@@ -86,7 +78,7 @@ static int valetparkingtime = DEFAULT_VALETPARK_TIME;
 /* First available extension for valetparking */
 static int valetparking_start = 1;
 
-/* Last available extension for valetparking */
+/* Lopbx available extension for valetparking */
 static int valetparking_stop = 10000;
 
 static char *vpsynopsis = "Valet Parking";
@@ -97,35 +89,40 @@ static char *vupsynopsis = "Valet UnPark Call";
 
 static char *vlsynopsis = "ValetParkList";
 
-static char *vpsyntax = "ValetParking(exten, lotname, timeout[, return_ext][, return_pri][, return_context])";
-static char *vpcsyntax = "ValetParkCall(exten, lotname, timeout[, return_ext][, return_pri][, return_context])";
-static char *vupsyntax = "ValetUnparkCall(exten, lotname)";
-static char *vlsyntax = "ValetParkList(lotname)";
-
 static char *vpdesc =
-"Auto-Sense Valet Parking: if <exten> is not occupied, park it, if it is already parked, bridge to it.\n";
+"ValetParking(<exten>|<lotname>|<timeout>[|<return_ext>][|<return_pri>][|<return_context>])\n"
+"Auto-Sense Valet Parking: if <exten> is not occupied, park it, if it is already parked, bridge to it.\n\n";
 
 static char *vpcdesc =
+"ValetParkCall(<exten>|<lotname>|<timeout>[|<return_ext>][|<return_pri>][|<return_context>])\n"
 "Park Call at <exten> in <lotname> until someone calls ValetUnparkCall on the same <exten> + <lotname>\n"
-"set <exten> to 'auto' to auto-choose the slot.\n";
+"set <exten> to 'auto' to auto-choose the slot.\n\n"
+"Come To ClueCon Aug-3-5 (http://www.cluecon.com)"
+;
 
 static char *vupdesc =
-"Un-Park the call at <exten> in lot <lotname> use 'fifo' or 'filo' for auto-ordered Un-Park.\n";
+"ValetUnparkCall(<exten>|<lotname>)\n"
+"Un-Park the call at <exten> in lot <lotname> use 'fifo' or 'filo' for auto-ordered Un-Park.\n\n"
+"Come To ClueCon Aug-3-5 (http://www.cluecon.com)"
+;
 
 static char *vldesc =
-"Audibly list the slot number of all the calls in <lotname> press * to unpark it.\n";
+"ValetParkList(<lotname>)\n"
+"Audibly list the slot number of all the calls in <lotname> press * to unpark it.\n\n"
+"Come To ClueCon Aug-3-5 (http://www.cluecon.com)"
+;
 
 
 
 struct valetparkeduser {
-	struct cw_channel *chan;
+	struct opbx_channel *chan;
 	struct timeval start;
 	int valetparkingnum;
 	/* Where to go if our valetparking time expires */
-	char context[CW_MAX_EXTENSION];
-	char exten[CW_MAX_EXTENSION];
-	char lotname[CW_MAX_EXTENSION];
-	char channame[CW_MAX_EXTENSION];
+	char context[OPBX_MAX_EXTENSION];
+	char exten[OPBX_MAX_EXTENSION];
+	char lotname[OPBX_MAX_EXTENSION];
+	char channame[OPBX_MAX_EXTENSION];
 	int priority;
 	int valetparkingtime;
 	int old;
@@ -134,7 +131,7 @@ struct valetparkeduser {
 
 static struct valetparkeduser *valetparkinglot;
 
-CW_MUTEX_DEFINE_STATIC(valetparking_lock);
+OPBX_MUTEX_DEFINE_STATIC(valetparking_lock);
 
 static pthread_t valetparking_thread;
 
@@ -146,28 +143,28 @@ static int valetparking_count(void)
 {
 	struct valetparkeduser *cur;
 	int x=0;
-	cw_mutex_lock(&valetparking_lock);
+	opbx_mutex_lock(&valetparking_lock);
 	for(cur = valetparkinglot;cur;cur = cur->next)
 		x++;
-	cw_mutex_unlock(&valetparking_lock);
+	opbx_mutex_unlock(&valetparking_lock);
 	return x;
 }
 
-static int valetparking_say(struct cw_channel *chan,char *lotname)
+static int valetparking_say(struct opbx_channel *chan,char *lotname)
 {
 	struct valetparkeduser *cur;
 	int x=0,y=0,res=0;
 	int list[1024];
 	if(!lotname)
 		return 0;
-	cw_mutex_lock(&valetparking_lock);
+	opbx_mutex_lock(&valetparking_lock);
 	for(cur = valetparkinglot;cur;cur = cur->next)
 		if(cur->lotname && !strcmp(lotname,cur->lotname))
 			list[y++] = cur->valetparkingnum;
-	cw_mutex_unlock(&valetparking_lock);
+	opbx_mutex_unlock(&valetparking_lock);
 	for(x=0;x<y;x++) {
-		cw_say_digits(chan,list[x], "", chan->language);
-		res = cw_waitfordigit(chan,1500);
+		opbx_say_digits(chan,list[x], "", chan->language);
+		res = opbx_waitfordigit(chan,1500);
 		if(res != 0) {
 			res = list[x];
 			break;
@@ -176,33 +173,33 @@ static int valetparking_say(struct cw_channel *chan,char *lotname)
 	return res;
 }
 
-static int cw_pop_valetparking_top(char *lotname)
+static int opbx_pop_valetparking_top(char *lotname)
 {
 	struct valetparkeduser *cur;
 
-	cw_mutex_lock(&valetparking_lock);
+	opbx_mutex_lock(&valetparking_lock);
 	for(cur = valetparkinglot;cur;cur = cur->next)
 		if(cur->lotname && !strcmp(lotname,cur->lotname))
 			break;
 
-	cw_mutex_unlock(&valetparking_lock);
+	opbx_mutex_unlock(&valetparking_lock);
 	return cur ? cur->valetparkingnum : 0;
 }
 
-static int cw_pop_valetparking_bot(char *lotname)
+static int opbx_pop_valetparking_bot(char *lotname)
 {
-	struct valetparkeduser *cur,*last=NULL;
-	cw_mutex_lock(&valetparking_lock);
+	struct valetparkeduser *cur,*lopbx=NULL;
+	opbx_mutex_lock(&valetparking_lock);
 	for(cur = valetparkinglot;cur;cur = cur->next) {
 		if(cur->lotname && !strcmp(lotname,cur->lotname)) {
-			last = cur;
+			lopbx = cur;
 		}
 	}
-	cw_mutex_unlock(&valetparking_lock);
-	return last ? last->valetparkingnum : 0;
+	opbx_mutex_unlock(&valetparking_lock);
+	return lopbx ? lopbx->valetparkingnum : 0;
 }
 
-static int cw_is_valetparked(char *exten,char *lotname)
+static int opbx_is_valetparked(char *exten,char *lotname)
 {
 	struct valetparkeduser *cur;
 	int ext=0;
@@ -211,7 +208,7 @@ static int cw_is_valetparked(char *exten,char *lotname)
 	if(! ext > 0) {
 		return ret;
 	}
-	cw_mutex_lock(&valetparking_lock);
+	opbx_mutex_lock(&valetparking_lock);
 	cur = valetparkinglot;
 	while(cur) {
 		if (cur->valetparkingnum == ext && lotname && cur->lotname && !strcmp(lotname,cur->lotname)) {
@@ -220,11 +217,11 @@ static int cw_is_valetparked(char *exten,char *lotname)
 		}
 		cur = cur->next;
 	}
-	cw_mutex_unlock(&valetparking_lock);
+	opbx_mutex_unlock(&valetparking_lock);
 	return ret;
 }
 
-static int cw_valetpark_call(struct cw_channel *chan, int timeout, int *extout,char *lotname)
+static int opbx_valetpark_call(struct opbx_channel *chan, int timeout, int *extout,char *lotname)
 {
 	/* We put the user in the valetparking list, then wake up the valetparking thread to be sure it looks
 	   after these channels too */
@@ -238,7 +235,7 @@ static int cw_valetpark_call(struct cw_channel *chan, int timeout, int *extout,c
 
 		memset(pu,0,sizeof(struct valetparkeduser));
 		
-		cw_mutex_lock(&valetparking_lock);
+		opbx_mutex_lock(&valetparking_lock);
 		if(lotname) {
 			strncpy(pu->lotname,lotname,sizeof(pu->lotname));
 			if(chan->exten) 
@@ -264,13 +261,14 @@ static int cw_valetpark_call(struct cw_channel *chan, int timeout, int *extout,c
 			}
 		}
 		if (x <= valetparking_stop) {
-			char lastname[256];
+			char lopbxname[256];
 
 			chan->appl = "Valet Parked Call";
+			chan->data = NULL; 
 
 			pu->chan = chan;
 			/* Start music on hold */
-			cw_moh_start(pu->chan, cw_strlen_zero(chan->musicclass) ? "default" : chan->musicclass);
+			opbx_moh_start(pu->chan, opbx_strlen_zero(chan->musicclass) ? "default" : chan->musicclass);
 			gettimeofday(&pu->start, NULL);
 			pu->valetparkingnum = x;
 			if (timeout >= 0) {
@@ -281,47 +279,47 @@ static int cw_valetpark_call(struct cw_channel *chan, int timeout, int *extout,c
 			*extout = x;
 			/* Remember what had been dialed, so that if the valetparking
 			   expires, we try to come back to the same place */
-			if (strlen(chan->proc_context)) {
-				strncpy(pu->context, chan->proc_context, sizeof(pu->context)-1);
+			if (strlen(chan->macrocontext)) {
+				strncpy(pu->context, chan->macrocontext, sizeof(pu->context)-1);
 			} else {
 				strncpy(pu->context, chan->context, sizeof(pu->context)-1);
 			}
-			if (strlen(chan->proc_exten)) {
-				strncpy(pu->exten, chan->proc_exten, sizeof(pu->exten)-1);
+			if (strlen(chan->macroexten)) {
+				strncpy(pu->exten, chan->macroexten, sizeof(pu->exten)-1);
 			} else {
 				strncpy(pu->exten, chan->exten, sizeof(pu->exten)-1);
 			}
-			if (chan->proc_priority) {
-				pu->priority = chan->proc_priority;
+			if (chan->macropriority) {
+				pu->priority = chan->macropriority;
 			} else {
 				pu->priority = chan->priority;
 			}
 			pu->next = valetparkinglot;
 			valetparkinglot = pu;
-			cw_mutex_unlock(&valetparking_lock);
+			opbx_mutex_unlock(&valetparking_lock);
 			if (chan && !pbx_builtin_getvar_helper(chan, "BLINDTRANSFER")) {
 				time_t now = 0, then = 0;
 				time(&then);
-				cw_moh_stop(chan);
-				strncpy(lastname, chan->name, sizeof(lastname) - 1);
+				opbx_moh_stop(chan);
+				strncpy(lopbxname, chan->name, sizeof(lopbxname) - 1);
 				then -= 2;
-				while(chan && !cw_check_hangup(chan) && !strcmp(chan->name, lastname)) {
+				while(chan && !opbx_check_hangup(chan) && !strcmp(chan->name, lopbxname)) {
 					time(&now);
 					if (now - then > 2) {
-						if(! (res = cw_streamfile(chan, "vm-extension", chan->language))) {
-							if (! (res = cw_waitstream(chan, ""))) {
-								res = cw_say_digits(chan, pu->valetparkingnum, "", chan->language);
+						if(! (res = opbx_streamfile(chan, "vm-extension", chan->language))) {
+							if (! (res = opbx_waitstream(chan, ""))) {
+								res = opbx_say_digits(chan, pu->valetparkingnum, "", chan->language);
 							}
 						}
 						time(&then);
 					}
-					cw_safe_sleep(chan, 100);
+					opbx_safe_sleep(chan, 100);
 				}
 			}
 			/* Wake up the (presumably select()ing) thread */
 			pthread_kill(valetparking_thread, SIGURG);
 			if (option_verbose > 1) 
-				cw_verbose(VERBOSE_PREFIX_2 "Valet Parked %s on slot %d\n", pu->chan->name, pu->valetparkingnum);
+				opbx_verbose(VERBOSE_PREFIX_2 "Valet Parked %s on slot %d\n", pu->chan->name, pu->valetparkingnum);
 
 			pbx_builtin_setvar_helper(pu->chan,"Parker","Yes");
 			manager_event(EVENT_FLAG_CALL, "VirtualValetparkedCall",
@@ -336,46 +334,45 @@ static int cw_valetpark_call(struct cw_channel *chan, int timeout, int *extout,c
 						  ,(pu->chan->cid.cid_num ? pu->chan->cid.cid_num : "")
 						  ,(pu->chan->cid.cid_name ? pu->chan->cid.cid_name : "")
 						  );
-			cw_device_state_changed("Valet/%d@%s", pu->valetparkingnum, lotname);
 
-			return 0;
+				return 0;
 		} else {
-			cw_log(LOG_WARNING, "No more valetparking spaces\n");
+			opbx_log(LOG_WARNING, "No more valetparking spaces\n");
 			free(pu);
-			cw_mutex_unlock(&valetparking_lock);
+			opbx_mutex_unlock(&valetparking_lock);
 			return -1;
 		}
 	} else {
-		cw_log(LOG_WARNING, "Out of memory\n");
+		opbx_log(LOG_WARNING, "Out of memory\n");
 		return -1;
 	}
 	return 0;
 }
 
-static int cw_masq_valetpark_call(struct cw_channel *rchan,int timeout, int *extout,char *lotname)
+static int opbx_masq_valetpark_call(struct opbx_channel *rchan,int timeout, int *extout,char *lotname)
 {
-	struct cw_channel *chan;
-	struct cw_frame *f;
+	struct opbx_channel *chan;
+	struct opbx_frame *f;
 
 	/* Make a new, fake channel that we'll use to masquerade in the real one */
-	chan = cw_channel_alloc(0);
+	chan = opbx_channel_alloc(0);
 	if (chan) {
 		/* Let us keep track of the channel name */
 		snprintf(chan->name, sizeof (chan->name), "ValetParked/%s",rchan->name);
 		/* Make formats okay */
 		chan->readformat = rchan->readformat;
 		chan->writeformat = rchan->writeformat;
-		cw_channel_masquerade(chan, rchan);
+		opbx_channel_masquerade(chan, rchan);
 		/* Setup the extensions and such */
 		strncpy(chan->context, rchan->context, sizeof(chan->context) - 1);
 		strncpy(chan->exten, rchan->exten, sizeof(chan->exten) - 1);
 		chan->priority = rchan->priority;
 		/* Make the masq execute */
-		if((f = cw_read(chan)))
-			cw_fr_free(f);
-		cw_valetpark_call(chan, timeout, extout, lotname);
+		if((f = opbx_read(chan)))
+			opbx_frfree(f);
+		opbx_valetpark_call(chan, timeout, extout, lotname);
 	} else {
-		cw_log(LOG_WARNING, "Unable to create Valet Parked channel\n");
+		opbx_log(LOG_WARNING, "Unable to create Valet Parked channel\n");
 		return -1;
 	}
 	return 0;
@@ -386,7 +383,7 @@ static void *do_valetparking_thread(void *ignore)
 	int ms, tms, max;
 	struct valetparkeduser *pu, *pl, *pt = NULL;
 	struct timeval tv;
-	struct cw_frame *f;
+	struct opbx_frame *f;
 	int x;
 	int gc=0;
 	fd_set rfds, efds;
@@ -396,7 +393,7 @@ static void *do_valetparking_thread(void *ignore)
 	for (;;) {
 		ms = -1;
 		max = -1;
-		cw_mutex_lock(&valetparking_lock);
+		opbx_mutex_lock(&valetparking_lock);
 		pl = NULL;
 		pu = valetparkinglot;
 		gettimeofday(&tv, NULL);
@@ -405,13 +402,13 @@ static void *do_valetparking_thread(void *ignore)
 		while(pu) {
 			if (pbx_builtin_getvar_helper(pu->chan,"BLINDTRANSFER") && !pu->old) {
 				gc = 0;
-				cw_indicate(pu->chan, -1);
+				opbx_indicate(pu->chan, -1);
 				pu->old++;
 			}
 			tms = (tv.tv_sec - pu->start.tv_sec) * 1000 + (tv.tv_usec - pu->start.tv_usec) / 1000;
-			if(gc < 5 && !cw_generator_is_active(pu->chan)) {
+			if(gc < 5 && !opbx_generator_is_active(pu->chan)) {
 				gc++;
-				cw_moh_start(pu->chan, cw_strlen_zero(pu->chan->musicclass) ? "default" : pu->chan->musicclass);
+				opbx_moh_start(pu->chan, opbx_strlen_zero(pu->chan->musicclass) ? "default" : pu->chan->musicclass);
 			}
 			if(pu->valetparkingtime > 0 && tms > pu->valetparkingtime) {
 				/* They've been waiting too long, send them back to where they came.  Theoretically they
@@ -420,11 +417,11 @@ static void *do_valetparking_thread(void *ignore)
 				strncpy(pu->chan->context, pu->context, sizeof(pu->chan->context)-1);
 				pu->chan->priority = pu->priority;
 				/* Stop music on hold */
-				cw_moh_stop(pu->chan);
+				opbx_moh_stop(pu->chan);
 				/* Start up the PBX, or hang them up */
-				if (cw_pbx_start(pu->chan))  {
-					cw_log(LOG_WARNING, "Unable to restart the PBX for user on '%s', hanging them up...\n", pu->chan->name);
-					cw_hangup(pu->chan);
+				if (opbx_pbx_start(pu->chan))  {
+					opbx_log(LOG_WARNING, "Unable to restart the PBX for user on '%s', hanging them up...\n", pu->chan->name);
+					opbx_hangup(pu->chan);
 				}
 				/* And take them out of the valetparking lot */
 				if (pl) 
@@ -432,42 +429,40 @@ static void *do_valetparking_thread(void *ignore)
 				else
 					valetparkinglot = pu->next;
 				pt = pu;
-				cw_device_state_changed("Valet/%d@%s", pu->valetparkingnum, pu->lotname);
 				pu = pu->next;
 				free(pt);
 			} else {
-				for (x=0;x<CW_MAX_FDS;x++) {
+				for (x=0;x<OPBX_MAX_FDS;x++) {
 					if ((pu->chan->fds[x] > -1) && (FD_ISSET(pu->chan->fds[x], &rfds) || FD_ISSET(pu->chan->fds[x], &efds))) {
 						if (FD_ISSET(pu->chan->fds[x], &efds))
-							cw_set_flag(pu->chan, CW_FLAG_EXCEPTION);
+							opbx_set_flag(pu->chan, OPBX_FLAG_EXCEPTION);
 
 						pu->chan->fdno = x;
 						/* See if they need servicing */
-						f = cw_read(pu->chan);
-						if (!f || ((f->frametype == CW_FRAME_CONTROL) && (f->subclass ==  CW_CONTROL_HANGUP))) {
+						f = opbx_read(pu->chan);
+						if (!f || ((f->frametype == OPBX_FRAME_CONTROL) && (f->subclass ==  OPBX_CONTROL_HANGUP))) {
 							/* There's a problem, hang them up*/
 							if (option_verbose > 1) 
-								cw_verbose(VERBOSE_PREFIX_2 "%s got tired of being Valet Parked\n", pu->chan->name);
-							cw_hangup(pu->chan);
+								opbx_verbose(VERBOSE_PREFIX_2 "%s got tired of being Valet Parked\n", pu->chan->name);
+							opbx_hangup(pu->chan);
 							/* And take them out of the valetparking lot */
 							if (pl) 
 								pl->next = pu->next;
 							else
 								valetparkinglot = pu->next;
 							pt = pu;
-							cw_device_state_changed("Valet/%d@%s", pu->valetparkingnum, pu->lotname);
 							pu = pu->next;
 							free(pt);
 							break;
 						} else {
 							/* XXX Maybe we could do something with packets, like dial "0" for operator or something XXX */
-							cw_fr_free(f);
+							opbx_frfree(f);
 							goto std;	/* XXX Ick: jumping into an else statement??? XXX */
 						}
 					}
 				}
-				if (x >= CW_MAX_FDS) {
-std:					for (x=0;x<CW_MAX_FDS;x++) {
+				if (x >= OPBX_MAX_FDS) {
+std:					for (x=0;x<OPBX_MAX_FDS;x++) {
 						/* Keep this one for next one */
 						if (pu->chan->fds[x] > -1) {
 							FD_SET(pu->chan->fds[x], &nrfds);
@@ -484,108 +479,197 @@ std:					for (x=0;x<CW_MAX_FDS;x++) {
 				}
 			}
 		}
-		cw_mutex_unlock(&valetparking_lock);
+		opbx_mutex_unlock(&valetparking_lock);
 		rfds = nrfds;
 		efds = nefds;
 		tv.tv_sec = ms / 1000;
 		tv.tv_usec = (ms % 1000) * 1000;
 		/* Wait for something to happen */
-		cw_select(max + 1, &rfds, NULL, &efds, (ms > -1) ? &tv : NULL);
+		opbx_select(max + 1, &rfds, NULL, &efds, (ms > -1) ? &tv : NULL);
 		pthread_testcancel();
 	}
 	return NULL;	/* Never reached */
 }
 
-static int valetpark_call(struct cw_channel *chan, int argc, char **argv)
+static int opbx_valetparking(struct opbx_channel *chan, void *data) 
 {
-	char tmp[80];
 	struct localuser *u;
-	int timeout;
-	int ext = 0, res = 0;
+	char *appname;	
+	char buf[512],*exten,*lotname,*to;
+	struct opbx_app *app;
+	int res=0;
 
-	if (argc < 2 || argc > 6 || !argv[0][0] || !argv[1][0]) {
-		cw_log(LOG_ERROR, "Syntax: %s\n", vpcsyntax);
+	if (!data) {
+		opbx_log(LOG_WARNING, "ValetParking requires an argument (extension number)\n");
 		return -1;
 	}
 
-	timeout = (argc > 2 && argv[2][0] ? atoi(argv[2]) : DEFAULT_VALETPARK_TIME);
+	exten=lotname=to=NULL;
+	strncpy(buf,data,512);
+	exten = buf;
+	if((lotname=strchr(exten,'|'))) {
+		*lotname = '\0';
+		*lotname++;
+        	if((to=strchr(lotname,'|'))) {
+            		*to = '\0';
+            		*to++;
+        	}
+	}
+	if(exten[0] >= 97) {
+		opbx_log(LOG_WARNING, "ValetParking requires a numeric extension.\n");
+        return -1;
+	}
+	appname = opbx_is_valetparked(exten,lotname) ? "ValetParkCall" : "ValetUnparkCall";
+	app = pbx_findapp(appname);
+	LOCAL_USER_ADD(u);
+	if(app) {
+		res = pbx_exec(chan,app,data,1);
+	} else {
+		opbx_log(LOG_WARNING, "Error: Can't find app %s\n",appname);
+		res = -1;
+	}
+	LOCAL_USER_REMOVE(u);
+	return res;
+}
 
-	if (cw_is_valetparked(argv[0], argv[1])) {
-		cw_log(LOG_WARNING,"Call is already Valet Parked Here [%s]\n", argv[0]);
+static int valetpark_call(struct opbx_channel *chan, void *data)
+{
+	struct localuser *u;
+	int timeout = DEFAULT_VALETPARK_TIME;
+	int ext = 0,res = 0;
+	char buf[512],*exten,*lotname,*to,*findme,*context,*priority=NULL,tmp[80];
+	if (!data) {
+		opbx_log(LOG_WARNING, "ValetParkCall requires an argument (extension number)\n");
+		return -1;
+	}
+	exten=lotname=to=findme=context=NULL;
+	strncpy(buf,data,512);
+	exten = buf;
+	if((lotname=strchr(exten,'|'))) {
+        *lotname = '\0';
+        *lotname++;
+        if((to=strchr(lotname,'|'))) {
+            *to = '\0';
+            *to++;
+			timeout = atoi(to) * 1000;
+			if((findme=strchr(to,'|'))) {
+				*findme = '\0';
+				*findme++;
+				if((priority=strchr(findme,'|'))) {
+					*priority = '\0';
+					*priority++;
+					if((context=strchr(priority,'|'))) {
+						*context = '\0';
+						*context++;
+					}
+				}
+			}
+		}
+	}
+	if(!lotname) {
+		opbx_log(LOG_WARNING,"Please specify a lotname in the dialplan.");
+		return -1;
+	}
+	if(opbx_is_valetparked(exten , lotname)) {
+		opbx_log(LOG_WARNING,"Call is already Valet Parked Here [%s]\n", exten);
+		
 
-		if (cw_exists_extension(chan, chan->context, chan->exten, chan->priority + 101, chan->cid.cid_num)) {
-			cw_explicit_goto(chan, chan->context, chan->exten, chan->priority + 100);
+		if (opbx_exists_extension(chan, 
+								 chan->context,
+								 chan->exten,
+								 chan->priority + 101,
+								 chan->cid.cid_num)) {
+			opbx_explicit_goto(chan, chan->context, chan->exten, chan->priority + 100);
 			return 0;
 		}
 
 		return -1;
 	}
 	LOCAL_USER_ADD(u);
+	opbx_answer(chan);
+	if(exten && lotname) {
+		if(!strcmp(exten,"auto"))
+			ext = -1;
+		else if(!strcmp(exten,"query")) {
+			opbx_waitfor(chan,-1);
+			memset(&tmp,0,80);
+			opbx_streamfile(chan, "vm-extension", chan->language);
+			res = opbx_waitstream(chan, OPBX_DIGIT_ANY);
+			if(res)
+				return -1;
 
-	if (chan->_state != CW_STATE_UP)
-		cw_answer(chan);
+			opbx_app_getdata(chan,"vm-then-pound",tmp,80,5000);
+			if(tmp[0])
+				ext = atoi(tmp);
+		} else { 
+			ext = atoi(exten);
+		}
+		if(ext == 0)
+			ext = -1;
 
-	if (!strcmp(argv[0],"auto"))
-		ext = -1;
-	else if (!strcmp(argv[0],"query")) {
-		cw_waitfor(chan,-1);
-		memset(&tmp, '\0', sizeof(tmp));
-		cw_streamfile(chan, "vm-extension", chan->language);
-		res = cw_waitstream(chan, CW_DIGIT_ANY);
-		if (res)
-			return -1;
 
-		cw_app_getdata(chan, "vm-then-pound", tmp, arraysize(tmp), 5000);
-		if (tmp[0])
-			ext = atoi(tmp);
-	} else { 
-		ext = atoi(argv[0]);
+		if(findme)
+			strncpy(chan->exten,findme,sizeof(chan->exten)-1);
+		if (context)
+			strncpy(chan->context, context, sizeof(chan->context)-1);
+		if(priority) {
+			chan->priority = atoi(priority);
+			if(!chan->priority)
+				chan->priority = 1;
+		}
+		opbx_masq_valetpark_call(chan,timeout,&ext,lotname);
 	}
-	if (ext == 0)
-		ext = -1;
-
-
-	if (argc > 3 && argv[3][0])
-		strncpy(chan->exten, argv[3], sizeof(chan->exten)-1);
-	if (argc > 4 && argv[4][0]) {
-		chan->priority = atoi(argv[4]);
-		if(!chan->priority)
-			chan->priority = 1;
-	}
-	if (argc > 5 && argv[5][0])
-		strncpy(chan->context, argv[5], sizeof(chan->context)-1);
-
-	cw_masq_valetpark_call(chan, timeout, &ext, argv[1]);
-
 	LOCAL_USER_REMOVE(u);
 	return 1;
 }
 
+static int valetpark_list(struct opbx_channel *chan, void *data)
+{
+	struct localuser *u;
+	int res=0;
+	struct opbx_app *app;
+	char buf[512];
+	if(!data) {
+		opbx_log(LOG_WARNING,"Parameter 'lotname' is required.\n");
+		return -1;
+	}
+	LOCAL_USER_ADD(u);
+	res = valetparking_say(chan,data);
+	if(res > 0) {
+		app = pbx_findapp("ValetUnparkCall");
+		if(app) {
+			snprintf(buf,512,"%d|%s",res,(char *)data);
+			res = pbx_exec(chan,app,buf,1);
+		}
+	}
+	LOCAL_USER_REMOVE(u);
+	return 1;
+}
 
-static struct cw_channel *do_valetunpark(struct cw_channel *chan, char *exten, char *lotname)
+static struct opbx_channel *do_valetunpark(struct opbx_channel *chan, char *exten, char *lotname)
 {
 	int res=0;
-	struct cw_channel *peer=NULL;
+	struct opbx_channel *peer=NULL;
 	struct valetparkeduser *pu, *pl=NULL;
 	int valetpark=-1;
-	struct cw_channel *rchan = NULL;
+	struct opbx_channel *rchan = NULL;
 	char tmp[80];
 
 	if(exten) {
 		if(!strcmp(exten,"fifo")) {
-			valetpark = cw_pop_valetparking_top(lotname);
+			valetpark = opbx_pop_valetparking_top(lotname);
 		}
 		else if(!strcmp(exten,"filo")) {
-			valetpark = cw_pop_valetparking_bot(lotname);
+			valetpark = opbx_pop_valetparking_bot(lotname);
 		}
 		else if(chan && !strcmp(exten,"query")) {
-			cw_waitfor(chan,-1);
+			opbx_waitfor(chan,-1);
 			memset(&tmp,0,80);
-			cw_streamfile(chan, "vm-extension", chan->language);
-			res = cw_waitstream(chan, CW_DIGIT_ANY);
+			opbx_streamfile(chan, "vm-extension", chan->language);
+			res = opbx_waitstream(chan, OPBX_DIGIT_ANY);
 			if(res)
 				return NULL;
-			cw_app_getdata(chan,"vm-then-pound",tmp,80,5000);
+			opbx_app_getdata(chan,"vm-then-pound",tmp,80,5000);
 			if(tmp[0])
 				valetpark = atoi(tmp);
 		}
@@ -594,13 +678,13 @@ static struct cw_channel *do_valetunpark(struct cw_channel *chan, char *exten, c
 		}
 
 		if(valetpark == 0) {
-			cw_log(LOG_WARNING, "Nobody Valet Parked in %s",lotname);
+			opbx_log(LOG_WARNING, "Nobody Valet Parked in %s",lotname);
 			return NULL;
 		}
 		
 	}
 
-	cw_mutex_lock(&valetparking_lock);
+	opbx_mutex_lock(&valetparking_lock);
 	pu = valetparkinglot;
 	while(pu) {
 		if ((lotname && pu->valetparkingnum == valetpark && pu->lotname && !strcmp(pu->lotname,lotname)) 
@@ -614,8 +698,7 @@ static struct cw_channel *do_valetunpark(struct cw_channel *chan, char *exten, c
 		pl = pu;
 		pu = pu->next;
 	}
-	cw_mutex_unlock(&valetparking_lock);
-	cw_device_state_changed("Valet/%s@%s", exten, lotname);
+	opbx_mutex_unlock(&valetparking_lock);
 	if (pu) {
 		rchan = pu->chan;
 		peer = pu->chan;
@@ -625,69 +708,89 @@ static struct cw_channel *do_valetunpark(struct cw_channel *chan, char *exten, c
 	return rchan;
 }
 
-static struct cw_channel *valet_request(const char *type, int format, void *data, int *cause)
+static struct opbx_channel *valet_request(const char *type, int format, void *data, int *cause)
 {
 	char *exten = NULL, *lotname = NULL;
-	struct cw_channel *peer;
+	struct opbx_channel *peer;
 
-	exten = cw_strdupa(data);
+	if(!data || !(exten = opbx_strdupa(data))) {
+        opbx_log(LOG_WARNING,"No Memory!\n");
+        return NULL;
+    }
 	if((lotname=strchr(exten,':'))) {
         *lotname = '\0';
-        lotname++;
+        *lotname++;
     }
 	if(!lotname) {
-        cw_log(LOG_WARNING,"Please specify a lotname in the dialplan.");
-		*cause = CW_CAUSE_UNALLOCATED;
+        opbx_log(LOG_WARNING,"Please specify a lotname in the dialplan.");
+		*cause = OPBX_CAUSE_UNALLOCATED;
         return NULL;
     }
 	if((peer = do_valetunpark(NULL, exten, lotname))) {
-	    if(cw_test_flag(peer, CW_FLAG_MOH)) {
-			cw_moh_stop(peer);
+	    if(opbx_test_flag(peer, OPBX_FLAG_MOH)) {
+			opbx_moh_stop(peer);
 		}
-		if(cw_set_read_format(peer, format) ||
-		   cw_set_write_format(peer, format)) {
-			cw_log(LOG_WARNING,"Hanging up on %s because I cant make it the requested format.\n",peer->name);
-			cw_hangup(peer);
-			*cause = CW_CAUSE_UNALLOCATED;
+		if(opbx_set_read_format(peer, format) ||
+		   opbx_set_write_format(peer, format)) {
+			opbx_log(LOG_WARNING,"Hanging up on %s because I cant make it the requested format.\n",peer->name);
+			opbx_hangup(peer);
+			*cause = OPBX_CAUSE_UNALLOCATED;
 			return NULL;
 		}
 		/* We return the chan we have been protecting which is already up but
-		   be vewy vewy qwiet we will trick callweaver into thinking it's a new channel
+		   be vewy vewy qwiet we will trick openpbx into thinking it's a new channel
 		*/
-		cw_setstate(peer, CW_STATE_RESERVED);
+		opbx_setstate(peer, OPBX_STATE_RESERVED);
 	}
 
 	return peer;
 }
 
 
-static int valetunpark_call(struct cw_channel *chan, int argc, char **argv)
+static int valetunpark_call(struct opbx_channel *chan, void *data)
 {
 	int res=0;
 	struct localuser *u;
-	struct cw_channel *peer=NULL;
+	struct opbx_channel *peer=NULL;
 	int valetpark=-1;
 	int dres;
-	struct cw_bridge_config config;
+	struct opbx_bridge_config config;
+	char *exten,*lotname;
 
-	if (argc != 2 || !argv[0][0] || !argv[1][0]) {
-		cw_log(LOG_ERROR, "Syntax: %s\n", vupsyntax);
+	if (!data) {
+		opbx_log(LOG_WARNING, "ValetUnpark requires an argument (extension number)\n");
 		return -1;
 	}
-
+	exten=lotname=NULL;
+	if(!data || !(exten = opbx_strdupa(data))) {
+		opbx_log(LOG_WARNING,"No Memory!\n");
+		return -1;
+	}
+	if((lotname=strchr(exten,'|'))) {
+		*lotname = '\0';
+		*lotname++;
+	}
+	if(!lotname) {
+		opbx_log(LOG_WARNING,"Please specify a lotname in the dialplan.");
+		return -1;
+	}
 	LOCAL_USER_ADD(u);
+	opbx_answer(chan);
 
-	if (chan->_state != CW_STATE_UP)
-		cw_answer(chan);
 
-	peer = do_valetunpark(chan, argv[0], argv[1]);
+
+	/* JK02: it helps to answer the channel if not already up */
+	if (chan->_state != OPBX_STATE_UP) {
+		opbx_answer(chan);
+	}
+	peer = do_valetunpark(chan, exten, lotname);
 
 	if (peer) {
-		cw_moh_stop(peer);
-		res = cw_channel_make_compatible(chan, peer);
+		opbx_moh_stop(peer);
+		res = opbx_channel_make_compatible(chan, peer);
 		if (res < 0) {
-			cw_log(LOG_WARNING, "Could not make channels %s and %s compatible for bridge\n", chan->name, peer->name);
-			cw_hangup(peer);
+			opbx_log(LOG_WARNING, "Could not make channels %s and %s compatible for bridge\n", chan->name, peer->name);
+			opbx_hangup(peer);
 			LOCAL_USER_REMOVE(u);
 			return -1;
 		}
@@ -695,151 +798,62 @@ static int valetunpark_call(struct cw_channel *chan, int argc, char **argv)
 		   were the person called. */
 
 		if (option_verbose > 2) 
-			cw_verbose(VERBOSE_PREFIX_3 "Channel %s connected to Valet Parked call %d in lot %s\n", chan->name, valetpark, argv[1]);
+			opbx_verbose(VERBOSE_PREFIX_3 "Channel %s connected to Valet Parked call %d in lot %s\n", chan->name, valetpark,lotname);
 
-		memset(&config,0,sizeof(struct cw_bridge_config));
-		cw_set_flag(&(config.features_caller) , CW_FEATURE_REDIRECT);
-		cw_set_flag(&(config.features_callee) , CW_FEATURE_REDIRECT);
-		res = cw_bridge_call(chan,peer,&config);
+		memset(&config,0,sizeof(struct opbx_bridge_config));
+		opbx_set_flag(&(config.features_caller) , OPBX_FEATURE_REDIRECT);
+		opbx_set_flag(&(config.features_callee) , OPBX_FEATURE_REDIRECT);
+		res = opbx_bridge_call(chan,peer,&config);
 
-		if (res != CW_PBX_NO_HANGUP_PEER)
-			cw_hangup(peer);
+		if (res != OPBX_PBX_NO_HANGUP_PEER)
+			opbx_hangup(peer);
 		LOCAL_USER_REMOVE(u);
 		return res;
 	} else {
 		/* XXX Play a message XXX */
-		dres = cw_streamfile(chan, "pbx-invalidpark", chan->language);
+		dres = opbx_streamfile(chan, "pbx-invalidpark", chan->language);
 		if (!dres) {
-			dres = cw_waitstream(chan, "");
+			dres = opbx_waitstream(chan, "");
 	 	} else {
-			cw_log(LOG_WARNING, "cw_streamfile of %s failed on %s\n", "pbx-invalidpark", chan->name);
+			opbx_log(LOG_WARNING, "opbx_streamfile of %s failed on %s\n", "pbx-invalidpark", chan->name);
 			res = 0;
 		}
 		if (option_verbose > 2) 
-			cw_verbose(VERBOSE_PREFIX_3 "Channel %s tried to talk to non-existant Valet Parked call %d\n", chan->name, valetpark);
+			opbx_verbose(VERBOSE_PREFIX_3 "Channel %s tried to talk to non-existant Valet Parked call %d\n", chan->name, valetpark);
 		res = -1;
 	}
 	LOCAL_USER_REMOVE(u);
 	return res;
 }
 
-
-static int cw_valetparking(struct cw_channel *chan, int argc, char **argv) 
-{
-	struct localuser *u;
-	int res=0;
-
-	if (argc < 2 || argc > 6 || !argv[0][0] || !argv[1][0]) {
-		cw_log(LOG_ERROR, "Syntax: %s\n", vpsyntax);
-		return -1;
-	}
-
-	if (!isdigit(argv[0][0])) {
-		cw_log(LOG_WARNING, "ValetParking requires a numeric extension.\n");
-		return -1;
-	}
-
-	LOCAL_USER_ADD(u);
-
-	res = (!cw_is_valetparked(argv[0], argv[1]) ? valetpark_call(chan, argc, argv) : valetunpark_call(chan, argc, argv));
-
-	LOCAL_USER_REMOVE(u);
-	return res;
-}
-
-
-static int valetpark_list(struct cw_channel *chan, int argc, char **argv)
-{
-	char buf[64];
-	char *nargv[3];
-	struct localuser *u;
-	int res = 0;
-
-	if (argc != 1 || !argv[0][0]) {
-		cw_log(LOG_ERROR, "Syntax: %s\n", vlsyntax);
-		return -1;
-	}
-
-	LOCAL_USER_ADD(u);
-
-	res = valetparking_say(chan, argv[0]);
-
-	if (res > 0) {
-		snprintf(buf, sizeof(buf), "%d", res);
-		nargv[0] = buf;
-		nargv[1] = argv[0];
-		nargv[2] = NULL;
-		res = valetunpark_call(chan, 2, nargv);
-	}
-
-	LOCAL_USER_REMOVE(u);
-	return 1;
-}
-
-
 static int handle_valetparkedcalls(int fd, int argc, char *argv[])
 {
 	struct valetparkeduser *cur;
 
-	cw_cli(fd, "%4s %25s (%-15s %-12s %-4s) %-6s %-6s %-15s\n", "Num", "Channel"
+	opbx_cli(fd, "%4s %25s (%-15s %-12s %-4s) %-6s %-6s %-15s\n", "Num", "Channel"
 		, "Context", "Extension", "Pri", "Elapsed","Timeout","LotName");
 
-	cw_mutex_lock(&valetparking_lock);
+	opbx_mutex_lock(&valetparking_lock);
 
 	cur=valetparkinglot;
 	while(cur) {
-		cw_cli(fd, "%4d %25s (%-15s %-12s %-4d) %6lds %6lds %-15s\n"
+		opbx_cli(fd, "%4d %25s (%-15s %-12s %-4d) %6lds %6lds %-15s\n"
 			,cur->valetparkingnum, cur->chan->name, cur->context, cur->exten
 			,cur->priority,(time(NULL) - cur->start.tv_sec),cur->valetparkingtime ? (cur->start.tv_sec +  (cur->valetparkingtime/1000) - time(NULL)) : 0,cur->lotname);
 
 		cur = cur->next;
 	}
 
-	cw_mutex_unlock(&valetparking_lock);
+	opbx_mutex_unlock(&valetparking_lock);
 
 	return RESULT_SUCCESS;
 }
-
-/* Pseudo-devices like Valet/<SLOT>@<LOT> */
-static int valetparked_devicestate(void *data)
-{
-	char *slot;
-	char *lot;
-	struct valetparkeduser *cur;
-	int res = CW_DEVICE_INVALID;
-	int slotnum;
-
-	slot = cw_strdupa(data);
-	if ((lot = strchr(slot, '@')))
-		*lot++ = 0;
-	else
-		return (res);
-	slotnum = atoi(slot);
-	
-	if (option_debug > 2)
-		cw_log(LOG_DEBUG, "Checking device state for lot %s, slot %s\n", lot, slot);
-
-	cw_mutex_lock(&valetparking_lock);
-
-	cur=valetparkinglot;
-	while(cur) {
-		if (!strcmp(lot, cur->lotname) && slotnum == cur->valetparkingnum)
-			res = CW_DEVICE_BUSY;
-		cur = cur->next;
-	}
-
-	cw_mutex_unlock(&valetparking_lock);
-
-	return (res);
-}
-
-
 
 static char showvaletparked_help[] =
 "Usage: show valetparkedcalls\n"
 "       Lists currently Valet Parked calls.\n";
 
-static struct cw_cli_entry showvaletparked =
+static struct opbx_cli_entry showvaletparked =
 { { "show", "valetparkedcalls", NULL }, handle_valetparkedcalls, "Lists valetparked calls", showvaletparked_help };
 /* Dump lot status */
 static int manager_valetparking_status( struct mansession *s, struct message *m )
@@ -848,11 +862,11 @@ static int manager_valetparking_status( struct mansession *s, struct message *m 
 
 	astman_send_ack(s, m, "Valet Parked calls will follow");
 
-        cw_mutex_lock(&valetparking_lock);
+        opbx_mutex_lock(&valetparking_lock);
 
         cur=valetparkinglot;
         while(cur) {
-                cw_cli(s->fd, "Event: ValetParkedCall\r\n"
+                opbx_cli(s->fd, "Event: ValetParkedCall\r\n"
 						"Exten: %d\r\n"
 						"Channel: %s\r\n"
 						"Timeout: %ld\r\n"
@@ -869,7 +883,7 @@ static int manager_valetparking_status( struct mansession *s, struct message *m 
                 cur = cur->next;
         }
 
-        cw_mutex_unlock(&valetparking_lock);
+        opbx_mutex_unlock(&valetparking_lock);
 
         return RESULT_SUCCESS;
 }
@@ -879,50 +893,56 @@ static int manager_valetparking_status( struct mansession *s, struct message *m 
 
 int load_module(void)
 {
-	cw_cli_register(&showvaletparked);
+	int res;
+
+	opbx_cli_register(&showvaletparked);
 	valetparkingtime = DEFAULT_VALETPARK_TIME;
-	cw_pthread_create(&valetparking_thread, NULL, do_valetparking_thread, NULL);
-	valetunparkedcall_app = cw_register_application(valetunparkedcall, valetunpark_call, vupsynopsis, vupsyntax, vupdesc);
-	valetparkedcall_app = cw_register_application(valetparkedcall, valetpark_call, vpcsynopsis, vpcsyntax, vpcdesc);
-	valetparking_app = cw_register_application(valetparking, cw_valetparking, vpsynopsis, vpsyntax, vpdesc);
-	valetparklist_app = cw_register_application(valetparklist,valetpark_list, vlsynopsis, vlsyntax, vldesc);
-	cw_channel_register(&valet_tech);
-	cw_manager_register( "ValetparkedCalls", 0, manager_valetparking_status, "List valetparked calls" );
-	return 0;
+	opbx_pthread_create(&valetparking_thread, NULL, do_valetparking_thread, NULL);
+	res = opbx_register_application(valetunparkedcall, valetunpark_call, vupsynopsis, vupdesc);
+	res = opbx_register_application(valetparkedcall, valetpark_call, vpcsynopsis, vpcdesc);
+	res = opbx_register_application(valetparking, opbx_valetparking, vpsynopsis, vpdesc);
+	res = opbx_register_application(valetparklist,valetpark_list, vlsynopsis, vldesc);
+	opbx_channel_register(&valet_tech);
+	
+	
+
+	if (!res) {
+		opbx_manager_register( "ValetparkedCalls", 0, manager_valetparking_status, "List valetparked calls" );
+	}
+
+	return res;
 }
 
 int unload_module(void)
 {
-	int res = 0;
-
 	STANDARD_HANGUP_LOCALUSERS;
 
-	if (!cw_mutex_lock(&valetparking_lock)) {
-        if (valetparking_thread && (valetparking_thread != CW_PTHREADT_STOP)) {
+	if (!opbx_mutex_lock(&valetparking_lock)) {
+        if (valetparking_thread && (valetparking_thread != OPBX_PTHREADT_STOP)) {
             pthread_cancel(valetparking_thread);
             pthread_kill(valetparking_thread, SIGURG);
             pthread_join(valetparking_thread, NULL);
         }
-        valetparking_thread = CW_PTHREADT_STOP;
-        cw_mutex_unlock(&valetparking_lock);
+        valetparking_thread = OPBX_PTHREADT_STOP;
+        opbx_mutex_unlock(&valetparking_lock);
     } else {
-        cw_log(LOG_WARNING, "Unable to lock the valet\n");
+        opbx_log(LOG_WARNING, "Unable to lock the valet\n");
         return -1;
     }
 
-	cw_channel_unregister(&valet_tech);
-	cw_manager_unregister( "ValetparkedCalls" );
-	cw_cli_unregister(&showvaletparked);
-	res |= cw_unregister_application(valetunparkedcall_app);
-	res |= cw_unregister_application(valetparkedcall_app);
-	res |= cw_unregister_application(valetparking_app);
-	res |= cw_unregister_application(valetparklist_app);
-	return res;
+	opbx_channel_unregister(&valet_tech);
+	opbx_manager_unregister( "ValetparkedCalls" );
+	opbx_cli_unregister(&showvaletparked);
+	opbx_unregister_application(valetunparkedcall);
+	opbx_unregister_application(valetparkedcall);
+	opbx_unregister_application(valetparking);
+	opbx_unregister_application(valetparklist);
+	return 0;
 }
 
 char *description(void)
 {
-	return "Valet Parking Application";
+	return "Valet Parking Application (http://www.cluecon.com)";
 }
 
 int usecount(void)

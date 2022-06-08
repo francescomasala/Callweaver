@@ -1,12 +1,12 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  *
  * Copyright (C) 2005, Frank Sautter, levigo holding gmbh, www.levigo.de
  *
- * Frank Sautter - callweaver+at+sautter+dot+com 
+ * Frank Sautter - openpbx+at+sautter+dot+com 
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -29,24 +29,38 @@
 #include <string.h>
 #include <stdlib.h>
 
-#include "callweaver.h"
+#include "openpbx.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/apps/app_settransfercapability.c $", "$Revision: 4723 $")
+OPENPBX_FILE_VERSION("$HeadURL$", "$Revision$")
 
-#include "callweaver/logger.h"
-#include "callweaver/channel.h"
-#include "callweaver/pbx.h"
-#include "callweaver/module.h"
-#include "callweaver/options.h"
-#include "callweaver/transcap.h"
+#include "openpbx/logger.h"
+#include "openpbx/channel.h"
+#include "openpbx/pbx.h"
+#include "openpbx/module.h"
+#include "openpbx/options.h"
+#include "openpbx/transcap.h"
 
 
-static void *settransfercapability_app;
-static const char *settransfercapability_name = "SetTransferCapability";
-static const char *settransfercapability_synopsis = "Set ISDN Transfer Capability";
-static const char *settransfercapability_syntax = "SetTransferCapability(transfercapability)";
-static const char *settransfercapability_descrip = 
-"Set the ISDN Transfer Capability of a call to a new value.\n"
+static char *app = "SetTransferCapability";
+
+static char *synopsis = "Set ISDN Transfer Capability";
+
+STANDARD_LOCAL_USER;
+
+LOCAL_USER_DECL;
+
+static struct {	int val; char *name; } transcaps[] = {
+	{ OPBX_TRANS_CAP_SPEECH,				"SPEECH" },
+	{ OPBX_TRANS_CAP_DIGITAL,			"DIGITAL" },
+	{ OPBX_TRANS_CAP_RESTRICTED_DIGITAL,	"RESTRICTED_DIGITAL" },
+	{ OPBX_TRANS_CAP_3_1K_AUDIO,			"3K1AUDIO" },
+	{ OPBX_TRANS_CAP_DIGITAL_W_TONES,	"DIGITAL_W_TONES" },
+	{ OPBX_TRANS_CAP_VIDEO,				"VIDEO" },
+};
+
+static char *descrip = 
+"  SetTransferCapability(transfercapability): Set the ISDN Transfer \n"
+"Capability of a call to a new value.\n"
 "Always returns 0.  Valid Transfer Capabilities are:\n"
 "\n"
 "  SPEECH             : 0x00 - Speech (default, voice calls)\n"
@@ -58,36 +72,33 @@ static const char *settransfercapability_descrip =
 "\n"
 ;
 
-
-STANDARD_LOCAL_USER;
-
-LOCAL_USER_DECL;
-
-static struct {	int val; char *name; } transcaps[] = {
-	{ CW_TRANS_CAP_SPEECH,				"SPEECH" },
-	{ CW_TRANS_CAP_DIGITAL,			"DIGITAL" },
-	{ CW_TRANS_CAP_RESTRICTED_DIGITAL,	"RESTRICTED_DIGITAL" },
-	{ CW_TRANS_CAP_3_1K_AUDIO,			"3K1AUDIO" },
-	{ CW_TRANS_CAP_DIGITAL_W_TONES,	"DIGITAL_W_TONES" },
-	{ CW_TRANS_CAP_VIDEO,				"VIDEO" },
-};
-
-static int settransfercapability_exec(struct cw_channel *chan, int argc, char **argv)
+static int settransfercapability_exec(struct opbx_channel *chan, void *data)
 {
+	char *tmp = NULL;
 	struct localuser *u;
 	int x;
+	char *opts;
 	int transfercapability = -1;
 	
 	LOCAL_USER_ADD(u);
 	
+	if (data)
+		tmp = opbx_strdupa(data);
+	else
+		tmp = "";
+
+	opts = strchr(tmp, '|');
+	if (opts)
+		*opts = '\0';
+	
 	for (x = 0; x < (sizeof(transcaps) / sizeof(transcaps[0])); x++) {
-		if (!strcasecmp(transcaps[x].name, argv[0])) {
+		if (!strcasecmp(transcaps[x].name, tmp)) {
 			transfercapability = transcaps[x].val;
 			break;
 		}
 	}
 	if (transfercapability < 0) {
-		cw_log(LOG_WARNING, "'%s' is not a valid transfer capability (see 'show application SetTransferCapability')\n", argv[0]);
+		opbx_log(LOG_WARNING, "'%s' is not a valid transfer capability (see 'show application SetTransferCapability')\n", tmp);
 		LOCAL_USER_REMOVE(u);
 		return 0;
 	}
@@ -95,8 +106,8 @@ static int settransfercapability_exec(struct cw_channel *chan, int argc, char **
 	chan->transfercapability = (unsigned short)transfercapability;
 	
 	if (option_verbose > 2)
-		cw_verbose(VERBOSE_PREFIX_3 "Setting transfer capability to: 0x%.2x - %s.\n", transfercapability, argv[0]);
-
+		opbx_verbose(VERBOSE_PREFIX_3 "Setting transfer capability to: 0x%.2x - %s.\n", transfercapability, tmp);			
+	
 	LOCAL_USER_REMOVE(u);
 
 	return 0;
@@ -105,21 +116,18 @@ static int settransfercapability_exec(struct cw_channel *chan, int argc, char **
 
 int unload_module(void)
 {
-	int res = 0;
 	STANDARD_HANGUP_LOCALUSERS;
-	res |= cw_unregister_application(settransfercapability_app);
-	return res;
+	return opbx_unregister_application(app);
 }
 
 int load_module(void)
 {
-	settransfercapability_app = cw_register_application(settransfercapability_name, settransfercapability_exec, settransfercapability_synopsis, settransfercapability_syntax, settransfercapability_descrip);
-	return 0;
+	return opbx_register_application(app, settransfercapability_exec, synopsis, descrip);
 }
 
 char *description(void)
 {
-	return (char *)settransfercapability_synopsis;
+	return synopsis;
 }
 
 int usecount(void)

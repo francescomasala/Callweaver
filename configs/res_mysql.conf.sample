@@ -8,7 +8,7 @@
 ;
 [general]
 ;dbhost = 127.0.0.1
-;dbname = callweaver
+;dbname = openpbx
 ;dbuser = myuser
 ;dbpass = mypass
 ;dbport = 3306

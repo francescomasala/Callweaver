@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 #
-# CallWeaver Queue Viewer
+# OpenPBX Queue Viewer
 # Uses management interface to query call queues on a machine
 # (C) 2003 David C. Troy -- dave@toad.net
 #
@@ -12,7 +12,7 @@ use IO::Socket;
 use CGI qw(:standard);
 use CGI::Carp qw/fatalsToBrowser/;
 
-$host = "callweaver.yourdomain.com";
+$host = "openpbx.yourdomain.com";
 $port = 5038;
 $user = "manager_user";
 $secret = "Manager_secret";
@@ -29,7 +29,7 @@ $remote = IO::Socket::INET->new(
 
 $remote->autoflush(1);	# Send immediately
 
-# Login and get our booty from CallWeaver
+# Login and get our booty from OpenPBX
 $logres = send_cmd("Action: Login${EOL}Username: $user${EOL}Secret: $secret$BLANK");
 $qinfo = send_cmd("Action: queues$BLANK$EOL");
 $logres = send_cmd("Action: Logoff$BLANK");

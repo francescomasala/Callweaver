@@ -3,11 +3,11 @@
 ;
 [general]
 ; Default formats for writing Voicemail
-;format=g723sf,wav49,wav
-format=wav49,gsm,wav
+;format=g723sf|wav49|wav
+format=wav49|gsm|wav
 ; Who the e-mail notification should appear to come from
-serveremail=callweaver
-;serveremail=callweaver@callweaver.org
+serveremail=openpbx
+;serveremail=openpbx@linux-support.net
 ; Should the email contain the voicemail as an attachment
 attach=yes
 ; Maximum number of messages per folder.  If not specified, a default value
@@ -48,7 +48,7 @@ maxlogins=3
 ; Skip the "[PBX]:" string from the message title
 ;pbxskip=yes
 ; Change the From: string
-;fromstring=The CallWeaver
+;fromstring=The OpenPBX
 ; Permit finding entries for forward/compose from the directory
 ;usedirectory=yes
 ;
@@ -57,16 +57,16 @@ maxlogins=3
 ;     VM_CIDNAME, VM_DATE
 ;
 ; Note: The emailbody config row can only be up to 512 characters due to a
-;       limitation in the CallWeaver configuration subsystem.
+;       limitation in the OpenPBX configuration subsystem.
 ;emailsubject=[PBX]: New message ${VM_MSGNUM} in mailbox ${VM_MAILBOX}
 ; The following definition is very close to the default, but the default shows
 ; just the CIDNAME, if it is not null, otherise just the CIDNUM, or "an unknown
 ; caller", if they are both null.
-;emailbody=Dear ${VM_NAME}:\n\n\tjust wanted to let you know you were just left a ${VM_DUR} long message (number ${VM_MSGNUM})\nin mailbox ${VM_MAILBOX} from ${VM_CALLERID}, on ${VM_DATE}, so you might\nwant to check it when you get a chance.  Thanks!\n\n\t\t\t\t--CallWeaver\n
+;emailbody=Dear ${VM_NAME}:\n\n\tjust wanted to let you know you were just left a ${VM_DUR} long message (number ${VM_MSGNUM})\nin mailbox ${VM_MAILBOX} from ${VM_CALLERID}, on ${VM_DATE}, so you might\nwant to check it when you get a chance.  Thanks!\n\n\t\t\t\t--OpenPBX\n
 ;
 ; You can also change the Pager From: string, the pager body and/or subject.
 ; The above defined variables also can be used here
-;pagerfromstring=The CallWeaver
+;pagerfromstring=The OpenPBX
 ;pagersubject=New VM
 ;pagerbody=New ${VM_DUR} long msg in box ${VM_MAILBOX}\nfrom ${VM_CALLERID}, on ${VM_DATE}
 ;
@@ -159,20 +159,20 @@ sendvoicemail=yes	; Context to Send voicemail from [option 5 from the advanced m
 			;     The default is "no".
 
 [zonemessages]
-eastern=America/New_York,'vm-received' Q 'digits/at' IMp
-central=America/Chicago,'vm-received' Q 'digits/at' IMp
-central24=America/Chicago,'vm-received' q 'digits/at' H N 'hours'
-military=Zulu,'vm-received' q 'digits/at' H N 'hours' 'phonetic/z_p'
+eastern=America/New_York|'vm-received' Q 'digits/at' IMp
+central=America/Chicago|'vm-received' Q 'digits/at' IMp
+central24=America/Chicago|'vm-received' q 'digits/at' H N 'hours'
+military=Zulu|'vm-received' q 'digits/at' H N 'hours' 'phonetic/z_p'
 
 [default]
 ; Define maximum number of messages per folder for partcular context.
 ;maxmsg=50
 
 1234 => 4242,Example Mailbox,root@localhost
-;4200 => 9855,Mark Spencer,markster@linux-support.net,mypager@digium.com,attach=no,serveremail=myaddy@digium.com,tz=central,maxmsg=10
+;4200 => 9855,Mark Spencer,markster@linux-support.net,mypager@digium.com,attach=no|serveremail=myaddy@digium.com|tz=central|maxmsg=10
 ;4300 => 3456,Ben Rigas,ben@american-computer.net
 ;4310 => -5432,Sales,sales@marko.net
-;4069 => 6522,Matt Brooks,matt@marko.net,,,tz=central,attach=yes,saycid=yes,dialout=fromvm,callback=fromvm,review=yes,operator=yes,envelope=yes,sayduration=yes,saydurationm=1
+;4069 => 6522,Matt Brooks,matt@marko.net,,|tz=central|attach=yes|saycid=yes|dialout=fromvm|callback=fromvm|review=yes|operator=yes|envelope=yes|sayduration=yes|saydurationm=1
 ;4073 => 1099,Bianca Paige,bianca@biancapaige.com,,delete=1
 ;4110 => 3443,Rob Flynn,rflynn@blueridge.net
 

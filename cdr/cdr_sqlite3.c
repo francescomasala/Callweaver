@@ -1,13 +1,13 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * Asterisk -- An open source telephony toolkit.
  *
  * Copyright (C) 2004 - 2005, Holger Schurig
  *
  *
  * Ideas taken from other cdr_*.c files
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.asterisk.org for more information about
+ * the Asterisk project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -35,9 +35,9 @@
 	<depend>sqlite</depend>
  ***/
 
-#include "callweaver.h"
+#include "openpbx.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/cdr/cdr_sqlite3.c $", "$Revision: 4723 $")
+OPENPBX_FILE_VERSION("$HeadURL: svn://svn.openpbx.org/openpbx/trunk/cdr/cdr_sqlite3.c $", "$Revision: 1589 $")
 
 #include <sys/types.h>
 #include <unistd.h>
@@ -45,10 +45,10 @@ CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branche
 #include <stdlib.h>
 #include <stdio.h>
 
-#include "callweaver/channel.h"
-#include "callweaver/module.h"
-#include "callweaver/logger.h"
-#include "callweaver/utils.h"
+#include "openpbx/channel.h"
+#include "openpbx/module.h"
+#include "openpbx/logger.h"
+#include "openpbx/utils.h"
 #include <sqlite3.h>
 
 #define LOG_UNIQUEID	0
@@ -61,7 +61,7 @@ static char *desc = "SQLite CDR Backend";
 static char *name = "sqlite";
 static struct sqlite3 *db = NULL;
 
-CW_MUTEX_DEFINE_STATIC(sqlite3_lock);
+OPBX_MUTEX_DEFINE_STATIC(sqlite3_lock);
 
 /*! \brief SQL table format */
 static char sql_create_table[] = "CREATE TABLE cdr ("
@@ -90,7 +90,7 @@ static char sql_create_table[] = "CREATE TABLE cdr ("
 #endif
 ");";
 
-static int sqlite_log(struct cw_cdr *cdr)
+static int sqlite_log(struct opbx_cdr *cdr)
 {
 	int res = 0;
 	char *zErr = 0;
@@ -101,13 +101,13 @@ static int sqlite_log(struct cw_cdr *cdr)
 	char fn[PATH_MAX];
 	char *sql;
 
-	cw_mutex_lock(&sqlite3_lock);
+	opbx_mutex_lock(&sqlite3_lock);
 
 	/* is the database there? */
-	snprintf(fn, sizeof(fn), "%s/cdr.db", cw_config_CW_LOG_DIR);
+	snprintf(fn, sizeof(fn), "%s/cdr.db", opbx_config_OPBX_LOG_DIR);
 	sqlite3_open(fn, &db);
 	if (!db) {
-		cw_log(LOG_ERROR, "cdr_sqlite: %s\n", zErr);
+		opbx_log(LOG_ERROR, "cdr_sqlite: %s\n", zErr);
 		free(zErr);
 		return -1;
 	}
@@ -164,7 +164,7 @@ static int sqlite_log(struct cw_cdr *cdr)
 				,cdr->userfield
 #				endif
 			);
-		cw_log(LOG_DEBUG, "CDR SQLITE3 SQL [%s]\n", sql);
+		opbx_log(LOG_DEBUG, "CDR SQLITE3 SQL [%s]\n", sql);
 		res = sqlite3_exec(db,
 						   sql,
 						   NULL,
@@ -187,13 +187,13 @@ static int sqlite_log(struct cw_cdr *cdr)
 	}
 	
 	if (zErr) {
-		cw_log(LOG_ERROR, "cdr_sqlite: %s\n", zErr);
+		opbx_log(LOG_ERROR, "cdr_sqlite: %s\n", zErr);
 		free(zErr);
 	}
 
 	if (db) sqlite3_close(db);
 
-	cw_mutex_unlock(&sqlite3_lock);
+	opbx_mutex_unlock(&sqlite3_lock);
 	return res;
 }
 
@@ -206,7 +206,7 @@ char *description(void)
 int unload_module(void)
 {
 	if (db) sqlite3_close(db);
-	cw_cdr_unregister(name);
+	opbx_cdr_unregister(name);
 	return 0;
 }
 
@@ -217,10 +217,10 @@ int load_module(void)
 	int res;
 
 	/* is the database there? */
-	snprintf(fn, sizeof(fn), "%s/cdr.db", cw_config_CW_LOG_DIR);
+	snprintf(fn, sizeof(fn), "%s/cdr.db", opbx_config_OPBX_LOG_DIR);
 	sqlite3_open(fn, &db);
 	if (!db) {
-		cw_log(LOG_ERROR, "cdr_sqlite: %s\n", zErr);
+		opbx_log(LOG_ERROR, "cdr_sqlite: %s\n", zErr);
 		free(zErr);
 		return -1;
 	}
@@ -230,7 +230,7 @@ int load_module(void)
 	if (res) {
 		res = sqlite3_exec(db, sql_create_table, NULL, NULL, &zErr);
 		if (res) {
-			cw_log(LOG_ERROR, "cdr_sqlite: Unable to create table 'cdr': %s\n", zErr);
+			opbx_log(LOG_ERROR, "cdr_sqlite: Unable to create table 'cdr': %s\n", zErr);
 			free(zErr);
 			goto err;
 		}
@@ -238,9 +238,9 @@ int load_module(void)
 		/* TODO: here we should probably create an index */
 	}
 	
-	res = cw_cdr_register(name, desc, sqlite_log);
+	res = opbx_cdr_register(name, desc, sqlite_log);
 	if (res) {
-		cw_log(LOG_ERROR, "Unable to register SQLite CDR handling\n");
+		opbx_log(LOG_ERROR, "Unable to register SQLite CDR handling\n");
 		goto err;
 	}
 
@@ -260,10 +260,10 @@ int reload(void)
 int usecount(void)
 {
 	/* To be able to unload the module */
-	if ( cw_mutex_trylock(&sqlite3_lock) ) {
+	if ( opbx_mutex_trylock(&sqlite3_lock) ) {
 		return 1;
 	} else {
-		cw_mutex_unlock(&sqlite3_lock);
+		opbx_mutex_unlock(&sqlite3_lock);
 		return 0;
 	}
 }

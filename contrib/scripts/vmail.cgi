@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 #
-# Web based Voicemail for CallWeaver
+# Web based Voicemail for OpenPBX
 #
 # Copyright (C) 2002, Linux Support Services, Inc.
 #
@@ -43,10 +43,10 @@ $context=""; # Define here your by default context (so you dont need to put voic
 	}
 );
 
-$cwpath = "/_callweaver";
+$opbxpath = "/_openpbx";
 
 $stdcontainerstart = "<table align=center width=600><tr><td>\n";
-$footer = "<hr><font size=-1><a href=\"http://www.callweaver.org\">The CallWeaver.org Open Source PBX</a> Copyright 2006</a></a>";
+$footer = "<hr><font size=-1><a href=\"http://www.openpbx.org\">The OpenPBX.org Open Source PBX</a> Copyright 2006</a></a>";
 $stdcontainerend = "</td></tr><tr><td align=right>$footer</td></tr></table>\n";
 
 sub lock_path() {
@@ -105,7 +105,7 @@ sub login_screen() {
 	my ($message) = @_;
 	print <<_EOH;
 
-<TITLE>CallWeaver Web-Voicemail</TITLE>
+<TITLE>OpenPBX Web-Voicemail</TITLE>
 <BODY BGCOLOR="white">
 $stdcontainerstart
 <FORM METHOD="post">
@@ -145,7 +145,7 @@ sub check_login()
 		$context = "default";
 	}
 	if (!$filename) {
-		$filename = "/etc/callweaver/voicemail.conf";
+		$filename = "/etc/openpbx/voicemail.conf";
 	}
 #	print header;
 #	print "Including <h2>$filename</h2> while in <h2>$category</h2>...\n";
@@ -153,7 +153,7 @@ sub check_login()
 	while(<VMAIL>) {
 		chomp;
 		if (/include\s\"([^\"]+)\"$/) {
-			($tmp, $category) = &check_login("/etc/callweaver/$1", $category);
+			($tmp, $category) = &check_login("/etc/openpbx/$1", $category);
 			if (length($tmp)) {
 #				print "Got '$tmp'\n";
 				return ($tmp, $category);
@@ -209,7 +209,7 @@ sub validmailbox()
 		$context = "default";
 	}
 	if (!$filename) {
-		$filename = "/opt/callweaver.org/etc/voicemail.conf";
+		$filename = "/opt/openpbx.org/etc/voicemail.conf";
 	}
 	if (!$category) {
 		$category = "general";
@@ -218,7 +218,7 @@ sub validmailbox()
 	while(<VMAIL>) {
 		chomp;
 		if (/include\s\"([^\"]+)\"$/) {
-			($tmp, $category) = &validmailbox($mbox, $context, "/opt/callweaver.org/etc/$1");
+			($tmp, $category) = &validmailbox($mbox, $context, "/opt/openpbx.org/etc/$1");
 			if ($tmp) {
 				return ($tmp, $category);
 			}
@@ -265,7 +265,7 @@ sub mailbox_options()
 	local $tmp2;
 	local $tmp;
 	if (!$filename) {
-		$filename = "/opt/callweaver.org/etc/voicemail.conf";
+		$filename = "/opt/openpbx.org/etc/voicemail.conf";
 	}
 	if (!$category) {
 		$category = "general";
@@ -277,7 +277,7 @@ sub mailbox_options()
 		chomp;
 		s/\;.*$//;
 		if (/include\s\"([^\"]+)\"$/) {
-			($tmp2, $category) = &mailbox_options($context, $current, "/opt/callweaver.org/etc/$1", $category);
+			($tmp2, $category) = &mailbox_options($context, $current, "/opt/openpbx.org/etc/$1", $category);
 #			print "Got '$tmp2'...\n";
 			$tmp .= $tmp2;
 		} elsif (/\[(.*)\]/) {
@@ -353,7 +353,7 @@ sub mailbox_list()
 sub msgcount() 
 {
 	my ($context, $mailbox, $folder) = @_;
-	my $path = "/opt/callweaver.org/var/spool/voicemail/$context/$mailbox/$folder";
+	my $path = "/opt/openpbx.org/var/spool/voicemail/$context/$mailbox/$folder";
 	if (opendir(DIR, $path)) {
 		my @msgs = grep(/^msg....\.txt$/, readdir(DIR));
 		closedir(DIR);
@@ -377,7 +377,7 @@ sub msgcountstr()
 sub messages()
 {
 	my ($context, $mailbox, $folder) = @_;
-	my $path = "/opt/callweaver.org/var/spool/voicemail/$context/$mailbox/$folder";
+	my $path = "/opt/openpbx.org/var/spool/voicemail/$context/$mailbox/$folder";
 	if (opendir(DIR, $path)) {
 		my @msgs = sort grep(/^msg....\.txt$/, readdir(DIR));
 		closedir(DIR);
@@ -402,7 +402,7 @@ sub getfields()
 {
 	my ($context, $mailbox, $folder, $msg) = @_;
 	my $fields;
-	if (open(MSG, "</opt/callweaver.org/var/spool/voicemail/$context/$mailbox/$folder/msg${msg}.txt")) {
+	if (open(MSG, "</opt/openpbx.org/var/spool/voicemail/$context/$mailbox/$folder/msg${msg}.txt")) {
 		while(<MSG>) {
 			s/\#.*$//g;
 			if (/^(\w+)\s*\=\s*(.*)$/) {
@@ -429,7 +429,7 @@ sub message_prefs()
 	print header;
 	print <<_EOH;
 
-<TITLE>CallWeaver Web-Voicemail: Preferences</TITLE>
+<TITLE>OpenPBX Web-Voicemail: Preferences</TITLE>
 <BODY BGCOLOR="white">
 $stdcontainerstart
 <FORM METHOD="post">
@@ -496,7 +496,7 @@ sub message_play()
 		}
 		print <<_EOH;
 	
-<TITLE>CallWeaver Web-Voicemail: $folder Message $msgid</TITLE>
+<TITLE>OpenPBX Web-Voicemail: $folder Message $msgid</TITLE>
 <BODY BGCOLOR="white">
 $stdcontainerstart
 <FORM METHOD="post">
@@ -555,7 +555,7 @@ sub message_audio()
 	}
 	&untaint($format);
 
-	my $path = "/opt/callweaver.org/var/spool/voicemail/$context/$mailbox/$folder/msg${msgid}.$format";
+	my $path = "/opt/openpbx.org/var/spool/voicemail/$context/$mailbox/$folder/msg${msgid}.$format";
 
 	$msgid =~ /^\d\d\d\d$/ || die("Msgid Liar ($msgid)!");
 	grep(/^${format}$/, keys %formats) || die("Format Liar ($format)!");
@@ -646,7 +646,7 @@ sub message_index()
 	print header(-cookie => &makecookie($format));
 	print <<_EOH;
 
-<TITLE>CallWeaver Web-Voicemail: $mbox\@$context $folder</TITLE>
+<TITLE>OpenPBX Web-Voicemail: $mbox\@$context $folder</TITLE>
 <BODY BGCOLOR="white">
 $stdcontainerstart
 <FORM METHOD="post">
@@ -670,7 +670,7 @@ foreach $msg (&messages($context, $mbox, $folder)) {
 		$duration = "<i>Unknown</i>";
 	}
 	$hasmsg++;
-	print "<tr><td><input type=checkbox name=\"msgselect\" value=\"$msg\">&nbsp;<b>$msg</b></td><td>$fields->{'callerid'}</td><td>$duration</td><td>$fields->{'origdate'}</td><td><input name='play$msg' alt=\"Play message $msg\" border=0 type=image align=left src=\"$cwpath/play.gif\"></td></tr>\n";
+	print "<tr><td><input type=checkbox name=\"msgselect\" value=\"$msg\">&nbsp;<b>$msg</b></td><td>$fields->{'callerid'}</td><td>$duration</td><td>$fields->{'origdate'}</td><td><input name='play$msg' alt=\"Play message $msg\" border=0 type=image align=left src=\"$opbxpath/play.gif\"></td></tr>\n";
 
 }
 if (!$hasmsg) {
@@ -776,11 +776,11 @@ sub message_rename()
 		die("Invalid old Message<BR>\n");
 	}
 	
-	my $path = "/opt/callweaver.org/var/spool/voicemail/$context/$mbox/$newfolder";
+	my $path = "/opt/openpbx.org/var/spool/voicemail/$context/$mbox/$newfolder";
 	$path =~ /^(.*)$/;
 	$path = $1;
 	mkdir $path, 0770;
-	my $path = "/opt/callweaver.org/var/spool/voicemail/$context/$mbox/$oldfolder";
+	my $path = "/opt/openpbx.org/var/spool/voicemail/$context/$mbox/$oldfolder";
 	opendir(DIR, $path) || die("Unable to open directory\n");
 	my @files = grep /^msg${old}\.\w+$/, readdir(DIR);
 	closedir(DIR);
@@ -790,7 +790,7 @@ sub message_rename()
 			$tmp = $1;
 			$oldfile = $path . "/$tmp";
 			$tmp =~ s/msg${old}/msg${new}/;
-			$newfile = "/opt/callweaver.org/var/spool/voicemail/$context/$mbox/$newfolder/$tmp";
+			$newfile = "/opt/openpbx.org/var/spool/voicemail/$context/$mbox/$newfolder/$tmp";
 #			print "Renaming $oldfile to $newfile<BR>\n";
 			rename($oldfile, $newfile);
 		}
@@ -851,15 +851,15 @@ sub message_copy()
 		die("Invalid old Message<BR>\n");
 	}
 	
-	my $path = "/opt/callweaver.org/var/spool/voicemail/$context/$newmbox";
+	my $path = "/opt/openpbx.org/var/spool/voicemail/$context/$newmbox";
 	$path =~ /^(.*)$/;
 	$path = $1;
 	mkdir $path, 0770;
-	my $path = "/opt/callweaver.org/var/spool/voicemail/$context/$newmbox/INBOX";
+	my $path = "/opt/openpbx.org/var/spool/voicemail/$context/$newmbox/INBOX";
 	$path =~ /^(.*)$/;
 	$path = $1;
 	mkdir $path, 0770;
-	my $path = "/opt/callweaver.org/var/spool/voicemail/$context/$mbox/$oldfolder";
+	my $path = "/opt/openpbx.org/var/spool/voicemail/$context/$mbox/$oldfolder";
 	opendir(DIR, $path) || die("Unable to open directory\n");
 	my @files = grep /^msg${old}\.\w+$/, readdir(DIR);
 	closedir(DIR);
@@ -869,7 +869,7 @@ sub message_copy()
 			$tmp = $1;
 			$oldfile = $path . "/$tmp";
 			$tmp =~ s/msg${old}/msg${new}/;
-			$newfile = "/opt/callweaver.org/var/spool/voicemail/$context/$newmbox/INBOX/$tmp";
+			$newfile = "/opt/openpbx.org/var/spool/voicemail/$context/$newmbox/INBOX/$tmp";
 #			print "Copying $oldfile to $newfile<BR>\n";
 			&file_copy($oldfile, $newfile);
 		}
@@ -899,7 +899,7 @@ sub message_delete()
 	} else {
 		die("Invalid Message<BR>\n");
 	}
-	my $path = "/opt/callweaver.org/var/spool/voicemail/$context/$mbox/$folder";
+	my $path = "/opt/openpbx.org/var/spool/voicemail/$context/$mbox/$folder";
 	opendir(DIR, $path) || die("Unable to open directory\n");
 	my @files = grep /^msg${msg}\.\w+$/, readdir(DIR);
 	closedir(DIR);
@@ -935,7 +935,7 @@ sub message_forward()
 	my $txt;
 	$context = &untaint($context);
 	$newmbox = &untaint($newmbox);
-	my $path = "/opt/callweaver.org/var/spool/voicemail/$context/$newmbox/INBOX";
+	my $path = "/opt/openpbx.org/var/spool/voicemail/$context/$newmbox/INBOX";
 	if (&lock_path($path) == 0) {
 		$msgcount = &msgcount($context, $newmbox, "INBOX");
 		
@@ -981,7 +981,7 @@ sub message_delete_or_move()
 	$context = &untaint($context);
 	$mbox = &untaint($mbox);
 	$folder = &untaint($folder);
-	my $path = "/var/spool/callweaver/voicemail/$context/$mbox/$folder";
+	my $path = "/var/spool/openpbx/voicemail/$context/$mbox/$folder";
 	if (&lock_path($path) == 0) {
 		my $msgcount = &msgcount($context, $mbox, $folder);
 		my $omsgcount = &msgcount($context, $mbox, $newfolder) if $newfolder;

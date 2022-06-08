@@ -1,12 +1,12 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  *
  * Copyright (C) 1999 - 2005, Digium, Inc.
  *
  * Mark Spencer <markster@digium.com>
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -35,35 +35,35 @@
 #include <ctype.h>
 #include <spandsp.h>
 
-#include "callweaver.h"
+#include "openpbx.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/corelib/phone_no_utils.c $", "$Revision: 4723 $")
+OPENPBX_FILE_VERSION("$HeadURL: svn://svn.openpbx.org/openpbx/trunk/corelib/phone_no_utils.c $", "$Revision: 922 $")
 
-#include "callweaver/ulaw.h"
-#include "callweaver/alaw.h"
-#include "callweaver/frame.h"
-#include "callweaver/channel.h"
-#include "callweaver/phone_no_utils.h"
-#include "callweaver/logger.h"
-#include "callweaver/utils.h"
+#include "openpbx/ulaw.h"
+#include "openpbx/alaw.h"
+#include "openpbx/frame.h"
+#include "openpbx/channel.h"
+#include "openpbx/phone_no_utils.h"
+#include "openpbx/logger.h"
+#include "openpbx/utils.h"
 
 static struct {
 	int val;
 	char *name;
 	char *description;
 } pres_types[] = {
-	{  CW_PRES_ALLOWED_USER_NUMBER_NOT_SCREENED, "allowed_not_screened", "Presentation Allowed, Not Screened"},
-	{  CW_PRES_ALLOWED_USER_NUMBER_PASSED_SCREEN, "allowed_passed_screen", "Presentation Allowed, Passed Screen"},
-	{  CW_PRES_ALLOWED_USER_NUMBER_FAILED_SCREEN, "allowed_failed_screen", "Presentation Allowed, Failed Screen"},
-	{  CW_PRES_ALLOWED_NETWORK_NUMBER, "allowed", "Presentation Allowed, Network Number"},
-	{  CW_PRES_PROHIB_USER_NUMBER_NOT_SCREENED, "prohib_not_screened", "Presentation Prohibited, Not Screened"},
-	{  CW_PRES_PROHIB_USER_NUMBER_PASSED_SCREEN, "prohib_passed_screen", "Presentation Prohibited, Passed Screen"},
-	{  CW_PRES_PROHIB_USER_NUMBER_FAILED_SCREEN, "prohib_failed_screen", "Presentation Prohibited, Failed Screen"},
-	{  CW_PRES_PROHIB_NETWORK_NUMBER, "prohib", "Presentation Prohibited, Network Number"},
-	{  CW_PRES_NUMBER_NOT_AVAILABLE, "unavailable", "Number Unavailable"},
+	{  OPBX_PRES_ALLOWED_USER_NUMBER_NOT_SCREENED, "allowed_not_screened", "Presentation Allowed, Not Screened"},
+	{  OPBX_PRES_ALLOWED_USER_NUMBER_PASSED_SCREEN, "allowed_passed_screen", "Presentation Allowed, Passed Screen"},
+	{  OPBX_PRES_ALLOWED_USER_NUMBER_FAILED_SCREEN, "allowed_failed_screen", "Presentation Allowed, Failed Screen"},
+	{  OPBX_PRES_ALLOWED_NETWORK_NUMBER, "allowed", "Presentation Allowed, Network Number"},
+	{  OPBX_PRES_PROHIB_USER_NUMBER_NOT_SCREENED, "prohib_not_screened", "Presentation Prohibited, Not Screened"},
+	{  OPBX_PRES_PROHIB_USER_NUMBER_PASSED_SCREEN, "prohib_passed_screen", "Presentation Prohibited, Passed Screen"},
+	{  OPBX_PRES_PROHIB_USER_NUMBER_FAILED_SCREEN, "prohib_failed_screen", "Presentation Prohibited, Failed Screen"},
+	{  OPBX_PRES_PROHIB_NETWORK_NUMBER, "prohib", "Presentation Prohibited, Network Number"},
+	{  OPBX_PRES_NUMBER_NOT_AVAILABLE, "unavailable", "Number Unavailable"},
 };
 
-int cw_parse_caller_presentation(const char *data)
+int opbx_parse_caller_presentation(const char *data)
 {
 	int i;
 
@@ -75,7 +75,7 @@ int cw_parse_caller_presentation(const char *data)
 	return -1;
 }
 
-const char *cw_describe_caller_presentation(int data)
+const char *opbx_describe_caller_presentation(int data)
 {
 	int i;
 
@@ -87,7 +87,7 @@ const char *cw_describe_caller_presentation(int data)
 	return "unknown";
 }
 
-void cw_shrink_phone_number(char *n)
+void opbx_shrink_phone_number(char *n)
 {
 	int x,y=0;
 	int bracketed=0;
@@ -117,10 +117,10 @@ void cw_shrink_phone_number(char *n)
 	n[y] = '\0';
 }
 
-int cw_isphonenumber(const char *n)
+int opbx_isphonenumber(const char *n)
 {
 	int x;
-	if (!n || cw_strlen_zero(n))
+	if (!n || opbx_strlen_zero(n))
 		return 0;
 	for (x=0;n[x];x++)
 		if (!strchr("0123456789*#+", n[x]))
@@ -128,42 +128,47 @@ int cw_isphonenumber(const char *n)
 	return 1;
 }
 
-char *cw_callerid_merge(char *buf, int bufsiz, const char *name, const char *num, const char *unknown)
+char *opbx_callerid_merge(char *buf, int bufsiz, const char *name, const char *num, const char *unknown)
 {
 	if (!unknown)
 		unknown = "<unknown>";
 	if (name && num)
 		snprintf(buf, bufsiz, "\"%s\" <%s>", name, num);
 	else if (name) 
-		cw_copy_string(buf, name, bufsiz);
+		opbx_copy_string(buf, name, bufsiz);
 	else if (num)
-		cw_copy_string(buf, num, bufsiz);
+		opbx_copy_string(buf, num, bufsiz);
 	else
-		cw_copy_string(buf, unknown, bufsiz);
+		opbx_copy_string(buf, unknown, bufsiz);
 	return buf;
 }
 
-int cw_callerid_split(const char *buf, char *name, int namelen, char *num, int numlen)
+int opbx_callerid_split(const char *buf, char *name, int namelen, char *num, int numlen)
 {
 	char *tmp;
 	char *l = NULL;
     char *n = NULL;
     
-	tmp = cw_strdupa(buf);
-	cw_callerid_parse(tmp, &n, &l);
+	tmp = opbx_strdupa(buf);
+	if (!tmp) {
+		name[0] = '\0';
+		num[0] = '\0';
+		return -1;
+	}
+	opbx_callerid_parse(tmp, &n, &l);
 	if (n)
-		cw_copy_string(name, n, namelen);
+		opbx_copy_string(name, n, namelen);
 	else
 		name[0] = '\0';
 	if (l) {
-		cw_shrink_phone_number(l);
-		cw_copy_string(num, l, numlen);
+		opbx_shrink_phone_number(l);
+		opbx_copy_string(num, l, numlen);
 	} else
 		num[0] = '\0';
 	return 0;
 }
 
-int cw_callerid_parse(char *instr, char **name, char **location)
+int opbx_callerid_parse(char *instr, char **name, char **location)
 {
 	char *ns, *ne;
 	char *ls, *le;
@@ -184,7 +189,7 @@ int cw_callerid_parse(char *instr, char **name, char **location)
 		} else {
 			/* Just trim off any trailing spaces */
 			*name = instr;
-			while(!cw_strlen_zero(instr) && (instr[strlen(instr) - 1] < 33))
+			while(!opbx_strlen_zero(instr) && (instr[strlen(instr) - 1] < 33))
 				instr[strlen(instr) - 1] = '\0';
 			/* And leading spaces */
 			while(**name && (**name < 33))
@@ -192,9 +197,9 @@ int cw_callerid_parse(char *instr, char **name, char **location)
 			return 0;
 		}
 	} else {
-		cw_copy_string(tmp, instr, sizeof(tmp));
-		cw_shrink_phone_number(tmp);
-		if (cw_isphonenumber(tmp)) {
+		opbx_copy_string(tmp, instr, sizeof(tmp));
+		opbx_shrink_phone_number(tmp);
+		if (opbx_isphonenumber(tmp)) {
 			/* Assume it's just a location */
 			*name = NULL;
 			*location = instr;

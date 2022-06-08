@@ -1,5 +1,5 @@
 /*
- * vISDN channel driver for CallWeaver
+ * vISDN channel driver for Asterisk
  *
  * Copyright (C) 2004-2005 Daniele Orlandi
  *
@@ -38,27 +38,27 @@
 
 #include <linux/rtc.h>
 
+#include <openpbx/lock.h>
+#include <openpbx/channel.h>
+#include <openpbx/config.h>
+#include <openpbx/logger.h>
+#include <openpbx/module.h>
+#include <openpbx/pbx.h>
+#include <openpbx/options.h>
+#include <openpbx/utils.h>
+#include <openpbx/indications.h>
+#include <openpbx/cli.h>
+#include <openpbx/musiconhold.h>
+#include <openpbx/devicestate.h>
+
 #include <streamport.h>
 #include <lapd.h>
 #include <libq931/q931.h>
 
 #include <visdn/visdn.h>
 
-#include "callweaver/lock.h"
-#include "callweaver/channel.h"
-#include "callweaver/config.h"
-#include "callweaver/logger.h"
-#include "callweaver/module.h"
-#include "callweaver/pbx.h"
-#include "callweaver/options.h"
-#include "callweaver/utils.h"
-#include "callweaver/indications.h"
-#include "callweaver/cli.h"
-#include "callweaver/musiconhold.h"
-#include "callweaver/devicestate.h"
 
-
-#define VISDN_DESCRIPTION "VISDN Channel For CallWeaver.org"
+#define VISDN_DESCRIPTION "VISDN Channel For OpenPBX.org"
 #define VISDN_CHAN_TYPE "VISDN"
 #define VISDN_CONFIG_FILE "chan_visdn.conf"
 
@@ -66,15 +66,15 @@
 #define assert(cond)							\
 	do {								\
 		if (!(cond)) {						\
-			cw_log(LOG_ERROR,				\
+			opbx_log(LOG_ERROR,				\
 				"assertion (" #cond ") failed\n");	\
 			abort();					\
 		}							\
 	} while(0)
 
-CW_MUTEX_DEFINE_STATIC(usecnt_lock);
+OPBX_MUTEX_DEFINE_STATIC(usecnt_lock);
 
-static pthread_t visdn_q931_thread = CW_PTHREADT_NULL;
+static pthread_t visdn_q931_thread = OPBX_PTHREADT_NULL;
 
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 
@@ -120,7 +120,7 @@ struct visdn_interface
 	enum visdn_type_of_number type_of_number;
 	enum visdn_type_of_number local_type_of_number;
 	int tones_option;
-	char context[CW_MAX_EXTENSION];
+	char context[OPBX_MAX_EXTENSION];
 	char default_inbound_caller_id[128];
 	int force_inbound_caller_id;
 	int overlap_sending;
@@ -157,19 +157,19 @@ struct visdn_interface
 
 struct visdn_state
 {
-	cw_mutex_t lock;
+	opbx_mutex_t lock;
 
 	struct q931_lib *libq931;
 
 	int have_to_exit;
 
 	struct list_head ccb_q931_queue;
-	cw_mutex_t ccb_q931_queue_lock;
+	opbx_mutex_t ccb_q931_queue_lock;
 	int ccb_q931_queue_pipe_read;
 	int ccb_q931_queue_pipe_write;
 
 	struct list_head q931_ccb_queue;
-	cw_mutex_t q931_ccb_queue_lock;
+	opbx_mutex_t q931_ccb_queue_lock;
 	int q931_ccb_queue_pipe_read;
 	int q931_ccb_queue_pipe_write;
 
@@ -222,7 +222,7 @@ struct visdn_state
 #ifdef DEBUG_CODE
 #define visdn_debug(format, arg...)			\
 	if (visdn.debug)				\
-		cw_log(LOG_NOTICE,			\
+		opbx_log(LOG_NOTICE,			\
 			format,				\
 			## arg)
 #else
@@ -259,22 +259,22 @@ static void visdn_set_socket_debug(int on)
 
 static int do_debug_visdn_generic(int fd, int argc, char *argv[])
 {
-	cw_mutex_lock(&visdn.lock);
+	opbx_mutex_lock(&visdn.lock);
 	visdn.debug = TRUE;
-	cw_mutex_unlock(&visdn.lock);
+	opbx_mutex_unlock(&visdn.lock);
 
-	cw_cli(fd, "vISDN debugging enabled\n");
+	opbx_cli(fd, "vISDN debugging enabled\n");
 
 	return 0;
 }
 
 static int do_no_debug_visdn_generic(int fd, int argc, char *argv[])
 {
-	cw_mutex_lock(&visdn.lock);
+	opbx_mutex_lock(&visdn.lock);
 	visdn.debug = FALSE;
-	cw_mutex_unlock(&visdn.lock);
+	opbx_mutex_unlock(&visdn.lock);
 
-	cw_cli(fd, "vISDN debugging disabled\n");
+	opbx_cli(fd, "vISDN debugging disabled\n");
 
 	return 0;
 }
@@ -283,12 +283,12 @@ static int do_debug_visdn_q921(int fd, int argc, char *argv[])
 {
 	// Enable debugging on new DLCs FIXME TODO
 
-	cw_mutex_lock(&visdn.lock);
+	opbx_mutex_lock(&visdn.lock);
 	visdn.debug_q921 = TRUE;
 	visdn_set_socket_debug(1);
-	cw_mutex_unlock(&visdn.lock);
+	opbx_mutex_unlock(&visdn.lock);
 
-	cw_cli(fd, "vISDN q.921 debugging enabled\n");
+	opbx_cli(fd, "vISDN q.921 debugging enabled\n");
 
 	return 0;
 }
@@ -297,34 +297,34 @@ static int do_no_debug_visdn_q921(int fd, int argc, char *argv[])
 {
 	// Disable debugging on new DLCs FIXME TODO
 
-	cw_mutex_lock(&visdn.lock);
+	opbx_mutex_lock(&visdn.lock);
 	visdn.debug_q921 = FALSE;
 	visdn_set_socket_debug(0);
-	cw_mutex_unlock(&visdn.lock);
+	opbx_mutex_unlock(&visdn.lock);
 
-	cw_cli(fd, "vISDN q.921 debugging disabled\n");
+	opbx_cli(fd, "vISDN q.921 debugging disabled\n");
 
 	return 0;
 }
 
 static int do_debug_visdn_q931(int fd, int argc, char *argv[])
 {
-	cw_mutex_lock(&visdn.lock);
+	opbx_mutex_lock(&visdn.lock);
 	visdn.debug_q931 = TRUE;
-	cw_mutex_unlock(&visdn.lock);
+	opbx_mutex_unlock(&visdn.lock);
 
-	cw_cli(fd, "vISDN q.931 debugging enabled\n");
+	opbx_cli(fd, "vISDN q.931 debugging enabled\n");
 
 	return 0;
 }
 
 static int do_no_debug_visdn_q931(int fd, int argc, char *argv[])
 {
-	cw_mutex_lock(&visdn.lock);
+	opbx_mutex_lock(&visdn.lock);
 	visdn.debug_q931 = FALSE;
-	cw_mutex_unlock(&visdn.lock);
+	opbx_mutex_unlock(&visdn.lock);
 
-	cw_cli(fd, "vISDN q.931 debugging disabled\n");
+	opbx_cli(fd, "vISDN q.931 debugging disabled\n");
 
 	return 0;
 }
@@ -368,20 +368,20 @@ static const char *visdn_type_of_number_to_string(enum visdn_type_of_number type
 
 static int do_show_visdn_interfaces(int fd, int argc, char *argv[])
 {
-	cw_mutex_lock(&visdn.lock);
+	opbx_mutex_lock(&visdn.lock);
 
 	struct visdn_interface *intf;
 	list_for_each_entry(intf, &visdn.ifs, ifs_node) {
 
-		cw_cli(fd, "\n------ Interface %s ---------\n", intf->name);
+		opbx_cli(fd, "\n------ Interface %s ---------\n", intf->name);
 
-		cw_cli(fd, "Role                      : %s\n",
+		opbx_cli(fd, "Role                      : %s\n",
 				intf->q931_intf ?
 					(intf->q931_intf->role == LAPD_ROLE_NT ?
 						"NT" : "TE") :
 					"UNUSED!");
 
-		cw_cli(fd,
+		opbx_cli(fd,
 			"Network role              : %s\n"
 			"Type of number            : %s\n"
 			"Local type of number      : %s\n"
@@ -412,19 +412,19 @@ static int do_show_visdn_interfaces(int fd, int argc, char *argv[])
 
 		if (intf->q931_intf) {
 			if (intf->q931_intf->role == LAPD_ROLE_NT) {
-				cw_cli(fd, "DLCs                      : ");
+				opbx_cli(fd, "DLCs                      : ");
 
 				struct q931_dlc *dlc;
 				list_for_each_entry(dlc, &intf->q931_intf->dlcs,
 						intf_node) {
-					cw_cli(fd, "%d ", dlc->tei);
+					opbx_cli(fd, "%d ", dlc->tei);
 
 				}
 
-				cw_cli(fd, "\n");
+				opbx_cli(fd, "\n");
 
 #define TIMER_CONFIG(timer)					\
-	cw_cli(fd, #timer ": %lld%s\n",			\
+	opbx_cli(fd, #timer ": %lld%s\n",			\
 		intf->q931_intf->timer / 1000000LL,		\
 		intf->timer ? " (Non-default)" : "");
 
@@ -436,7 +436,7 @@ static int do_show_visdn_interfaces(int fd, int argc, char *argv[])
 				TIMER_CONFIG(T304);
 				TIMER_CONFIG(T305);
 				TIMER_CONFIG(T306);
-				cw_cli(fd, "T307: %d\n", intf->T307);
+				opbx_cli(fd, "T307: %d\n", intf->T307);
 				TIMER_CONFIG(T308);
 				TIMER_CONFIG(T309);
 				TIMER_CONFIG(T310);
@@ -454,7 +454,7 @@ static int do_show_visdn_interfaces(int fd, int argc, char *argv[])
 				TIMER_CONFIG(T304);
 				TIMER_CONFIG(T305);
 				TIMER_CONFIG(T306);
-				cw_cli(fd, "T307: %d\n", intf->T307);
+				opbx_cli(fd, "T307: %d\n", intf->T307);
 				TIMER_CONFIG(T308);
 				TIMER_CONFIG(T309);
 				TIMER_CONFIG(T310);
@@ -471,7 +471,7 @@ static int do_show_visdn_interfaces(int fd, int argc, char *argv[])
 			}
 
 		} else {
-			cw_cli(fd,
+			opbx_cli(fd,
 				"T301: %d\n"
 				"T302: %d\n"
 				"T303: %d\n"
@@ -514,7 +514,7 @@ static int do_show_visdn_interfaces(int fd, int argc, char *argv[])
 				intf->T322);
 		}
 
-		cw_cli(fd, "Parked calls:\n");
+		opbx_cli(fd, "Parked calls:\n");
 		struct visdn_suspended_call *suspended_call;
 		list_for_each_entry(suspended_call, &intf->suspended_calls, node) {
 
@@ -537,13 +537,13 @@ static int do_show_visdn_interfaces(int fd, int argc, char *argv[])
 			sane_str[i] = '\0';
 			hex_str[i*2] = '\0';
 
-			cw_cli(fd, "    %s (%s)\n",
+			opbx_cli(fd, "    %s (%s)\n",
 				sane_str,
 				hex_str);
 		}
 	}
 
-	cw_mutex_unlock(&visdn.lock);
+	opbx_mutex_unlock(&visdn.lock);
 
 	return 0;
 }
@@ -567,7 +567,7 @@ static enum visdn_type_of_number
 	else if (!strcasecmp(str, "abbreviated"))
 		type_of_number = VISDN_TYPE_OF_NUMBER_ABBREVIATED;
 	else {
-		cw_log(LOG_ERROR,
+		opbx_log(LOG_ERROR,
 			"Unknown type_of_number '%s'\n",
 			str);
 	}
@@ -591,7 +591,7 @@ static enum q931_interface_network_role
 	else if (!strcasecmp(str, "international"))
 		role = Q931_INTF_NET_INTERNATIONAL;
 	else {
-		cw_log(LOG_ERROR,
+		opbx_log(LOG_ERROR,
 			"Unknown network_role '%s'\n",
 			str);
 	}
@@ -601,7 +601,7 @@ static enum q931_interface_network_role
 
 static int visdn_intf_from_var(
 	struct visdn_interface *intf,
-	struct cw_variable *var)
+	struct opbx_variable *var)
 {
 	if (!strcasecmp(var->name, "network_role")) {
 		intf->network_role =
@@ -613,7 +613,7 @@ static int visdn_intf_from_var(
 		intf->local_type_of_number =
 			visdn_string_to_type_of_number(var->value);
 	} else if (!strcasecmp(var->name, "tones_option")) {
-		intf->tones_option = cw_true(var->value);
+		intf->tones_option = opbx_true(var->value);
 	} else if (!strcasecmp(var->name, "context")) {
 		strncpy(intf->context, var->value,
 			sizeof(intf->context));
@@ -621,11 +621,11 @@ static int visdn_intf_from_var(
 		strncpy(intf->default_inbound_caller_id, var->value,
 			sizeof(intf->default_inbound_caller_id));
 	} else if (!strcasecmp(var->name, "force_inbound_caller_id")) {
-		intf->force_inbound_caller_id = cw_true(var->value);
+		intf->force_inbound_caller_id = opbx_true(var->value);
 	} else if (!strcasecmp(var->name, "overlap_sending")) {
-		intf->overlap_sending = cw_true(var->value);
+		intf->overlap_sending = opbx_true(var->value);
 	} else if (!strcasecmp(var->name, "overlap_receiving")) {
-		intf->overlap_receiving = cw_true(var->value);
+		intf->overlap_receiving = opbx_true(var->value);
 	} else if (!strcasecmp(var->name, "national_prefix")) {
 		strncpy(intf->national_prefix, var->value,
 			sizeof(intf->national_prefix));
@@ -725,23 +725,23 @@ static void visdn_copy_interface_config(
 
 static void visdn_reload_config(void)
 {
-	struct cw_config *cfg;
-	cfg = cw_config_load(VISDN_CONFIG_FILE);
+	struct opbx_config *cfg;
+	cfg = opbx_config_load(VISDN_CONFIG_FILE);
 	if (!cfg) {
-		cw_log(LOG_WARNING,
+		opbx_log(LOG_WARNING,
 			"Unable to load config %s, VISDN disabled\n",
 			VISDN_CONFIG_FILE);
 
 		return;
 	}
 
-	cw_mutex_lock(&visdn.lock);
+	opbx_mutex_lock(&visdn.lock);
 
-	struct cw_variable *var;
-	var = cw_variable_browse(cfg, "global");
+	struct opbx_variable *var;
+	var = opbx_variable_browse(cfg, "global");
 	while (var) {
 		if (visdn_intf_from_var(&visdn.default_intf, var) < 0) {
-			cw_log(LOG_WARNING,
+			opbx_log(LOG_WARNING,
 				"Unknown configuration variable %s\n",
 				var->name);
 		}
@@ -755,8 +755,8 @@ static void visdn_reload_config(void)
 	}
 
 	const char *cat;
-	for (cat = cw_category_browse(cfg, NULL); cat;
-	     cat = cw_category_browse(cfg, (char *)cat)) {
+	for (cat = opbx_category_browse(cfg, NULL); cat;
+	     cat = opbx_category_browse(cfg, (char *)cat)) {
 
 		if (!strcasecmp(cat, "general") ||
 		    !strcasecmp(cat, "global"))
@@ -784,10 +784,10 @@ static void visdn_reload_config(void)
 
 		intf->configured = TRUE;
 
-		var = cw_variable_browse(cfg, (char *)cat);
+		var = opbx_variable_browse(cfg, (char *)cat);
 		while (var) {
 			if (visdn_intf_from_var(intf, var) < 0) {
-				cw_log(LOG_WARNING,
+				opbx_log(LOG_WARNING,
 					"Unknown configuration variable %s\n",
 					var->name);
 			}
@@ -796,9 +796,9 @@ static void visdn_reload_config(void)
 		}
 	}
 
-	cw_mutex_unlock(&visdn.lock);
+	opbx_mutex_unlock(&visdn.lock);
 
-	cw_config_destroy(cfg);  // FIXME
+	opbx_config_destroy(cfg);  // FIXME
 }
 
 static int do_visdn_reload(int fd, int argc, char *argv[])
@@ -810,7 +810,7 @@ static int do_visdn_reload(int fd, int argc, char *argv[])
 
 static int do_show_visdn_channels(int fd, int argc, char *argv[])
 {
-	cw_mutex_lock(&visdn.lock);
+	opbx_mutex_lock(&visdn.lock);
 
 	struct visdn_interface *intf;
 	list_for_each_entry(intf, &visdn.ifs, ifs_node) {
@@ -818,18 +818,18 @@ static int do_show_visdn_channels(int fd, int argc, char *argv[])
 		if (!intf->q931_intf)
 			continue;
 
-		cw_cli(fd, "Interface: %s\n", intf->name);
+		opbx_cli(fd, "Interface: %s\n", intf->name);
 
 		int j;
 		for (j=0; j<intf->q931_intf->n_channels; j++) {
-			cw_cli(fd, "  B%d: %s\n",
+			opbx_cli(fd, "  B%d: %s\n",
 				intf->q931_intf->channels[j].id + 1,
 				q931_channel_state_to_text(
 					intf->q931_intf->channels[j].state));
 		}
 	}
 
-	cw_mutex_unlock(&visdn.lock);
+	opbx_mutex_unlock(&visdn.lock);
 
 	return 0;
 }
@@ -840,7 +840,7 @@ static int visdn_cli_print_call_list(
 {
 	int first_call;
 
-	cw_mutex_lock(&visdn.lock);
+	opbx_mutex_lock(&visdn.lock);
 
 	struct visdn_interface *intf;
 	list_for_each_entry(intf, &visdn.ifs, ifs_node) {
@@ -856,19 +856,19 @@ static int visdn_cli_print_call_list(
 			if (!intf || call->intf == filter_intf) {
 
 				if (first_call) {
-					cw_cli(fd, "Interface: %s\n", intf->q931_intf->name);
-					cw_cli(fd, "  Ref#    Caller       Called       State\n");
+					opbx_cli(fd, "Interface: %s\n", intf->q931_intf->name);
+					opbx_cli(fd, "  Ref#    Caller       Called       State\n");
 					first_call = FALSE;
 				}
 
-				cw_cli(fd, "  %c %5ld %s\n",
+				opbx_cli(fd, "  %c %5ld %s\n",
 					(call->direction ==
 						Q931_CALL_DIRECTION_INBOUND)
 							? 'I' : 'O',
 					call->call_reference,
 					q931_call_state_to_text(call->state));
 
-/*				cw_cli(fd, "  %c %5ld %-12s %-12s %s\n",
+/*				opbx_cli(fd, "  %c %5ld %-12s %-12s %s\n",
 					(call->direction == Q931_CALL_DIRECTION_INBOUND)
 						? 'I' : 'O',
 					call->call_reference,
@@ -880,83 +880,83 @@ static int visdn_cli_print_call_list(
 		}
 	}
 
-	cw_mutex_unlock(&visdn.lock);
+	opbx_mutex_unlock(&visdn.lock);
 
 	return RESULT_SUCCESS;
 }
 
 static void visdn_cli_print_call(int fd, struct q931_call *call)
 {
-	cw_cli(fd, "--------- Call %ld %s (%d refs)\n",
+	opbx_cli(fd, "--------- Call %ld %s (%d refs)\n",
 		call->call_reference,
 		call->direction == Q931_CALL_DIRECTION_INBOUND ?
 			"inbound" : "outbound",
 		call->refcnt);
 
-	cw_cli(fd, "Interface       : %s\n", call->intf->name);
+	opbx_cli(fd, "Interface       : %s\n", call->intf->name);
 
 	if (call->dlc)
-		cw_cli(fd, "DLC (TEI)       : %d\n", call->dlc->tei);
+		opbx_cli(fd, "DLC (TEI)       : %d\n", call->dlc->tei);
 
-	cw_cli(fd, "State           : %s\n",
+	opbx_cli(fd, "State           : %s\n",
 		q931_call_state_to_text(call->state));
 
-//	cw_cli(fd, "Calling Number  : %s\n", call->calling_number);
-//	cw_cli(fd, "Called Number   : %s\n", call->called_number);
+//	opbx_cli(fd, "Calling Number  : %s\n", call->calling_number);
+//	opbx_cli(fd, "Called Number   : %s\n", call->called_number);
 
-//	cw_cli(fd, "Sending complete: %s\n",
+//	opbx_cli(fd, "Sending complete: %s\n",
 //		call->sending_complete ? "Yes" : "No");
 
-	cw_cli(fd, "Broadcast seutp : %s\n",
+	opbx_cli(fd, "Broadcast seutp : %s\n",
 		call->broadcast_setup ? "Yes" : "No");
 
-	cw_cli(fd, "Tones option    : %s\n",
+	opbx_cli(fd, "Tones option    : %s\n",
 		call->tones_option ? "Yes" : "No");
 
-	cw_cli(fd, "Active timers   : ");
+	opbx_cli(fd, "Active timers   : ");
 
-	if (call->T301.pending) cw_cli(fd, "T301 ");
-	if (call->T302.pending) cw_cli(fd, "T302 ");
-	if (call->T303.pending) cw_cli(fd, "T303 ");
-	if (call->T304.pending) cw_cli(fd, "T304 ");
-	if (call->T305.pending) cw_cli(fd, "T305 ");
-	if (call->T306.pending) cw_cli(fd, "T306 ");
-	if (call->T308.pending) cw_cli(fd, "T308 ");
-	if (call->T309.pending) cw_cli(fd, "T309 ");
-	if (call->T310.pending) cw_cli(fd, "T310 ");
-	if (call->T312.pending) cw_cli(fd, "T312 ");
-	if (call->T313.pending) cw_cli(fd, "T313 ");
-	if (call->T314.pending) cw_cli(fd, "T314 ");
-	if (call->T316.pending) cw_cli(fd, "T316 ");
-	if (call->T318.pending) cw_cli(fd, "T318 ");
-	if (call->T319.pending) cw_cli(fd, "T319 ");
-	if (call->T320.pending) cw_cli(fd, "T320 ");
-	if (call->T321.pending) cw_cli(fd, "T321 ");
-	if (call->T322.pending) cw_cli(fd, "T322 ");
+	if (call->T301.pending) opbx_cli(fd, "T301 ");
+	if (call->T302.pending) opbx_cli(fd, "T302 ");
+	if (call->T303.pending) opbx_cli(fd, "T303 ");
+	if (call->T304.pending) opbx_cli(fd, "T304 ");
+	if (call->T305.pending) opbx_cli(fd, "T305 ");
+	if (call->T306.pending) opbx_cli(fd, "T306 ");
+	if (call->T308.pending) opbx_cli(fd, "T308 ");
+	if (call->T309.pending) opbx_cli(fd, "T309 ");
+	if (call->T310.pending) opbx_cli(fd, "T310 ");
+	if (call->T312.pending) opbx_cli(fd, "T312 ");
+	if (call->T313.pending) opbx_cli(fd, "T313 ");
+	if (call->T314.pending) opbx_cli(fd, "T314 ");
+	if (call->T316.pending) opbx_cli(fd, "T316 ");
+	if (call->T318.pending) opbx_cli(fd, "T318 ");
+	if (call->T319.pending) opbx_cli(fd, "T319 ");
+	if (call->T320.pending) opbx_cli(fd, "T320 ");
+	if (call->T321.pending) opbx_cli(fd, "T321 ");
+	if (call->T322.pending) opbx_cli(fd, "T322 ");
 
-	cw_cli(fd, "\n");
+	opbx_cli(fd, "\n");
 
-	cw_cli(fd, "CES:\n");
+	opbx_cli(fd, "CES:\n");
 	struct q931_ces *ces;
 	list_for_each_entry(ces, &call->ces, node) {
-		cw_cli(fd, "%d %s %s ",
+		opbx_cli(fd, "%d %s %s ",
 			ces->dlc->tei,
 			q931_ces_state_to_text(ces->state),
 			(ces == call->selected_ces ? "presel" :
 			  (ces == call->preselected_ces ? "sel" : "")));
 
-		if (ces->T304.pending) cw_cli(fd, "T304 ");
-		if (ces->T308.pending) cw_cli(fd, "T308 ");
-		if (ces->T322.pending) cw_cli(fd, "T322 ");
+		if (ces->T304.pending) opbx_cli(fd, "T304 ");
+		if (ces->T308.pending) opbx_cli(fd, "T308 ");
+		if (ces->T322.pending) opbx_cli(fd, "T322 ");
 
-		cw_cli(fd, "\n");
+		opbx_cli(fd, "\n");
 	}
 
 }
 
 static int do_show_visdn_calls(int fd, int argc, char *argv[])
 {
-	cw_mutex_lock(&visdn.lock);
+	opbx_mutex_lock(&visdn.lock);
 
 	if (argc == 3) {
 		visdn_cli_print_call_list(fd, NULL);
@@ -978,7 +978,7 @@ static int do_show_visdn_calls(int fd, int argc, char *argv[])
 		}
 
 		if (!filter_intf) {
-			cw_cli(fd, "Interface not found\n");
+			opbx_cli(fd, "Interface not found\n");
 			goto err_intf_not_found;
 		}
 
@@ -998,12 +998,12 @@ static int do_show_visdn_calls(int fd, int argc, char *argv[])
 					Q931_CALL_DIRECTION_OUTBOUND,
 					atoi(callpos + 1));
 			} else {
-				cw_cli(fd, "Invalid call reference\n");
+				opbx_cli(fd, "Invalid call reference\n");
 				goto err_unknown_direction;
 			}
 
 			if (!call) {
-				cw_cli(fd, "Call %s not found\n", callpos);
+				opbx_cli(fd, "Call %s not found\n", callpos);
 				goto err_call_not_found;
 			}
 
@@ -1017,7 +1017,7 @@ err_call_not_found:
 err_unknown_direction:
 err_intf_not_found:
 
-	cw_mutex_unlock(&visdn.lock);
+	opbx_mutex_unlock(&visdn.lock);
 
 	return RESULT_SUCCESS;
 }
@@ -1026,7 +1026,7 @@ static char debug_visdn_generic_help[] =
 	"Usage: debug visdn generic\n"
 	"	Debug generic vISDN events\n";
 
-static struct cw_cli_entry debug_visdn_generic =
+static struct opbx_cli_entry debug_visdn_generic =
 {
 	{ "debug", "visdn", "generic", NULL },
 	do_debug_visdn_generic,
@@ -1035,7 +1035,7 @@ static struct cw_cli_entry debug_visdn_generic =
 	NULL
 };
 
-static struct cw_cli_entry no_debug_visdn_generic =
+static struct opbx_cli_entry no_debug_visdn_generic =
 {
 	{ "no", "debug", "visdn", "generic", NULL },
 	do_no_debug_visdn_generic,
@@ -1048,7 +1048,7 @@ static char debug_visdn_q921_help[] =
 	"Usage: debug visdn q921 [interface]\n"
 	"	Traces q921 traffic\n";
 
-static struct cw_cli_entry debug_visdn_q921 =
+static struct opbx_cli_entry debug_visdn_q921 =
 {
 	{ "debug", "visdn", "q921", NULL },
 	do_debug_visdn_q921,
@@ -1057,7 +1057,7 @@ static struct cw_cli_entry debug_visdn_q921 =
 	NULL
 };
 
-static struct cw_cli_entry no_debug_visdn_q921 =
+static struct opbx_cli_entry no_debug_visdn_q921 =
 {
 	{ "no", "debug", "visdn", "q921", NULL },
 	do_no_debug_visdn_q921,
@@ -1070,7 +1070,7 @@ static char debug_visdn_q931_help[] =
 	"Usage: debug visdn q931 [interface]\n"
 	"	Traces q931 traffic\n";
 
-static struct cw_cli_entry debug_visdn_q931 =
+static struct opbx_cli_entry debug_visdn_q931 =
 {
 	{ "debug", "visdn", "q931", NULL },
 	do_debug_visdn_q931,
@@ -1079,7 +1079,7 @@ static struct cw_cli_entry debug_visdn_q931 =
 	NULL
 };
 
-static struct cw_cli_entry no_debug_visdn_q931 =
+static struct opbx_cli_entry no_debug_visdn_q931 =
 {
 	{ "no", "debug", "visdn", "q931", NULL },
 	do_no_debug_visdn_q931,
@@ -1092,7 +1092,7 @@ static char show_visdn_interfaces_help[] =
 	"Usage: visdn show interfaces\n"
 	"	Displays informations on vISDN interfaces\n";
 
-static struct cw_cli_entry show_visdn_interfaces =
+static struct opbx_cli_entry show_visdn_interfaces =
 {
 	{ "show", "visdn", "interfaces", NULL },
 	do_show_visdn_interfaces,
@@ -1105,7 +1105,7 @@ static char visdn_visdn_reload_help[] =
 	"Usage: visdn reload\n"
 	"	Reloads vISDN config\n";
 
-static struct cw_cli_entry visdn_reload =
+static struct opbx_cli_entry visdn_reload =
 {
 	{ "visdn", "reload", NULL },
 	do_visdn_reload,
@@ -1118,7 +1118,7 @@ static char visdn_show_visdn_channels_help[] =
 	"Usage: visdn show channels\n"
 	"	Displays informations on vISDN channels\n";
 
-static struct cw_cli_entry show_visdn_channels =
+static struct opbx_cli_entry show_visdn_channels =
 {
 	{ "show", "visdn", "channels", NULL },
 	do_show_visdn_channels,
@@ -1131,7 +1131,7 @@ static char show_visdn_calls_help[] =
 	"Usage: show visdn calls\n"
 	"	Lists vISDN calls\n";
 
-static struct cw_cli_entry show_visdn_calls =
+static struct opbx_cli_entry show_visdn_calls =
 {
 	{ "show", "visdn", "calls", NULL },
 	do_show_visdn_calls,
@@ -1142,17 +1142,17 @@ static struct cw_cli_entry show_visdn_calls =
 
 static int visdn_devicestate(void *data)
 {
-	int res = CW_DEVICE_INVALID;
+	int res = OPBX_DEVICE_INVALID;
 
 	// not sure what this should do xxx
-	res = CW_DEVICE_UNKNOWN;
+	res = OPBX_DEVICE_UNKNOWN;
 	return res;
 }
 
-static inline struct cw_channel *callpvt_to_cwchan(
+static inline struct opbx_channel *callpvt_to_opbxchan(
 	struct q931_call *call)
 {
-	return (struct cw_channel *)call->pvt;
+	return (struct opbx_channel *)call->pvt;
 }
 
 static enum q931_ie_called_party_number_type_of_number
@@ -1213,12 +1213,12 @@ void q931_send_primitive(
 	if (ies)
 		q931_ies_copy(&msg->ies, ies);
 
-	cw_mutex_lock(&visdn.ccb_q931_queue_lock);
+	opbx_mutex_lock(&visdn.ccb_q931_queue_lock);
 	list_add_tail(&msg->node, &visdn.ccb_q931_queue);
-	cw_mutex_unlock(&visdn.ccb_q931_queue_lock);
+	opbx_mutex_unlock(&visdn.ccb_q931_queue_lock);
 
 	if (write(visdn.ccb_q931_queue_pipe_write, " ", 1) < 0) {
-		cw_log(LOG_WARNING,
+		opbx_log(LOG_WARNING,
 			"Cannot write on ccb_q931_pipe_write\n");
 	}
 }
@@ -1245,23 +1245,23 @@ void visdn_queue_primitive(
 		q931_ies_copy(&msg->ies, ies);
 	}
 
-	cw_mutex_lock(&visdn.q931_ccb_queue_lock);
+	opbx_mutex_lock(&visdn.q931_ccb_queue_lock);
 	list_add_tail(&msg->node, &visdn.q931_ccb_queue);
-	cw_mutex_unlock(&visdn.q931_ccb_queue_lock);
+	opbx_mutex_unlock(&visdn.q931_ccb_queue_lock);
 
 	if (write(visdn.q931_ccb_queue_pipe_write, " ", 1) < 0) {
-		cw_log(LOG_WARNING,
+		opbx_log(LOG_WARNING,
 			"Cannot write on q931_ccb_pipe_write\n");
 	}
 }
 
 
 static int visdn_call(
-	struct cw_channel *cw_chan,
+	struct opbx_channel *opbx_chan,
 	char *orig_dest,
 	int timeout)
 {
-	struct visdn_chan *visdn_chan = cw_chan->tech_pvt;
+	struct visdn_chan *visdn_chan = opbx_chan->tech_pvt;
 	int err;
 	char dest[256];
 
@@ -1274,7 +1274,7 @@ static int visdn_call(
 
 	intf_name = strsep(&stringp, "/");
 	if (!intf_name) {
-		cw_log(LOG_WARNING,
+		opbx_log(LOG_WARNING,
 			"Invalid destination '%s' format (interface/number)\n",
 			dest);
 
@@ -1284,7 +1284,7 @@ static int visdn_call(
 
 	number = strsep(&stringp, "/");
 	if (!number) {
-		cw_log(LOG_WARNING,
+		opbx_log(LOG_WARNING,
 			"Invalid destination '%s' format (interface/number)\n",
 			dest);
 
@@ -1319,13 +1319,13 @@ static int visdn_call(
 	}
 
 	if (!found) {
-		cw_log(LOG_WARNING, "Interface %s not found\n", intf_name);
+		opbx_log(LOG_WARNING, "Interface %s not found\n", intf_name);
 		err = -1;
 		goto err_intf_not_found;
 	}
 
 	if (!intf->q931_intf) {
-		cw_log(LOG_WARNING, "Interface %s not present\n", intf_name);
+		opbx_log(LOG_WARNING, "Interface %s not present\n", intf_name);
 		err = -1;
 		goto err_intf_not_found;
 	}
@@ -1333,28 +1333,28 @@ static int visdn_call(
 	struct q931_call *q931_call;
 	q931_call = q931_call_alloc_out(intf->q931_intf);
 	if (!q931_call) {
-		cw_log(LOG_WARNING, "Cannot allocate outbound call\n");
+		opbx_log(LOG_WARNING, "Cannot allocate outbound call\n");
 		err = -1;
 		goto err_call_alloc;
 	}
 
-	if ((cw_chan->_state != CW_STATE_DOWN) &&
-	    (cw_chan->_state != CW_STATE_RESERVED)) {
-		cw_log(LOG_WARNING,
+	if ((opbx_chan->_state != OPBX_STATE_DOWN) &&
+	    (opbx_chan->_state != OPBX_STATE_RESERVED)) {
+		opbx_log(LOG_WARNING,
 			"visdn_call called on %s,"
 			" neither down nor reserved\n",
-			cw_chan->name);
+			opbx_chan->name);
 
 		err = -1;
 		goto err_channel_not_down;
 	}
 
 	if (option_debug)
-		cw_log(LOG_DEBUG,
+		opbx_log(LOG_DEBUG,
 			"Calling %s on %s\n",
-			dest, cw_chan->name);
+			dest, opbx_chan->name);
 
-	q931_call->pvt = cw_chan;
+	q931_call->pvt = opbx_chan;
 
 	visdn_chan->q931_call = q931_call_get(q931_call);
 
@@ -1364,9 +1364,9 @@ static int visdn_call(
 		q931_call->direction == Q931_CALL_DIRECTION_INBOUND ? 'I' : 'O',
 		q931_call->call_reference);
 
-	cw_change_name(cw_chan, newname);
+	opbx_change_name(opbx_chan, newname);
 
-	cw_setstate(cw_chan, CW_STATE_DIALING);
+	opbx_setstate(opbx_chan, OPBX_STATE_DIALING);
 
 	struct q931_ies ies = Q931_IES_INIT;
 
@@ -1397,7 +1397,7 @@ static int visdn_call(
 		q931_ies_add_put(&ies, &sc->ie);
 	}
 
-	if (cw_chan->cid.cid_num && strlen(cw_chan->cid.cid_num)) {
+	if (opbx_chan->cid.cid_num && strlen(opbx_chan->cid.cid_num)) {
 		struct q931_ie_calling_party_number *cgpn =
 			q931_ie_calling_party_number_alloc();
 
@@ -1410,7 +1410,7 @@ static int visdn_call(
 		cgpn->screening_indicator =
 			Q931_IE_CGPN_SI_USER_PROVIDED_VERIFIED_AND_PASSED;
 
-		strncpy(cgpn->number, cw_chan->cid.cid_num, sizeof(cgpn->number));
+		strncpy(cgpn->number, opbx_chan->cid.cid_num, sizeof(cgpn->number));
 
 		q931_ies_add_put(&ies, &cgpn->ie);
 	} 
@@ -1438,16 +1438,16 @@ err_invalid_destination:
 	return err;
 }
 
-static int visdn_answer(struct cw_channel *cw_chan)
+static int visdn_answer(struct opbx_channel *opbx_chan)
 {
-	struct visdn_chan *visdn_chan = cw_chan->tech_pvt;
+	struct visdn_chan *visdn_chan = opbx_chan->tech_pvt;
 
 	visdn_debug("visdn_answer\n");
 
-	cw_indicate(cw_chan, -1);
+	opbx_indicate(opbx_chan, -1);
 
 	if (!visdn_chan) {
-		cw_log(LOG_ERROR, "NO VISDN_CHAN!!\n");
+		opbx_log(LOG_ERROR, "NO VISDN_CHAN!!\n");
 		return -1;
 	}
 
@@ -1466,16 +1466,16 @@ static int visdn_answer(struct cw_channel *cw_chan)
 }
 
 static int visdn_bridge(
-	struct cw_channel *c0,
-	struct cw_channel *c1,
-	int flags, struct cw_frame **fo,
-	struct cw_channel **rc,
+	struct opbx_channel *c0,
+	struct opbx_channel *c1,
+	int flags, struct opbx_frame **fo,
+	struct opbx_channel **rc,
 	int timeout)
 {
 	return -2;
 
 	/* if need DTMF, cant native bridge (at least not yet...) */
-	if (flags & (CW_BRIDGE_DTMF_CHANNEL_0 | CW_BRIDGE_DTMF_CHANNEL_1))
+	if (flags & (OPBX_BRIDGE_DTMF_CHANNEL_0 | OPBX_BRIDGE_DTMF_CHANNEL_1))
 		return -2;
 
 	struct visdn_chan *visdn_chan1 = c0->tech_pvt;
@@ -1490,13 +1490,13 @@ static int visdn_bridge(
 
 	memset(dest1, 0, sizeof(dest1));
 	if (readlink(path, dest1, sizeof(dest1) - 1) < 0) {
-		cw_log(LOG_ERROR, "readlink(%s): %s\n", path, strerror(errno));
+		opbx_log(LOG_ERROR, "readlink(%s): %s\n", path, strerror(errno));
 		return -2;
 	}
 
 	char *chanid1 = strrchr(dest1, '/');
 	if (!chanid1 || !strlen(chanid1 + 1)) {
-		cw_log(LOG_ERROR,
+		opbx_log(LOG_ERROR,
 			"Invalid chanid found in symlink %s\n",
 			dest1);
 		return -2;
@@ -1511,13 +1511,13 @@ static int visdn_bridge(
 
 	memset(dest2, 0, sizeof(dest2));
 	if (readlink(path, dest2, sizeof(dest2) - 1) < 0) {
-		cw_log(LOG_ERROR, "readlink(%s): %s\n", path, strerror(errno));
+		opbx_log(LOG_ERROR, "readlink(%s): %s\n", path, strerror(errno));
 		return -2;
 	}
 
 	char *chanid2 = strrchr(dest2, '/');
 	if (!chanid2 || !strlen(chanid2 + 1)) {
-		cw_log(LOG_ERROR,
+		opbx_log(LOG_ERROR,
 			"Invalid chanid found in symlink %s\n",
 			dest2);
 		return -2;
@@ -1529,7 +1529,7 @@ static int visdn_bridge(
 
 	int fd = open("/sys/visdn_tdm/internal-cxc/connect", O_WRONLY);
 	if (fd < 0) {
-		cw_log(LOG_ERROR,
+		opbx_log(LOG_ERROR,
 			"Cannot open /sys/visdn_tdm/internal-cxc/connect: %s\n",
 			strerror(errno));
 		return -2;
@@ -1537,7 +1537,7 @@ static int visdn_bridge(
 
 	if (ioctl(visdn_chan1->channel_fd,
 			VISDN_IOC_DISCONNECT, NULL) < 0) {
-		cw_log(LOG_ERROR,
+		opbx_log(LOG_ERROR,
 			"ioctl(VISDN_IOC_DISCONNECT): %s\n",
 			strerror(errno));
 	}
@@ -1547,7 +1547,7 @@ static int visdn_bridge(
 
 	if (ioctl(visdn_chan2->channel_fd,
 			VISDN_IOC_DISCONNECT, NULL) < 0) {
-		cw_log(LOG_ERROR,
+		opbx_log(LOG_ERROR,
 			"ioctl(VISDN_IOC_DISCONNECT): %s\n",
 			strerror(errno));
 	}
@@ -1562,7 +1562,7 @@ static int visdn_bridge(
 		chanid2);
 
 	if (write(fd, command, strlen(command)) < 0) {
-		cw_log(LOG_ERROR,
+		opbx_log(LOG_ERROR,
 			"Cannot write to /sys/visdn_tdm/internal-cxc/connect: %s\n",
 			strerror(errno));
 
@@ -1573,27 +1573,27 @@ static int visdn_bridge(
 
 	close(fd);
 
-	struct cw_channel *cs[2];
+	struct opbx_channel *cs[2];
 	cs[0] = c0;
 	cs[1] = c1;
 
-	struct cw_channel *who = NULL;
+	struct opbx_channel *who = NULL;
 	for (;;) {
 		int to = -1;
-		who = cw_waitfor_n(cs, 2, &to);
+		who = opbx_waitfor_n(cs, 2, &to);
 		if (!who) {
-			cw_log(LOG_DEBUG, "Ooh, empty read...\n");
+			opbx_log(LOG_DEBUG, "Ooh, empty read...\n");
 			continue;
 		}
 
-		struct cw_frame *f;
-		f = cw_read(who);
+		struct opbx_frame *f;
+		f = opbx_read(who);
 		if (!f)
 			break;
 
-		if (f->frametype == CW_FRAME_DTMF) {
-			if (((who == c0) && (flags & CW_BRIDGE_DTMF_CHANNEL_0)) ||
-			    ((who == c1) && (flags & CW_BRIDGE_DTMF_CHANNEL_1))) {
+		if (f->frametype == OPBX_FRAME_DTMF) {
+			if (((who == c0) && (flags & OPBX_BRIDGE_DTMF_CHANNEL_0)) ||
+			    ((who == c1) && (flags & OPBX_BRIDGE_DTMF_CHANNEL_1))) {
 
 				*fo = f;
 				*rc = who;
@@ -1603,15 +1603,15 @@ static int visdn_bridge(
 			}
 
 			if (who == c0)
-				cw_write(c1, f);
+				opbx_write(c1, f);
 			else
-				cw_write(c0, f);
+				opbx_write(c0, f);
 		}
 
-		cw_fr_free(f);
+		opbx_frfree(f);
 
 		// Braindead anyone?
-		struct cw_channel *t;
+		struct opbx_channel *t;
 		t = cs[0];
 		cs[0] = cs[1];
 		cs[1] = t;
@@ -1624,69 +1624,69 @@ static int visdn_bridge(
 	return 0;
 }
 
-struct cw_frame *visdn_exception(struct cw_channel *cw_chan)
+struct opbx_frame *visdn_exception(struct opbx_channel *opbx_chan)
 {
-	cw_log(LOG_WARNING, "visdn_exception\n");
+	opbx_log(LOG_WARNING, "visdn_exception\n");
 
 	return NULL;
 }
 
 /* We are called with chan->lock'ed */
-static int visdn_indicate(struct cw_channel *cw_chan, int condition)
+static int visdn_indicate(struct opbx_channel *opbx_chan, int condition)
 {
-	struct visdn_chan *visdn_chan = cw_chan->tech_pvt;
+	struct visdn_chan *visdn_chan = opbx_chan->tech_pvt;
 
 	if (!visdn_chan) {
-		cw_log(LOG_ERROR, "NO VISDN_CHAN!!\n");
+		opbx_log(LOG_ERROR, "NO VISDN_CHAN!!\n");
 		return 1;
 	}
 
 	visdn_debug("visdn_indicate %d\n", condition);
 
 	switch(condition) {
-	case CW_CONTROL_RING:
-	case CW_CONTROL_TAKEOFFHOOK:
-	case CW_CONTROL_FLASH:
-	case CW_CONTROL_WINK:
-	case CW_CONTROL_OPTION:
-	case CW_CONTROL_RADIO_KEY:
-	case CW_CONTROL_RADIO_UNKEY:
+	case OPBX_CONTROL_RING:
+	case OPBX_CONTROL_TAKEOFFHOOK:
+	case OPBX_CONTROL_FLASH:
+	case OPBX_CONTROL_WINK:
+	case OPBX_CONTROL_OPTION:
+	case OPBX_CONTROL_RADIO_KEY:
+	case OPBX_CONTROL_RADIO_UNKEY:
 		return 1;
 	break;
 
 	case -1:
-		cw_playtones_stop(cw_chan);
+		opbx_playtones_stop(opbx_chan);
 
 		return 0;
 	break;
 
-	case CW_CONTROL_OFFHOOK: {
+	case OPBX_CONTROL_OFFHOOK: {
 		const struct tone_zone_sound *tone;
-		tone = cw_get_indication_tone(cw_chan->zone, "dial");
+		tone = opbx_get_indication_tone(opbx_chan->zone, "dial");
 		if (tone)
-			cw_playtones_start(cw_chan, 0, tone->data, 1);
+			opbx_playtones_start(opbx_chan, 0, tone->data, 1);
 
 		return 0;
 	}
 	break;
 
-	case CW_CONTROL_HANGUP: {
+	case OPBX_CONTROL_HANGUP: {
 		const struct tone_zone_sound *tone;
-		tone = cw_get_indication_tone(cw_chan->zone, "congestion");
+		tone = opbx_get_indication_tone(opbx_chan->zone, "congestion");
 		if (tone)
-			cw_playtones_start(cw_chan, 0, tone->data, 1);
+			opbx_playtones_start(opbx_chan, 0, tone->data, 1);
 
 		return 0;
 	}
 	break;
 
-	case CW_CONTROL_RINGING: {
+	case OPBX_CONTROL_RINGING: {
 		struct q931_ies ies = Q931_IES_INIT;
 
 		struct q931_ie_progress_indicator *pi = NULL;
 
-		if (cw_chan->_bridge &&
-		   strcmp(cw_chan->_bridge->type, VISDN_CHAN_TYPE)) {
+		if (opbx_chan->_bridge &&
+		   strcmp(opbx_chan->_bridge->type, VISDN_CHAN_TYPE)) {
 
 			visdn_debug("Channel is not VISDN, sending"
 					" progress indicator\n");
@@ -1715,21 +1715,21 @@ static int visdn_indicate(struct cw_channel *cw_chan, int condition)
 			Q931_CCB_ALERTING_REQUEST, &ies);
 
 		const struct tone_zone_sound *tone;
-		tone = cw_get_indication_tone(cw_chan->zone, "ring");
+		tone = opbx_get_indication_tone(opbx_chan->zone, "ring");
 		if (tone)
-			cw_playtones_start(cw_chan, 0, tone->data, 1);
+			opbx_playtones_start(opbx_chan, 0, tone->data, 1);
 
 		return 0;
 	}
 	break;
 
-	case CW_CONTROL_ANSWER:
-		cw_playtones_stop(cw_chan);
+	case OPBX_CONTROL_ANSWER:
+		opbx_playtones_stop(opbx_chan);
 
 		return 0;
 	break;
 
-	case CW_CONTROL_BUSY: {
+	case OPBX_CONTROL_BUSY: {
 		struct q931_ies ies = Q931_IES_INIT;
 
 		struct q931_ie_cause *cause = q931_ie_cause_alloc();
@@ -1742,15 +1742,15 @@ static int visdn_indicate(struct cw_channel *cw_chan, int condition)
 		q931_send_primitive(visdn_chan->q931_call, Q931_CCB_DISCONNECT_REQUEST, &ies);
 
 		const struct tone_zone_sound *tone;
-		tone = cw_get_indication_tone(cw_chan->zone, "busy");
+		tone = opbx_get_indication_tone(opbx_chan->zone, "busy");
 		if (tone)
-			cw_playtones_start(cw_chan, 0, tone->data, 1);
+			opbx_playtones_start(opbx_chan, 0, tone->data, 1);
 
 		return 0;
 	}
 	break;
 
-	case CW_CONTROL_CONGESTION: {
+	case OPBX_CONTROL_CONGESTION: {
 		struct q931_ies ies = Q931_IES_INIT;
 
 		struct q931_ie_cause *cause = q931_ie_cause_alloc();
@@ -1763,15 +1763,15 @@ static int visdn_indicate(struct cw_channel *cw_chan, int condition)
 		q931_send_primitive(visdn_chan->q931_call, Q931_CCB_DISCONNECT_REQUEST, &ies);
 
 		const struct tone_zone_sound *tone;
-		tone = cw_get_indication_tone(cw_chan->zone, "busy");
+		tone = opbx_get_indication_tone(opbx_chan->zone, "busy");
 		if (tone)
-			cw_playtones_start(cw_chan, 0, tone->data, 1);
+			opbx_playtones_start(opbx_chan, 0, tone->data, 1);
 
 		return 0;
 	}
 	break;
 
-	case CW_CONTROL_PROGRESS: {
+	case OPBX_CONTROL_PROGRESS: {
 		struct q931_ies ies = Q931_IES_INIT;
 
 		struct q931_ie_progress_indicator *pi =
@@ -1780,8 +1780,8 @@ static int visdn_indicate(struct cw_channel *cw_chan, int condition)
 		pi->location = q931_ie_progress_indicator_location(
 					visdn_chan->q931_call);
 
-		if (cw_chan->_bridge &&
-		   strcmp(cw_chan->_bridge->type, VISDN_CHAN_TYPE)) {
+		if (opbx_chan->_bridge &&
+		   strcmp(opbx_chan->_bridge->type, VISDN_CHAN_TYPE)) {
 			pi->progress_description =
 				Q931_IE_PI_PD_CALL_NOT_END_TO_END; // FIXME
 		} else if (visdn_chan->is_voice) {
@@ -1797,7 +1797,7 @@ static int visdn_indicate(struct cw_channel *cw_chan, int condition)
 	}
 	break;
 
-	case CW_CONTROL_PROCEEDING:
+	case OPBX_CONTROL_PROCEEDING:
 		q931_send_primitive(visdn_chan->q931_call, Q931_CCB_PROCEEDING_REQUEST, NULL);
 
 		return 0;
@@ -1808,47 +1808,47 @@ static int visdn_indicate(struct cw_channel *cw_chan, int condition)
 }
 
 static int visdn_fixup(
-	struct cw_channel *oldchan,
-	struct cw_channel *newchan)
+	struct opbx_channel *oldchan,
+	struct opbx_channel *newchan)
 {
 	struct visdn_chan *chan = newchan->tech_pvt;
 
-	if (chan->cw_chan != oldchan) {
-		cw_log(LOG_WARNING, "old channel wasn't %p but was %p\n",
-				oldchan, chan->cw_chan);
+	if (chan->opbx_chan != oldchan) {
+		opbx_log(LOG_WARNING, "old channel wasn't %p but was %p\n",
+				oldchan, chan->opbx_chan);
 		return -1;
 	}
 
-	chan->cw_chan = newchan;
+	chan->opbx_chan = newchan;
 
 	return 0;
 }
 
 static int visdn_setoption(
-	struct cw_channel *cw_chan,
+	struct opbx_channel *opbx_chan,
 	int option,
 	void *data,
 	int datalen)
 {
-	cw_log(LOG_ERROR, "%s\n", __FUNCTION__);
+	opbx_log(LOG_ERROR, "%s\n", __FUNCTION__);
 
 	return -1;
 }
 
 static int visdn_transfer(
-	struct cw_channel *cw_chan,
+	struct opbx_channel *opbx_chan,
 	const char *dest)
 {
-	cw_log(LOG_ERROR, "%s\n", __FUNCTION__);
+	opbx_log(LOG_ERROR, "%s\n", __FUNCTION__);
 
 	return -1;
 }
 
-static int visdn_send_digit(struct cw_channel *cw_chan, char digit)
+static int visdn_send_digit(struct opbx_channel *opbx_chan, char digit)
 {
-	cw_log(LOG_NOTICE, "%s %c\n", __FUNCTION__, digit);
+	opbx_log(LOG_NOTICE, "%s %c\n", __FUNCTION__, digit);
 
-	struct visdn_chan *visdn_chan = cw_chan->tech_pvt;
+	struct visdn_chan *visdn_chan = opbx_chan->tech_pvt;
 	struct q931_call *q931_call = visdn_chan->q931_call;
 	struct visdn_interface *intf = q931_call->intf->pvt;
 
@@ -1878,9 +1878,9 @@ static int visdn_send_digit(struct cw_channel *cw_chan, char digit)
 	return 1;
 }
 
-static int visdn_sendtext(struct cw_channel *cw_chan, const char *text)
+static int visdn_sendtext(struct opbx_channel *opbx_chan, const char *text)
 {
-	cw_log(LOG_WARNING, "%s\n", __FUNCTION__);
+	opbx_log(LOG_WARNING, "%s\n", __FUNCTION__);
 
 	return -1;
 }
@@ -1905,14 +1905,14 @@ static struct visdn_chan *visdn_alloc()
 	return visdn_chan;
 }
 
-static int visdn_hangup(struct cw_channel *cw_chan)
+static int visdn_hangup(struct opbx_channel *opbx_chan)
 {
-	visdn_debug("visdn_hangup %s\n", cw_chan->name);
+	visdn_debug("visdn_hangup %s\n", opbx_chan->name);
 
-	struct visdn_chan *visdn_chan = cw_chan->tech_pvt;
+	struct visdn_chan *visdn_chan = opbx_chan->tech_pvt;
 	struct q931_call *q931_call = visdn_chan->q931_call;
 
-	cw_mutex_lock(&visdn.lock);
+	opbx_mutex_lock(&visdn.lock);
 	if (q931_call) {
 		q931_call->pvt = NULL;
 
@@ -1949,9 +1949,9 @@ static int visdn_hangup(struct cw_channel *cw_chan)
 		q931_call_put(q931_call);
 	}
 
-	cw_mutex_unlock(&visdn.lock);
+	opbx_mutex_unlock(&visdn.lock);
 
-	cw_mutex_lock(&cw_chan->lock);
+	opbx_mutex_lock(&opbx_chan->lock);
 
 	visdn_chan->q931_call = NULL;
 
@@ -1964,7 +1964,7 @@ static int visdn_hangup(struct cw_channel *cw_chan)
 		visdn_chan->suspended_call = NULL;
 	}
 
-	close(cw_chan->fds[0]);
+	close(opbx_chan->fds[0]);
 
 	if (visdn_chan) {
 		if (visdn_chan->channel_fd >= 0) {
@@ -1972,13 +1972,13 @@ static int visdn_hangup(struct cw_channel *cw_chan)
 			// libq931 (see above)
 			if (ioctl(visdn_chan->channel_fd,
 					VISDN_IOC_DISCONNECT, NULL) < 0) {
-				cw_log(LOG_ERROR,
+				opbx_log(LOG_ERROR,
 					"ioctl(VISDN_IOC_DISCONNECT): %s\n",
 					strerror(errno));
 			}
 
 			if (close(visdn_chan->channel_fd) < 0) {
-				cw_log(LOG_ERROR,
+				opbx_log(LOG_ERROR,
 					"close(visdn_chan->channel_fd): %s\n",
 					strerror(errno));
 			}
@@ -1988,40 +1988,45 @@ static int visdn_hangup(struct cw_channel *cw_chan)
 
 		visdn_destroy(visdn_chan);
 
-		cw_chan->tech_pvt = NULL;
+		opbx_chan->tech_pvt = NULL;
 	}
 
-	cw_setstate(cw_chan, CW_STATE_DOWN);
+	opbx_setstate(opbx_chan, OPBX_STATE_DOWN);
 
-	cw_mutex_unlock(&cw_chan->lock);
+	opbx_mutex_unlock(&opbx_chan->lock);
 
 	visdn_debug("visdn_hangup complete\n");
 
 	return 0;
 }
 
-static struct cw_frame *visdn_read(struct cw_channel *cw_chan)
+static struct opbx_frame *visdn_read(struct opbx_channel *opbx_chan)
 {
-	struct visdn_chan *visdn_chan = cw_chan->tech_pvt;
-	static struct cw_frame f;
+	struct visdn_chan *visdn_chan = opbx_chan->tech_pvt;
+	static struct opbx_frame f;
 	char buf[512];
 
-	read(cw_chan->fds[0], buf, 1);
+	read(opbx_chan->fds[0], buf, 1);
 
 	f.src = VISDN_CHAN_TYPE;
 	f.mallocd = 0;
 	f.delivery.tv_sec = 0;
 	f.delivery.tv_usec = 0;
 
-	if (visdn_chan->channel_fd < 0)
-    {
-        cw_fr_init(&f);
+	if (visdn_chan->channel_fd < 0) {
+		f.frametype = OPBX_FRAME_NULL;
+		f.subclass = 0;
+		f.samples = 0;
+		f.datalen = 0;
+		f.data = NULL;
+		f.offset = 0;
+
 		return &f;
 	}
 
 	int nread = read(visdn_chan->channel_fd, buf, sizeof(buf));
 	if (nread < 0) {
-		cw_log(LOG_WARNING, "read error: %s\n", strerror(errno));
+		opbx_log(LOG_WARNING, "read error: %s\n", strerror(errno));
 		return &f;
 	}
 
@@ -2029,46 +2034,50 @@ static struct cw_frame *visdn_read(struct cw_channel *cw_chan)
 struct timeval tv;
 gettimeofday(&tv, NULL);
 unsigned long long t = tv.tv_sec * 1000000ULL + tv.tv_usec;
-cw_verbose(VERBOSE_PREFIX_3 "R %.3f %d\n",
+opbx_verbose(VERBOSE_PREFIX_3 "R %.3f %d\n",
 	t/1000000.0,
 	visdn_chan->channel_fd);
 #endif
 
-    cw_fr_init_ex(&f, CW_FRAME_VOICE, CW_FORMAT_ALAW, "");
+	f.frametype = OPBX_FRAME_VOICE;
+	f.subclass = OPBX_FORMAT_ALAW;
 	f.samples = nread;
 	f.datalen = nread;
 	f.data = buf;
+	f.offset = 0;
+
 	return &f;
 }
 
-static int visdn_write(struct cw_channel *cw_chan,
-                       struct cw_frame *frame)
+static int visdn_write(
+	struct opbx_channel *opbx_chan,
+	struct opbx_frame *frame)
 {
-	struct visdn_chan *visdn_chan = cw_chan->tech_pvt;
+	struct visdn_chan *visdn_chan = opbx_chan->tech_pvt;
 
-	if (frame->frametype != CW_FRAME_VOICE) {
-		cw_log(LOG_WARNING,
+	if (frame->frametype != OPBX_FRAME_VOICE) {
+		opbx_log(LOG_WARNING,
 			"Don't know what to do with frame type '%d'\n",
 			frame->frametype);
 
 		return 0;
 	}
 
-	if (frame->subclass != CW_FORMAT_ALAW) {
-		cw_log(LOG_WARNING,
+	if (frame->subclass != OPBX_FORMAT_ALAW) {
+		opbx_log(LOG_WARNING,
 			"Cannot handle frames in %d format\n",
 			frame->subclass);
 		return 0;
 	}
 
 	if (visdn_chan->channel_fd < 0) {
-//		cw_log(LOG_WARNING,
+//		opbx_log(LOG_WARNING,
 //			"Attempting to write on unconnected channel\n");
 		return 0;
 	}
 
 #if 0
-cw_verbose(VERBOSE_PREFIX_3 "W %d %02x%02x%02x%02x%02x%02x%02x%02x %d\n", visdn_chan->channel_fd,
+opbx_verbose(VERBOSE_PREFIX_3 "W %d %02x%02x%02x%02x%02x%02x%02x%02x %d\n", visdn_chan->channel_fd,
 	*(__u8 *)(frame->data + 0),
 	*(__u8 *)(frame->data + 1),
 	*(__u8 *)(frame->data + 2),
@@ -2085,51 +2094,51 @@ cw_verbose(VERBOSE_PREFIX_3 "W %d %02x%02x%02x%02x%02x%02x%02x%02x %d\n", visdn_
 	return 0;
 }
 
-static struct cw_channel *visdn_new(
+static struct opbx_channel *visdn_new(
 	struct visdn_chan *visdn_chan,
 	int state)
 {
-	struct cw_channel *cw_chan;
-	cw_chan = cw_channel_alloc(1);
-	if (!cw_chan) {
-		cw_log(LOG_WARNING, "Unable to allocate channel\n");
+	struct opbx_channel *opbx_chan;
+	opbx_chan = opbx_channel_alloc(1);
+	if (!opbx_chan) {
+		opbx_log(LOG_WARNING, "Unable to allocate channel\n");
 		return NULL;
 	}
 
-	cw_chan->tech = &visdn_tech;
-	// cw_chan->type = VISDN_CHAN_TYPE;
+	opbx_chan->tech = &visdn_tech;
+	// opbx_chan->type = VISDN_CHAN_TYPE;
 
-	cw_chan->fds[0] = open("/dev/visdn/timer", O_RDONLY);
-	if (cw_chan->fds[0] < 0) {
-		cw_log(LOG_ERROR, "Unable to open timer: %s\n",
+	opbx_chan->fds[0] = open("/dev/visdn/timer", O_RDONLY);
+	if (opbx_chan->fds[0] < 0) {
+		opbx_log(LOG_ERROR, "Unable to open timer: %s\n",
 			strerror(errno));
 		return NULL;
 	}
 
-	if (state == CW_STATE_RING)
-		cw_chan->rings = 1;
+	if (state == OPBX_STATE_RING)
+		opbx_chan->rings = 1;
 
-	cw_chan->adsicpe = CW_ADSI_UNAVAILABLE;
+	opbx_chan->adsicpe = OPBX_ADSI_UNAVAILABLE;
 
-	cw_chan->nativeformats = CW_FORMAT_ALAW;
-	cw_chan->rawreadformat = CW_FORMAT_ALAW;  // FIXME
-	cw_chan->readformat = CW_FORMAT_ALAW;
-	cw_chan->rawwriteformat = CW_FORMAT_ALAW;  // FIXME
-	cw_chan->writeformat = CW_FORMAT_ALAW;
-	// cw_chan->oldwriteformat = CW_FORMAT_ALAW;
+	opbx_chan->nativeformats = OPBX_FORMAT_ALAW;
+	opbx_chan->rawreadformat = OPBX_FORMAT_ALAW;  // FIXME
+	opbx_chan->readformat = OPBX_FORMAT_ALAW;
+	opbx_chan->rawwriteformat = OPBX_FORMAT_ALAW;  // FIXME
+	opbx_chan->writeformat = OPBX_FORMAT_ALAW;
+	// opbx_chan->oldwriteformat = OPBX_FORMAT_ALAW;
 
-//	cw_chan->language[0] = '\0';
-//	cw_set_flag(cw_chan, AST_FLAG_DIGITAL);
+//	opbx_chan->language[0] = '\0';
+//	opbx_set_flag(opbx_chan, AST_FLAG_DIGITAL);
 
-	visdn_chan->cw_chan = cw_chan;
-	cw_chan->tech_pvt = visdn_chan;
+	visdn_chan->opbx_chan = opbx_chan;
+	opbx_chan->tech_pvt = visdn_chan;
 
-	cw_setstate(cw_chan, state);
+	opbx_setstate(opbx_chan, state);
 
-	return cw_chan;
+	return opbx_chan;
 }
 
-static struct cw_channel *visdn_request(
+static struct opbx_channel *visdn_request(
 		const char *type, 
 		int format, 
 		void *data,
@@ -2138,37 +2147,37 @@ static struct cw_channel *visdn_request(
 	struct visdn_chan *visdn_chan;
 	char *dest = NULL;
 
-	if (!(format & CW_FORMAT_ALAW)) {
-		cw_log(LOG_NOTICE,
+	if (!(format & OPBX_FORMAT_ALAW)) {
+		opbx_log(LOG_NOTICE,
 			"Asked to get a channel of unsupported format '%d'\n",
 			format);
 		return NULL;
 	}
 
 	if (data) {
-		dest = cw_strdupa((char *)data);
+		dest = opbx_strdupa((char *)data);
 	} else {
-		cw_log(LOG_WARNING, "Channel requested with no data\n");
+		opbx_log(LOG_WARNING, "Channel requested with no data\n");
 		return NULL;
 	}
 
 	visdn_chan = visdn_alloc();
 	if (!visdn_chan) {
-		cw_log(LOG_ERROR, "Cannot allocate visdn_chan\n");
+		opbx_log(LOG_ERROR, "Cannot allocate visdn_chan\n");
 		return NULL;
 	}
 
-	struct cw_channel *cw_chan;
-	cw_chan = visdn_new(visdn_chan, CW_STATE_DOWN);
+	struct opbx_channel *opbx_chan;
+	opbx_chan = visdn_new(visdn_chan, OPBX_STATE_DOWN);
 
-	snprintf(cw_chan->name, sizeof(cw_chan->name), "VISDN/null");
+	snprintf(opbx_chan->name, sizeof(opbx_chan->name), "VISDN/null");
 
-	cw_mutex_lock(&usecnt_lock);
+	opbx_mutex_lock(&usecnt_lock);
 	visdn.usecnt++;
-	cw_mutex_unlock(&usecnt_lock);
-	cw_update_use_count();
+	opbx_mutex_unlock(&usecnt_lock);
+	opbx_update_use_count();
 
-	return cw_chan;
+	return opbx_chan;
 }
 
 // Must be called with visdn.lock acquired
@@ -2257,7 +2266,7 @@ static int visdn_open_interface(
 
 	intf->q931_intf = q931_open_interface(visdn.libq931, intf->name, 0);
 	if (!intf->q931_intf) {
-		cw_log(LOG_WARNING,
+		opbx_log(LOG_WARNING,
 			"Cannot open interface %s, skipping\n",
 			intf->name);
 
@@ -2290,7 +2299,7 @@ static int visdn_open_interface(
 
 	if (intf->q931_intf->role == LAPD_ROLE_NT) {
 		if (listen(intf->q931_intf->master_socket, 100) < 0) {
-			cw_log(LOG_ERROR,
+			opbx_log(LOG_ERROR,
 				"cannot listen on master socket: %s\n",
 				strerror(errno));
 
@@ -2385,7 +2394,7 @@ static void visdn_netlink_receive()
 	skmsg.msg_flags = 0;
 
 	if(recvmsg(visdn.netlink_socket, &skmsg, 0) < 0) {
-		cw_log(LOG_WARNING, "recvmsg: %s\n", strerror(errno));
+		opbx_log(LOG_WARNING, "recvmsg: %s\n", strerror(errno));
 		return;
 	}
 
@@ -2433,12 +2442,12 @@ static void visdn_ccb_q931_receive()
 	struct q931_ccb_message *msg;
 
 	while(1) {
-		cw_mutex_lock(&visdn.ccb_q931_queue_lock);
+		opbx_mutex_lock(&visdn.ccb_q931_queue_lock);
 
 		msg = list_entry(visdn.ccb_q931_queue.next,
 				struct q931_ccb_message, node);
 		if (&msg->node == &visdn.ccb_q931_queue) {
-			cw_mutex_unlock(&visdn.ccb_q931_queue_lock);
+			opbx_mutex_unlock(&visdn.ccb_q931_queue_lock);
 			break;
 		}
 
@@ -2448,7 +2457,7 @@ static void visdn_ccb_q931_receive()
 		q931_ccb_dispatch(msg);
 		list_del_init(&msg->node);
 
-		cw_mutex_unlock(&visdn.ccb_q931_queue_lock);
+		opbx_mutex_unlock(&visdn.ccb_q931_queue_lock);
 	}
 }
 
@@ -2476,11 +2485,11 @@ static int visdn_q931_thread_do_poll()
 		if (errno == EINTR)
 			return TRUE;
 
-		cw_log(LOG_WARNING, "poll error: %s\n", strerror(errno));
+		opbx_log(LOG_WARNING, "poll error: %s\n", strerror(errno));
 		exit(1);
 	}
 
-	cw_mutex_lock(&visdn.lock);
+	opbx_mutex_lock(&visdn.lock);
 	if (time(NULL) > visdn.open_pending_nextcheck) {
 
 		struct visdn_interface *intf;
@@ -2498,7 +2507,7 @@ static int visdn_q931_thread_do_poll()
 
 		refresh_polls_list();
 	}
-	cw_mutex_unlock(&visdn.lock);
+	opbx_mutex_unlock(&visdn.lock);
 
 	int i;
 	for(i = 0; i < visdn.npolls; i++) {
@@ -2525,11 +2534,11 @@ static int visdn_q931_thread_do_poll()
 			if (visdn.polls[i].revents &
 					(POLLIN | POLLPRI | POLLERR |
 					 POLLHUP | POLLNVAL)) {
-				cw_mutex_lock(&visdn.lock);
+				opbx_mutex_lock(&visdn.lock);
 				visdn_accept(
 					visdn.poll_infos[i].interface,
 					visdn.polls[i].fd);
-				cw_mutex_unlock(&visdn.lock);
+				opbx_mutex_unlock(&visdn.lock);
 				break; // polls list may have been changed
 			}
 		} else if (visdn.poll_infos[i].type == POLL_INFO_TYPE_DLC) {
@@ -2538,21 +2547,21 @@ static int visdn_q931_thread_do_poll()
 					 POLLHUP | POLLNVAL)) {
 
 				int err;
-				cw_mutex_lock(&visdn.lock);
+				opbx_mutex_lock(&visdn.lock);
 				err = q931_receive(visdn.poll_infos[i].dlc);
 
 				if (err == Q931_RECEIVE_REFRESH) {
 					refresh_polls_list();
-					cw_mutex_unlock(&visdn.lock);
+					opbx_mutex_unlock(&visdn.lock);
 
 					break;
 				}
-				cw_mutex_unlock(&visdn.lock);
+				opbx_mutex_unlock(&visdn.lock);
 			}
 		}
 	}
 
-	cw_mutex_lock(&visdn.lock);
+	opbx_mutex_lock(&visdn.lock);
 	int active_calls_cnt = 0;
 	if (visdn.have_to_exit) {
 		active_calls_cnt = 0;
@@ -2568,11 +2577,11 @@ static int visdn_q931_thread_do_poll()
 			}
 		}
 
-		cw_log(LOG_WARNING,
+		opbx_log(LOG_WARNING,
 			"There are still %d active calls, waiting...\n",
 			active_calls_cnt);
 	}
-	cw_mutex_unlock(&visdn.lock);
+	opbx_mutex_unlock(&visdn.lock);
 
 	return (!visdn.have_to_exit || active_calls_cnt > 0);
 }
@@ -2580,14 +2589,14 @@ static int visdn_q931_thread_do_poll()
 
 static void *visdn_q931_thread_main(void *data)
 {
-	cw_mutex_lock(&visdn.lock);
+	opbx_mutex_lock(&visdn.lock);
 
 	visdn.npolls = 0;
 	refresh_polls_list();
 
 	visdn.have_to_exit = 0;
 
-	cw_mutex_unlock(&visdn.lock);
+	opbx_mutex_unlock(&visdn.lock);
 
 	while(visdn_q931_thread_do_poll());
 
@@ -2597,7 +2606,7 @@ static void *visdn_q931_thread_main(void *data)
 #ifdef DEBUG_CODE
 #define FUNC_DEBUG()					\
 	if (visdn.debug)				\
-		cw_verbose(VERBOSE_PREFIX_3		\
+		opbx_verbose(VERBOSE_PREFIX_3		\
 			"%s\n", __FUNCTION__);
 #else
 #define FUNC_DEBUG() do {} while(0)
@@ -2609,13 +2618,13 @@ static void visdn_q931_alerting_indication(
 {
 	FUNC_DEBUG();
 
-	struct cw_channel *cw_chan = callpvt_to_cwchan(q931_call);
+	struct opbx_channel *opbx_chan = callpvt_to_opbxchan(q931_call);
 
-	if (!cw_chan)
+	if (!opbx_chan)
 		return;
 
-	cw_queue_control(cw_chan, CW_CONTROL_RINGING);
-	cw_setstate(cw_chan, CW_STATE_RINGING);
+	opbx_queue_control(opbx_chan, OPBX_CONTROL_RINGING);
+	opbx_setstate(opbx_chan, OPBX_STATE_RINGING);
 }
 
 static void visdn_q931_connect_indication(
@@ -2626,12 +2635,12 @@ static void visdn_q931_connect_indication(
 
 	q931_send_primitive(q931_call, Q931_CCB_SETUP_COMPLETE_REQUEST, NULL);
 
-	struct cw_channel *cw_chan = callpvt_to_cwchan(q931_call);
+	struct opbx_channel *opbx_chan = callpvt_to_opbxchan(q931_call);
 
-	if (!cw_chan)
+	if (!opbx_chan)
 		return;
 
-	cw_queue_control(cw_chan, CW_CONTROL_ANSWER);
+	opbx_queue_control(opbx_chan, OPBX_CONTROL_ANSWER);
 }
 
 static void visdn_q931_disconnect_indication(
@@ -2656,16 +2665,16 @@ static void visdn_q931_info_indication(
 {
 	FUNC_DEBUG();
 
-	struct cw_channel *cw_chan = callpvt_to_cwchan(q931_call);
+	struct opbx_channel *opbx_chan = callpvt_to_opbxchan(q931_call);
 
-	if (!cw_chan)
+	if (!opbx_chan)
 		return;
 
-	struct visdn_chan *visdn_chan = cw_chan->tech_pvt;
+	struct visdn_chan *visdn_chan = opbx_chan->tech_pvt;
 
 	if (q931_call->state != U2_OVERLAP_SENDING &&
 	    q931_call->state != N2_OVERLAP_SENDING) {
-		cw_log(LOG_WARNING, "Received info not in overlap sending\n");
+		opbx_log(LOG_WARNING, "Received info not in overlap sending\n");
 		return;
 	}
 
@@ -2686,9 +2695,9 @@ static void visdn_q931_info_indication(
 		return;
 
 	for(i=0; cdpn->number[i]; i++) {
-		struct cw_frame f =
-			{ CW_FRAME_DTMF, cdpn->number[i] };
-		cw_queue_frame(cw_chan, &f);
+		struct opbx_frame f =
+			{ OPBX_FRAME_DTMF, cdpn->number[i] };
+		opbx_queue_frame(opbx_chan, &f);
 	}
 }
 
@@ -2698,14 +2707,14 @@ static void visdn_q931_more_info_indication(
 {
 	FUNC_DEBUG();
 
-	struct cw_channel *cw_chan = callpvt_to_cwchan(q931_call);
+	struct opbx_channel *opbx_chan = callpvt_to_opbxchan(q931_call);
 
-	if (!cw_chan)
+	if (!opbx_chan)
 		return;
 
-	cw_mutex_lock(&cw_chan->lock);
+	opbx_mutex_lock(&opbx_chan->lock);
 
-	struct visdn_chan *visdn_chan = cw_chan->tech_pvt;
+	struct visdn_chan *visdn_chan = opbx_chan->tech_pvt;
 	struct visdn_interface *intf = q931_call->intf->pvt;
 
 	visdn_chan->may_send_digits = TRUE;
@@ -2730,7 +2739,7 @@ static void visdn_q931_more_info_indication(
 			Q931_CCB_INFO_REQUEST, &ies);
 	}
 
-	cw_mutex_unlock(&cw_chan->lock);
+	opbx_mutex_unlock(&opbx_chan->lock);
 }
 
 static void visdn_q931_notify_indication(
@@ -2746,17 +2755,17 @@ static void visdn_q931_proceeding_indication(
 {
 	FUNC_DEBUG();
 
-	struct cw_channel *cw_chan = callpvt_to_cwchan(q931_call);
+	struct opbx_channel *opbx_chan = callpvt_to_opbxchan(q931_call);
 
-	if (!cw_chan)
+	if (!opbx_chan)
 		return;
 
-	cw_mutex_lock(&cw_chan->lock);
-	struct visdn_chan *visdn_chan = cw_chan->tech_pvt;
+	opbx_mutex_lock(&opbx_chan->lock);
+	struct visdn_chan *visdn_chan = opbx_chan->tech_pvt;
 	visdn_chan->may_send_digits = TRUE;
-	cw_mutex_unlock(&cw_chan->lock);
+	opbx_mutex_unlock(&opbx_chan->lock);
 
-	cw_queue_control(cw_chan, CW_CONTROL_PROCEEDING);
+	opbx_queue_control(opbx_chan, OPBX_CONTROL_PROCEEDING);
 }
 
 static void visdn_q931_progress_indication(
@@ -2765,12 +2774,12 @@ static void visdn_q931_progress_indication(
 {
 	FUNC_DEBUG();
 
-	struct cw_channel *cw_chan = callpvt_to_cwchan(q931_call);
+	struct opbx_channel *opbx_chan = callpvt_to_opbxchan(q931_call);
 
-	if (!cw_chan)
+	if (!opbx_chan)
 		return;
 
-	cw_queue_control(cw_chan, CW_CONTROL_PROGRESS);
+	opbx_queue_control(opbx_chan, OPBX_CONTROL_PROGRESS);
 }
 
 static void visdn_q931_reject_indication(
@@ -2779,12 +2788,12 @@ static void visdn_q931_reject_indication(
 {
 	FUNC_DEBUG();
 
-	struct cw_channel *cw_chan = callpvt_to_cwchan(q931_call);
+	struct opbx_channel *opbx_chan = callpvt_to_opbxchan(q931_call);
 
-	if (!cw_chan)
+	if (!opbx_chan)
 		return;
 
-	cw_softhangup(cw_chan, CW_SOFTHANGUP_DEV);
+	opbx_softhangup(opbx_chan, OPBX_SOFTHANGUP_DEV);
 }
 
 static void visdn_q931_release_confirm(
@@ -2794,12 +2803,12 @@ static void visdn_q931_release_confirm(
 {
 	FUNC_DEBUG();
 
-	struct cw_channel *cw_chan = callpvt_to_cwchan(q931_call);
+	struct opbx_channel *opbx_chan = callpvt_to_opbxchan(q931_call);
 
-	if (!cw_chan)
+	if (!opbx_chan)
 		return;
 
-	cw_softhangup(cw_chan, CW_SOFTHANGUP_DEV);
+	opbx_softhangup(opbx_chan, OPBX_SOFTHANGUP_DEV);
 }
 
 static void visdn_q931_release_indication(
@@ -2808,12 +2817,12 @@ static void visdn_q931_release_indication(
 {
 	FUNC_DEBUG();
 
-	struct cw_channel *cw_chan = callpvt_to_cwchan(q931_call);
+	struct opbx_channel *opbx_chan = callpvt_to_opbxchan(q931_call);
 
-	if (!cw_chan)
+	if (!opbx_chan)
 		return;
 
-	cw_softhangup(cw_chan, CW_SOFTHANGUP_DEV);
+	opbx_softhangup(opbx_chan, OPBX_SOFTHANGUP_DEV);
 }
 
 static void visdn_q931_resume_confirm(
@@ -2832,10 +2841,10 @@ static void visdn_q931_resume_indication(
 
 	enum q931_ie_cause_value cause;
 
-	if (callpvt_to_cwchan(q931_call)) {
-		cw_log(LOG_WARNING, "Unexpexted cw_chan\n");
+	if (callpvt_to_opbxchan(q931_call)) {
+		opbx_log(LOG_WARNING, "Unexpexted opbx_chan\n");
 		cause = Q931_IE_C_CV_RESOURCES_UNAVAILABLE;
-		goto err_cw_chan;
+		goto err_opbx_chan;
 	}
 
 	struct q931_ie_call_identity *ci = NULL;
@@ -2865,7 +2874,7 @@ static void visdn_q931_resume_indication(
 	}
 
 	if (!found) {
-		cw_log(LOG_NOTICE, "Unable to find suspended call\n");
+		opbx_log(LOG_NOTICE, "Unable to find suspended call\n");
 
 		if (list_empty(&intf->suspended_calls))
 			cause = Q931_IE_C_CV_SUSPENDED_CALL_EXISTS_BUT_NOT_THIS;
@@ -2875,21 +2884,21 @@ static void visdn_q931_resume_indication(
 		goto err_call_not_found;
 	}
 
-	assert(suspended_call->cw_chan);
+	assert(suspended_call->opbx_chan);
 
-	struct visdn_chan *visdn_chan = suspended_call->cw_chan->tech_pvt;
+	struct visdn_chan *visdn_chan = suspended_call->opbx_chan->tech_pvt;
 
-	q931_call->pvt = suspended_call->cw_chan;
+	q931_call->pvt = suspended_call->opbx_chan;
 	visdn_chan->q931_call = q931_call;
 	visdn_chan->suspended_call = NULL;
 
-	if (!strcmp(suspended_call->cw_chan->_bridge->type, VISDN_CHAN_TYPE)) {
+	if (!strcmp(suspended_call->opbx_chan->_bridge->type, VISDN_CHAN_TYPE)) {
 		// Wow, the remote channel is ISDN too, let's notify it!
 
 		struct q931_ies response_ies = Q931_IES_INIT;
 
 		struct visdn_chan *remote_visdn_chan =
-				suspended_call->cw_chan->_bridge->tech_pvt;
+				suspended_call->opbx_chan->_bridge->tech_pvt;
 
 		struct q931_call *remote_call = remote_visdn_chan->q931_call;
 
@@ -2901,7 +2910,7 @@ static void visdn_q931_resume_indication(
 		q931_send_primitive(remote_call, Q931_CCB_NOTIFY_REQUEST, &response_ies);
 	}
 
-	cw_moh_stop(suspended_call->cw_chan->_bridge);
+	opbx_moh_stop(suspended_call->opbx_chan->_bridge);
 
 	// FIXME: Transform suspended_call->q931_chan to IE and pass it
 	assert(0);
@@ -2913,7 +2922,7 @@ static void visdn_q931_resume_indication(
 	return;
 
 err_call_not_found:
-err_cw_chan:
+err_opbx_chan:
 	;
 	struct q931_ies resp_ies = Q931_IES_INIT;
 	struct q931_ie_cause *c = q931_ie_cause_alloc();
@@ -2942,12 +2951,12 @@ static void visdn_q931_setup_confirm(
 {
 	FUNC_DEBUG();
 
-	struct cw_channel *cw_chan = callpvt_to_cwchan(q931_call);
+	struct opbx_channel *opbx_chan = callpvt_to_opbxchan(q931_call);
 
-	if (!cw_chan)
+	if (!opbx_chan)
 		return;
 
-	cw_setstate(cw_chan, CW_STATE_UP);
+	opbx_setstate(opbx_chan, OPBX_STATE_UP);
 }
 
 static void visdn_q931_setup_indication(
@@ -2961,7 +2970,7 @@ static void visdn_q931_setup_indication(
 	struct visdn_chan *visdn_chan;
 	visdn_chan = visdn_alloc();
 	if (!visdn_chan) {
-		cw_log(LOG_ERROR, "Cannot allocate visdn_chan\n");
+		opbx_log(LOG_ERROR, "Cannot allocate visdn_chan\n");
 		goto err_visdn_alloc;
 	}
 
@@ -2980,7 +2989,7 @@ static void visdn_q931_setup_indication(
 
 			if (strlen(called_number) + strlen(cdpn->number) - 1 >
 					sizeof(called_number)) {
-				cw_log(LOG_NOTICE,
+				opbx_log(LOG_NOTICE,
 					"Called number overflow\n");
 
 				struct q931_ies ies = Q931_IES_INIT;
@@ -3025,7 +3034,7 @@ static void visdn_q931_setup_indication(
 			// We should check the destination bearer capability
 			// unfortunately we don't know if the destination is
 			// compatible until we start the PBX... this is a
-			// design flaw in CallWeaver
+			// design flaw in Asterisk
 
 			struct q931_ie_bearer_capability *bc =
 				container_of(ies->ies[i],
@@ -3063,50 +3072,50 @@ static void visdn_q931_setup_indication(
 		}
 	}
 
-	struct cw_channel *cw_chan;
-	cw_chan = visdn_new(visdn_chan, CW_STATE_OFFHOOK);
-	if (!cw_chan)
+	struct opbx_channel *opbx_chan;
+	opbx_chan = visdn_new(visdn_chan, OPBX_STATE_OFFHOOK);
+	if (!opbx_chan)
 		goto err_visdn_new;
 
-	q931_call->pvt = cw_chan;
+	q931_call->pvt = opbx_chan;
 
-	snprintf(cw_chan->name, sizeof(cw_chan->name), "VISDN/%s/%c%ld",
+	snprintf(opbx_chan->name, sizeof(opbx_chan->name), "VISDN/%s/%c%ld",
 		q931_call->intf->name,
 		q931_call->direction == Q931_CALL_DIRECTION_INBOUND ? 'I' : 'O',
 		q931_call->call_reference);
 
-	strncpy(cw_chan->context,
+	strncpy(opbx_chan->context,
 		intf->context,
-		sizeof(cw_chan->context)-1);
+		sizeof(opbx_chan->context)-1);
 
-	cw_mutex_lock(&usecnt_lock);
+	opbx_mutex_lock(&usecnt_lock);
 	visdn.usecnt++;
-	cw_mutex_unlock(&usecnt_lock);
-	cw_update_use_count();
+	opbx_mutex_unlock(&usecnt_lock);
+	opbx_update_use_count();
 
 	if (strlen(visdn_chan->calling_number) &&
 	    !intf->force_inbound_caller_id)
-		cw_chan->cid.cid_num = strdup(visdn_chan->calling_number);
+		opbx_chan->cid.cid_num = strdup(visdn_chan->calling_number);
 	else
-		cw_chan->cid.cid_num = strdup(intf->default_inbound_caller_id);
+		opbx_chan->cid.cid_num = strdup(intf->default_inbound_caller_id);
 
 	if (!intf->overlap_sending ||
 	    visdn_chan->sending_complete) {
-		if (cw_exists_extension(NULL, intf->context,
+		if (opbx_exists_extension(NULL, intf->context,
 				called_number, 1,
 				visdn_chan->calling_number)) {
 
-			strncpy(cw_chan->exten,
+			strncpy(opbx_chan->exten,
 				called_number,
-				sizeof(cw_chan->exten)-1);
+				sizeof(opbx_chan->exten)-1);
 
-			cw_setstate(cw_chan, CW_STATE_RING);
+			opbx_setstate(opbx_chan, OPBX_STATE_RING);
 
-			if (cw_pbx_start(cw_chan)) {
-				cw_log(LOG_ERROR,
+			if (opbx_pbx_start(opbx_chan)) {
+				opbx_log(LOG_ERROR,
 					"Unable to start PBX on %s\n",
-					cw_chan->name);
-				cw_hangup(cw_chan);
+					opbx_chan->name);
+				opbx_hangup(opbx_chan);
 
 				struct q931_ies ies = Q931_IES_INIT;
 
@@ -3126,10 +3135,10 @@ static void visdn_q931_setup_indication(
 				q931_send_primitive(visdn_chan->q931_call,
 					Q931_CCB_PROCEEDING_REQUEST, NULL);
 
-				cw_setstate(cw_chan, CW_STATE_RING);
+				opbx_setstate(opbx_chan, OPBX_STATE_RING);
 			}
 		} else {
-			cw_log(LOG_NOTICE,
+			opbx_log(LOG_NOTICE,
 				"No extension '%s' in context '%s',"
 				" rejecting call\n",
 				called_number,
@@ -3148,18 +3157,18 @@ static void visdn_q931_setup_indication(
 
 			q931_send_primitive(visdn_chan->q931_call,
 				Q931_CCB_REJECT_REQUEST, &ies);
-			cw_hangup(cw_chan);
+			opbx_hangup(opbx_chan);
 		}
 	} else {
 
-		strncpy(cw_chan->exten, "s",
-			sizeof(cw_chan->exten)-1);
+		strncpy(opbx_chan->exten, "s",
+			sizeof(opbx_chan->exten)-1);
 
-		if (cw_pbx_start(cw_chan)) {
-			cw_log(LOG_ERROR,
+		if (opbx_pbx_start(opbx_chan)) {
+			opbx_log(LOG_ERROR,
 				"Unable to start PBX on %s\n",
-				cw_chan->name);
-			cw_hangup(cw_chan);
+				opbx_chan->name);
+			opbx_hangup(opbx_chan);
 
 			struct q931_ies ies_proc = Q931_IES_INIT;
 			struct q931_ie_cause *cause = q931_ie_cause_alloc();
@@ -3193,9 +3202,9 @@ static void visdn_q931_setup_indication(
 		}
 
 		for(i=0; called_number[i]; i++) {
-			struct cw_frame f =
-				{ CW_FRAME_DTMF, called_number[i] };
-			cw_queue_frame(cw_chan, &f);
+			struct opbx_frame f =
+				{ OPBX_FRAME_DTMF, called_number[i] };
+			opbx_queue_frame(opbx_chan, &f);
 		}
 	}
 
@@ -3224,8 +3233,8 @@ static void visdn_q931_suspend_confirm(
 }
 
 struct visdn_dual {
-	struct cw_channel *chan1;
-	struct cw_channel *chan2;
+	struct opbx_channel *chan1;
+	struct opbx_channel *chan2;
 };
 
 static void visdn_q931_suspend_indication(
@@ -3234,14 +3243,14 @@ static void visdn_q931_suspend_indication(
 {
 	FUNC_DEBUG();
 
-	struct cw_channel *cw_chan = callpvt_to_cwchan(q931_call);
+	struct opbx_channel *opbx_chan = callpvt_to_opbxchan(q931_call);
 
 	enum q931_ie_cause_value cause;
 
-	if (!cw_chan) {
-		cw_log(LOG_WARNING, "Unexpexted cw_chan\n");
+	if (!opbx_chan) {
+		opbx_log(LOG_WARNING, "Unexpexted opbx_chan\n");
 		cause = Q931_IE_C_CV_RESOURCES_UNAVAILABLE;
-		goto err_cw_chan;
+		goto err_opbx_chan;
 	}
 
 	struct q931_ie_call_identity *ci = NULL;
@@ -3274,7 +3283,7 @@ static void visdn_q931_suspend_indication(
 		goto err_suspend_alloc;
 	}
 
-	suspended_call->cw_chan = cw_chan;
+	suspended_call->opbx_chan = opbx_chan;
 	suspended_call->q931_chan = q931_call->channel;
 
 	if (ci) {
@@ -3284,23 +3293,23 @@ static void visdn_q931_suspend_indication(
 		suspended_call->call_identity_len = 0;
 	}
 
-	suspended_call->old_when_to_hangup = cw_chan->whentohangup;
+	suspended_call->old_when_to_hangup = opbx_chan->whentohangup;
 
 	list_add_tail(&suspended_call->node, &intf->suspended_calls);
 
 	q931_send_primitive(q931_call, Q931_CCB_SUSPEND_RESPONSE, NULL);
 
-	assert(cw_chan->_bridge);
+	assert(opbx_chan->_bridge);
 
-	cw_moh_start(cw_chan->_bridge, NULL);
+	opbx_moh_start(opbx_chan->_bridge, NULL);
 
-	if (!strcmp(cw_chan->_bridge->type, VISDN_CHAN_TYPE)) {
+	if (!strcmp(opbx_chan->_bridge->type, VISDN_CHAN_TYPE)) {
 		// Wow, the remote channel is ISDN too, let's notify it!
 
 		struct q931_ies response_ies = Q931_IES_INIT;
 
 		struct visdn_chan *remote_visdn_chan =
-					cw_chan->_bridge->tech_pvt;
+					opbx_chan->_bridge->tech_pvt;
 
 		struct q931_call *remote_call = remote_visdn_chan->q931_call;
 
@@ -3312,11 +3321,11 @@ static void visdn_q931_suspend_indication(
 		q931_send_primitive(remote_call, Q931_CCB_NOTIFY_REQUEST, &response_ies);
 	}
 
-	struct visdn_chan *visdn_chan = cw_chan->tech_pvt;
+	struct visdn_chan *visdn_chan = opbx_chan->tech_pvt;
 
-	if (!cw_chan->whentohangup ||
-	    time(NULL) + 45 < cw_chan->whentohangup)
-		cw_channel_setwhentohangup(cw_chan, intf->T307);
+	if (!opbx_chan->whentohangup ||
+	    time(NULL) + 45 < opbx_chan->whentohangup)
+		opbx_channel_setwhentohangup(opbx_chan, intf->T307);
 
 	q931_call->pvt = NULL;
 	visdn_chan->q931_call = NULL;
@@ -3327,7 +3336,7 @@ static void visdn_q931_suspend_indication(
 
 err_suspend_alloc:
 err_call_identity_in_use:
-err_cw_chan:
+err_opbx_chan:
 	;
 	struct q931_ies resp_ies = Q931_IES_INIT;
 	struct q931_ie_cause *c = q931_ie_cause_alloc();
@@ -3354,15 +3363,15 @@ static void visdn_q931_connect_channel(
 	FUNC_DEBUG();
 
 	assert(channel->call);
-	struct cw_channel *cw_chan = callpvt_to_cwchan(channel->call);
+	struct opbx_channel *opbx_chan = callpvt_to_opbxchan(channel->call);
 
-	if (!cw_chan)
+	if (!opbx_chan)
 		return;
 
-	cw_mutex_lock(&cw_chan->lock);
-	assert(cw_chan->tech_pvt);
+	opbx_mutex_lock(&opbx_chan->lock);
+	assert(opbx_chan->tech_pvt);
 
-	struct visdn_chan *visdn_chan = cw_chan->tech_pvt;
+	struct visdn_chan *visdn_chan = opbx_chan->tech_pvt;
 
 	char path[100], dest[100];
 	snprintf(path, sizeof(path),
@@ -3372,13 +3381,13 @@ static void visdn_q931_connect_channel(
 
 	memset(dest, 0, sizeof(dest));
 	if (readlink(path, dest, sizeof(dest) - 1) < 0) {
-		cw_log(LOG_ERROR, "readlink(%s): %s\n", path, strerror(errno));
+		opbx_log(LOG_ERROR, "readlink(%s): %s\n", path, strerror(errno));
 		goto err_readlink;
 	}
 
 	char *chanid = strrchr(dest, '/');
 	if (!chanid || !strlen(chanid + 1)) {
-		cw_log(LOG_ERROR,
+		opbx_log(LOG_ERROR,
 			"Invalid chanid found in symlink %s\n",
 			dest);
 		goto err_invalid_chanid;
@@ -3393,7 +3402,7 @@ static void visdn_q931_connect_channel(
 
 		visdn_chan->channel_fd = open("/dev/visdn/streamport", O_RDWR);
 		if (visdn_chan->channel_fd < 0) {
-			cw_log(LOG_ERROR,
+			opbx_log(LOG_ERROR,
 				"Cannot open streamport: %s\n",
 				strerror(errno));
 			goto err_open;
@@ -3407,14 +3416,14 @@ static void visdn_q931_connect_channel(
 
 		if (ioctl(visdn_chan->channel_fd, VISDN_IOC_CONNECT,
 		    (caddr_t) &vc) < 0) {
-			cw_log(LOG_ERROR,
+			opbx_log(LOG_ERROR,
 				"ioctl(VISDN_CONNECT): %s\n",
 				strerror(errno));
 			goto err_ioctl;
 		}
 	}
 
-	cw_mutex_unlock(&cw_chan->lock);
+	opbx_mutex_unlock(&opbx_chan->lock);
 
 	return;
 
@@ -3423,7 +3432,7 @@ err_open:
 err_invalid_chanid:
 err_readlink:
 
-	cw_mutex_unlock(&cw_chan->lock);
+	opbx_mutex_unlock(&opbx_chan->lock);
 }
 
 static void visdn_q931_disconnect_channel(
@@ -3431,25 +3440,25 @@ static void visdn_q931_disconnect_channel(
 {
 	FUNC_DEBUG();
 
-	struct cw_channel *cw_chan = callpvt_to_cwchan(channel->call);
+	struct opbx_channel *opbx_chan = callpvt_to_opbxchan(channel->call);
 
-	if (!cw_chan)
+	if (!opbx_chan)
 		return;
 
-	struct visdn_chan *visdn_chan = cw_chan->tech_pvt;
+	struct visdn_chan *visdn_chan = opbx_chan->tech_pvt;
 
-	cw_mutex_lock(&cw_chan->lock);
+	opbx_mutex_lock(&opbx_chan->lock);
 
 	if (visdn_chan->channel_fd >= 0) {
 		if (ioctl(visdn_chan->channel_fd,
 				VISDN_IOC_DISCONNECT, NULL) < 0) {
-			cw_log(LOG_ERROR,
+			opbx_log(LOG_ERROR,
 				"ioctl(VISDN_IOC_DISCONNECT): %s\n",
 				strerror(errno));
 		}
 
 		if (close(visdn_chan->channel_fd) < 0) {
-			cw_log(LOG_ERROR,
+			opbx_log(LOG_ERROR,
 				"close(visdn_chan->channel_fd): %s\n",
 				strerror(errno));
 		}
@@ -3457,7 +3466,7 @@ static void visdn_q931_disconnect_channel(
 		visdn_chan->channel_fd = -1;
 	}
 
-	cw_mutex_unlock(&cw_chan->lock);
+	opbx_mutex_unlock(&opbx_chan->lock);
 }
 
 static void visdn_q931_start_tone(struct q931_channel *channel,
@@ -3465,28 +3474,28 @@ static void visdn_q931_start_tone(struct q931_channel *channel,
 {
 	FUNC_DEBUG();
 
-	struct cw_channel *cw_chan = callpvt_to_cwchan(channel->call);
+	struct opbx_channel *opbx_chan = callpvt_to_opbxchan(channel->call);
 
 	// Unfortunately, after ast_hangup the channel is not valid
 	// anymore and we cannot generate further tones thought we should
-	if (!cw_chan)
+	if (!opbx_chan)
 		return;
 
 	switch (tone) {
 	case Q931_TONE_DIAL:
-		cw_indicate(cw_chan, CW_CONTROL_OFFHOOK);
+		opbx_indicate(opbx_chan, OPBX_CONTROL_OFFHOOK);
 	break;
 
 	case Q931_TONE_HANGUP:
-		cw_indicate(cw_chan, CW_CONTROL_HANGUP);
+		opbx_indicate(opbx_chan, OPBX_CONTROL_HANGUP);
 	break;
 
 	case Q931_TONE_BUSY:
-		cw_indicate(cw_chan, CW_CONTROL_BUSY);
+		opbx_indicate(opbx_chan, OPBX_CONTROL_BUSY);
 	break;
 
 	case Q931_TONE_FAILURE:
-		cw_indicate(cw_chan, CW_CONTROL_CONGESTION);
+		opbx_indicate(opbx_chan, OPBX_CONTROL_CONGESTION);
 	break;
 	default:;
 	}
@@ -3496,12 +3505,12 @@ static void visdn_q931_stop_tone(struct q931_channel *channel)
 {
 	FUNC_DEBUG();
 
-	struct cw_channel *cw_chan = callpvt_to_cwchan(channel->call);
+	struct opbx_channel *opbx_chan = callpvt_to_opbxchan(channel->call);
 
-	if (!cw_chan)
+	if (!opbx_chan)
 		return;
 
-	cw_indicate(cw_chan, -1);
+	opbx_indicate(opbx_chan, -1);
 }
 
 static void visdn_q931_management_restart_confirm(
@@ -3535,26 +3544,26 @@ static void visdn_logger(int level, const char *format, ...)
 	switch(level) {
 	case Q931_LOG_DEBUG:
 		if (visdn.debug_q931)
-			cw_verbose(VERBOSE_PREFIX_3 "%s", msg);
+			opbx_verbose(VERBOSE_PREFIX_3 "%s", msg);
 	break;
 
 	case Q931_LOG_INFO:
-		cw_verbose(VERBOSE_PREFIX_3  "%s", msg);
+		opbx_verbose(VERBOSE_PREFIX_3  "%s", msg);
 	break;
 
 	case Q931_LOG_NOTICE:
-		cw_log(__LOG_NOTICE, "libq931", 0, "", "%s", msg);
+		opbx_log(__LOG_NOTICE, "libq931", 0, "", "%s", msg);
 	break;
 
 	case Q931_LOG_WARNING:
-		cw_log(__LOG_WARNING, "libq931", 0, "", "%s", msg);
+		opbx_log(__LOG_WARNING, "libq931", 0, "", "%s", msg);
 	break;
 
 	case Q931_LOG_ERR:
 	case Q931_LOG_CRIT:
 	case Q931_LOG_ALERT:
 	case Q931_LOG_EMERG:
-		cw_log(__LOG_ERROR, "libq931", 0, "", "%s", msg);
+		opbx_log(__LOG_ERROR, "libq931", 0, "", "%s", msg);
 	break;
 	}
 }
@@ -3569,12 +3578,12 @@ static void visdn_q931_ccb_receive()
 	struct q931_ccb_message *msg;
 
 	while(1) {
-		cw_mutex_lock(&visdn.q931_ccb_queue_lock);
+		opbx_mutex_lock(&visdn.q931_ccb_queue_lock);
 
 		msg = list_entry(visdn.q931_ccb_queue.next,
 				struct q931_ccb_message, node);
 		if (&msg->node == &visdn.q931_ccb_queue) {
-			cw_mutex_unlock(&visdn.q931_ccb_queue_lock);
+			opbx_mutex_unlock(&visdn.q931_ccb_queue_lock);
 			break;
 		}
 
@@ -3583,7 +3592,7 @@ static void visdn_q931_ccb_receive()
 
 		list_del_init(&msg->node);
 
-		cw_mutex_unlock(&visdn.q931_ccb_queue_lock);
+		opbx_mutex_unlock(&visdn.q931_ccb_queue_lock);
 
 		switch (msg->primitive) {
 		case Q931_CCB_ALERTING_INDICATION:
@@ -3711,7 +3720,7 @@ static void visdn_q931_ccb_receive()
 		break;
 
 		default:
-			cw_log(LOG_WARNING, "Unexpected primitive %d\n",
+			opbx_log(LOG_WARNING, "Unexpected primitive %d\n",
 				msg->primitive);
 		}
 	}
@@ -3721,70 +3730,69 @@ STANDARD_LOCAL_USER;
 
 LOCAL_USER_DECL;
 
-static int visdn_exec_overlap_dial(struct cw_channel *chan, int argc, char **argv)
+static int visdn_exec_overlap_dial(struct opbx_channel *chan, void *data)
 {
 	struct localuser *u;
 	LOCAL_USER_ADD(u);
 
 	char called_number[64] = "";
 
-	while(cw_waitfor(chan, -1) > -1) {
-		struct cw_frame *f;
-		f = cw_read(chan);
+	while(opbx_waitfor(chan, -1) > -1) {
+		struct opbx_frame *f;
+		f = opbx_read(chan);
 		if (!f)
 			break;
 
-		if (f->frametype == CW_FRAME_DTMF) {
-			cw_setstate(chan, CW_STATE_DIALING);
+		if (f->frametype == OPBX_FRAME_DTMF) {
+			opbx_setstate(chan, OPBX_STATE_DIALING);
 
 			if(strlen(called_number) >= sizeof(called_number)-1)
 				break;
 
 			called_number[strlen(called_number)] = f->subclass;
 
-			if (!cw_canmatch_extension(NULL,
+			if (!opbx_canmatch_extension(NULL,
 					chan->context,
 					called_number, 1,
 					chan->cid.cid_num)) {
 
-				cw_indicate(chan, CW_CONTROL_CONGESTION);
-				cw_safe_sleep(chan, 30000);
+				opbx_indicate(chan, OPBX_CONTROL_CONGESTION);
+				opbx_safe_sleep(chan, 30000);
 				return -1;
 			}
 
-			if (cw_exists_extension(NULL,
+			if (opbx_exists_extension(NULL,
 					chan->context,
 					called_number, 1,
 					chan->cid.cid_num)) {
 
-				if (!cw_matchmore_extension(NULL,
+				if (!opbx_matchmore_extension(NULL,
 					chan->context,
 					called_number, 1,
 					chan->cid.cid_num)) {
 
-					cw_setstate(chan, CW_STATE_RING);
-					cw_indicate(chan,
-						CW_CONTROL_PROCEEDING);
+					opbx_setstate(chan, OPBX_STATE_RING);
+					opbx_indicate(chan,
+						OPBX_CONTROL_PROCEEDING);
 				}
 
 				chan->priority = 0;
 				strncpy(chan->exten, called_number,
 						sizeof(chan->exten));
 
-				cw_fr_free(f);
+				opbx_frfree(f);
 
 				return 0;
 			}
 		}
 
-		cw_fr_free(f);
+		opbx_frfree(f);
 	}
 
 	LOCAL_USER_REMOVE(u);
 	return -1;
 }
 
-static void *visdn_exec_overlap_dial_app;
 static char *visdn_overlap_dial_descr =
 "  vISDNOverlapDial():\n";
 
@@ -3794,17 +3802,17 @@ int load_module()
 
 	// Initialize q.931 library.
 	// No worries, internal structures are read-only and thread safe
-	cw_mutex_init(&visdn.lock);
+	opbx_mutex_init(&visdn.lock);
 
 	INIT_LIST_HEAD(&visdn.ccb_q931_queue);
-	cw_mutex_init(&visdn.ccb_q931_queue_lock);
+	opbx_mutex_init(&visdn.ccb_q931_queue_lock);
 
 	INIT_LIST_HEAD(&visdn.q931_ccb_queue);
-	cw_mutex_init(&visdn.q931_ccb_queue_lock);
+	opbx_mutex_init(&visdn.q931_ccb_queue_lock);
 
 	int filedes[2];
 	if (pipe(filedes) < 0) {
-		cw_log(LOG_ERROR, "Unable to create pipe: %s\n",
+		opbx_log(LOG_ERROR, "Unable to create pipe: %s\n",
 			strerror(errno));
 		return -1;
 	}
@@ -3813,7 +3821,7 @@ int load_module()
 	visdn.ccb_q931_queue_pipe_write = filedes[1];
 
 	if (pipe(filedes) < 0) {
-		cw_log(LOG_ERROR, "Unable to create pipe: %s\n",
+		opbx_log(LOG_ERROR, "Unable to create pipe: %s\n",
 			strerror(errno));
 		return -1;
 	}
@@ -3833,7 +3841,7 @@ int load_module()
 
 	visdn.netlink_socket = socket(PF_NETLINK, SOCK_RAW, NETLINK_ROUTE);
 	if(visdn.netlink_socket < 0) {
-		cw_log(LOG_ERROR, "Unable to open netlink socket: %s\n",
+		opbx_log(LOG_ERROR, "Unable to open netlink socket: %s\n",
 			strerror(errno));
 		return -1;
 	}
@@ -3846,7 +3854,7 @@ int load_module()
 	if (bind(visdn.netlink_socket,
 			(struct sockaddr *)&snl,
 			sizeof(snl)) < 0) {
-		cw_log(LOG_ERROR, "Unable to bind netlink socket: %s\n",
+		opbx_log(LOG_ERROR, "Unable to bind netlink socket: %s\n",
 			strerror(errno));
 		return -1;
 	}
@@ -3856,14 +3864,14 @@ int load_module()
 	struct ifaddrs *ifaddr;
 
 	if (getifaddrs(&ifaddrs) < 0) {
-		cw_log(LOG_ERROR, "getifaddr: %s\n", strerror(errno));
+		opbx_log(LOG_ERROR, "getifaddr: %s\n", strerror(errno));
 		return -1;
 	}
 
 	int fd;
 	fd = socket(PF_LAPD, SOCK_SEQPACKET, 0);
 	if (fd < 0) {
-		cw_log(LOG_ERROR, "socket: %s\n", strerror(errno));
+		opbx_log(LOG_ERROR, "socket: %s\n", strerror(errno));
 		return -1;
 	}
 
@@ -3877,7 +3885,7 @@ int load_module()
 			sizeof(ifreq.ifr_name));
 
 		if (ioctl(fd, SIOCGIFHWADDR, &ifreq) < 0) {
-			cw_log(LOG_ERROR, "ioctl (%s): %s\n",
+			opbx_log(LOG_ERROR, "ioctl (%s): %s\n",
 				ifaddr->ifa_name, strerror(errno));
 			return -1;
 		}
@@ -3898,34 +3906,33 @@ int load_module()
 	pthread_attr_init(&attr);
 	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
 
-	if (cw_pthread_create(&visdn_q931_thread, &attr,
+	if (opbx_pthread_create(&visdn_q931_thread, &attr,
 					visdn_q931_thread_main, NULL) < 0) {
-		cw_log(LOG_ERROR, "Unable to start q931 thread.\n");
+		opbx_log(LOG_ERROR, "Unable to start q931 thread.\n");
 		return -1;
 	}
 
-	if (cw_channel_register(&visdn_tech)) {
-		cw_log(LOG_ERROR, "Unable to register channel class %s\n",
+	if (opbx_channel_register(&visdn_tech)) {
+		opbx_log(LOG_ERROR, "Unable to register channel class %s\n",
 			VISDN_CHAN_TYPE);
 		return -1;
 	}
 
-	cw_cli_register(&debug_visdn_generic);
-	cw_cli_register(&no_debug_visdn_generic);
-	cw_cli_register(&debug_visdn_q921);
-	cw_cli_register(&no_debug_visdn_q921);
-	cw_cli_register(&debug_visdn_q931);
-	cw_cli_register(&no_debug_visdn_q931);
-	cw_cli_register(&visdn_reload);
-	cw_cli_register(&show_visdn_channels);
-	cw_cli_register(&show_visdn_interfaces);
-	cw_cli_register(&show_visdn_calls);
+	opbx_cli_register(&debug_visdn_generic);
+	opbx_cli_register(&no_debug_visdn_generic);
+	opbx_cli_register(&debug_visdn_q921);
+	opbx_cli_register(&no_debug_visdn_q921);
+	opbx_cli_register(&debug_visdn_q931);
+	opbx_cli_register(&no_debug_visdn_q931);
+	opbx_cli_register(&visdn_reload);
+	opbx_cli_register(&show_visdn_channels);
+	opbx_cli_register(&show_visdn_interfaces);
+	opbx_cli_register(&show_visdn_calls);
 
-	visdn_exec_overlap_dial_app = cw_register_application(
+	opbx_register_application(
 		"VISDNOverlapDial",
 		visdn_exec_overlap_dial,
 		"Plays dialtone and waits for digits",
-		visdn_overlap_dial_descr,
 		visdn_overlap_dial_descr);
 
 	return res;
@@ -3933,22 +3940,20 @@ int load_module()
 
 int unload_module(void)
 {
-	int res = 0;
+	opbx_unregister_application("VISDNOverlapDial");
 
-	res |= cw_unregister_application(visdn_exec_overlap_dial_app);
+	opbx_cli_unregister(&show_visdn_calls);
+	opbx_cli_unregister(&show_visdn_interfaces);
+	opbx_cli_unregister(&show_visdn_channels);
+	opbx_cli_unregister(&visdn_reload);
+	opbx_cli_unregister(&no_debug_visdn_q931);
+	opbx_cli_unregister(&debug_visdn_q931);
+	opbx_cli_unregister(&no_debug_visdn_q921);
+	opbx_cli_unregister(&debug_visdn_q921);
+	opbx_cli_unregister(&no_debug_visdn_generic);
+	opbx_cli_unregister(&debug_visdn_generic);
 
-	cw_cli_unregister(&show_visdn_calls);
-	cw_cli_unregister(&show_visdn_interfaces);
-	cw_cli_unregister(&show_visdn_channels);
-	cw_cli_unregister(&visdn_reload);
-	cw_cli_unregister(&no_debug_visdn_q931);
-	cw_cli_unregister(&debug_visdn_q931);
-	cw_cli_unregister(&no_debug_visdn_q921);
-	cw_cli_unregister(&debug_visdn_q921);
-	cw_cli_unregister(&no_debug_visdn_generic);
-	cw_cli_unregister(&debug_visdn_generic);
-
-	cw_channel_unregister(&visdn_tech);
+	opbx_channel_unregister(&visdn_tech);
 
 	if (visdn.libq931)
 		q931_leave(visdn.libq931);
@@ -3966,9 +3971,9 @@ int reload(void)
 int usecount()
 {
 	int res;
-	cw_mutex_lock(&usecnt_lock);
+	opbx_mutex_lock(&usecnt_lock);
 	res = visdn.usecnt;
-	cw_mutex_unlock(&usecnt_lock);
+	opbx_mutex_unlock(&usecnt_lock);
 	return res;
 }
 

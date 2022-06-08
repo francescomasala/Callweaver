@@ -1,8 +1,8 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -29,19 +29,19 @@
 #include <arpa/inet.h>
 #include <fcntl.h>
 
-#include "callweaver.h"
+#include "openpbx.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/corelib/stun.c $", "$Revision: 4723 $")
+OPENPBX_FILE_VERSION("$HeadURL$", "$Revision$")
 
-#include "callweaver/udp.h"
-#include "callweaver/rtp.h"
-#include "callweaver/lock.h"
-#include "callweaver/stun.h"
-#include "callweaver/logger.h"
-#include "callweaver/cli.h"
-#include "callweaver/utils.h"
-#include "callweaver/options.h"
-#include "callweaver/udpfromto.h"
+#include "openpbx/udp.h"
+#include "openpbx/rtp.h"
+#include "openpbx/lock.h"
+#include "openpbx/stun.h"
+#include "openpbx/logger.h"
+#include "openpbx/cli.h"
+#include "openpbx/utils.h"
+#include "openpbx/options.h"
+#include "openpbx/udpfromto.h"
 
 char stunserver_host[MAXHOSTNAMELEN] = "";
 struct sockaddr_in stunserver_ip;
@@ -119,7 +119,7 @@ static int stun_process_attr(struct stun_state *state, struct stun_attr *attr)
     struct sockaddr_in sin;
 
     if (stundebug  &&  option_debug)
-        cw_verbose("Found STUN Attribute %s (%04x), length %d\n",
+        opbx_verbose("Found STUN Attribute %s (%04x), length %d\n",
             stun_attr2str(ntohs(attr->attr)), ntohs(attr->attr), ntohs(attr->len));
     switch (ntohs(attr->attr))
     {
@@ -134,8 +134,8 @@ static int stun_process_attr(struct stun_state *state, struct stun_attr *attr)
         if (stundebug)
         {
             stun_addr2sockaddr(&sin, state->mapped_addr);
-            cw_verbose("STUN: Mapped address is %s\n", cw_inet_ntoa(iabuf, sizeof(iabuf), sin.sin_addr));
-            cw_verbose("STUN: Mapped port is %d\n", ntohs(state->mapped_addr->port));
+            opbx_verbose("STUN: Mapped address is %s\n", opbx_inet_ntoa(iabuf, sizeof(iabuf), sin.sin_addr));
+            opbx_verbose("STUN: Mapped port is %d\n", ntohs(state->mapped_addr->port));
         }
         break;
     case STUN_RESPONSE_ADDRESS:
@@ -147,7 +147,7 @@ static int stun_process_attr(struct stun_state *state, struct stun_attr *attr)
     default:
         if (stundebug && option_debug)
         {
-            cw_verbose("Ignoring STUN attribute %s (%04x), length %d\n", 
+            opbx_verbose("Ignoring STUN attribute %s (%04x), length %d\n", 
                          stun_attr2str(ntohs(attr->attr)),
                          ntohs(attr->attr),
                          ntohs(attr->len));
@@ -201,8 +201,8 @@ static int stun_send(int s, struct sockaddr_in *dst, struct stun_header *resp)
                   (struct sockaddr *) dst,
                   sizeof(*dst));
 /*
-    // Alternative way to send STUN PACKETS using CallWeaver library functions.
-    return cw_sendfromto(
+    // Alternative way to send STUN PACKETS using OpenPBX library functions.
+    return opbx_sendfromto(
 	s,
 	resp,ntohs(resp->msglen) + sizeof(*resp),0,
 	NULL,0,
@@ -218,12 +218,12 @@ static void stun_req_id(struct stun_header *req)
     int x;
     
     for (x = 0;  x < 4;  x++)
-        req->id.id[x] = cw_random();
+        req->id.id[x] = opbx_random();
 }
 
 /* ************************************************************************* */
 
-struct stun_addr *cw_stun_find_request(stun_trans_id *st)
+struct stun_addr *opbx_stun_find_request(stun_trans_id *st)
 {
     struct stun_request *req_queue;
     struct stun_addr *a = NULL;
@@ -231,22 +231,22 @@ struct stun_addr *cw_stun_find_request(stun_trans_id *st)
     req_queue=stun_req_queue;
 
     if (stundebug)
-        cw_verbose("** Trying to lookup stun response for this sip packet %d\n", st->id[0]);
+        opbx_verbose("** Trying to lookup stun response for this sip packet %d\n", st->id[0]);
     while (req_queue != NULL)
     {
-        //cw_verbose("** STUN FIND REQUEST compare trans_id %d\n",req_queue->req_head.id.id[0]);
+        //opbx_verbose("** STUN FIND REQUEST compare trans_id %d\n",req_queue->req_head.id.id[0]);
 
         if (req_queue->got_response
             &&
             !memcmp((void *) &req_queue->req_head.id, st, sizeof(stun_trans_id))) 
         {
             if (stundebug)
-                cw_verbose("** Found request in request queue for reqresp lookup\n");
+                opbx_verbose("** Found request in request queue for reqresp lookup\n");
             struct sockaddr_in sin;
             stun_addr2sockaddr(&sin, &req_queue->mapped_addr);
             //char iabuf[INET_ADDRSTRLEN];
-            //cw_verbose("STUN: passing Mapped address is %s\n", cw_inet_ntoa(iabuf, sizeof(iabuf), sin.sin_addr));
-            //cw_verbose("STUN: passing Mapped port is %d\n", ntohs(req_queue->mapped_addr.port));
+            //opbx_verbose("STUN: passing Mapped address is %s\n", opbx_inet_ntoa(iabuf, sizeof(iabuf), sin.sin_addr));
+            //opbx_verbose("STUN: passing Mapped port is %d\n", ntohs(req_queue->mapped_addr.port));
             a = &req_queue->mapped_addr;        
             if (!stundebug)
                 return a;
@@ -270,7 +270,7 @@ int stun_remove_request(stun_trans_id *st)
     req_queue_prev = NULL;
 
     if (stundebug)
-        cw_verbose("** Trying to lookup for removal stun queue %d\n", st->id[0]);
+        opbx_verbose("** Trying to lookup for removal stun queue %d\n", st->id[0]);
     while (req_queue != NULL)
     {
         if (req_queue->got_response
@@ -280,7 +280,7 @@ int stun_remove_request(stun_trans_id *st)
             found = 1;
             delqueue = req_queue;
             if (stundebug)
-                cw_verbose("** Found: request in removal stun queue %d\n", st->id[0]);
+                opbx_verbose("** Found: request in removal stun queue %d\n", st->id[0]);
             if (req_queue_prev != NULL)
             {
                 req_queue_prev->next = req_queue->next;
@@ -298,7 +298,7 @@ int stun_remove_request(stun_trans_id *st)
             req_queue = req_queue->next;
     }
     if (!found)
-        cw_verbose("** Not Found: request in removal stun queue %d\n", st->id[0]);
+        opbx_verbose("** Not Found: request in removal stun queue %d\n", st->id[0]);
 
     /* Removing old requests, caused by "sip reload" whose requests are not linked to any transmission */
     req_queue = stun_req_queue;
@@ -308,7 +308,7 @@ int stun_remove_request(stun_trans_id *st)
         if (req_queue->whendone + 300 < now)
         {
             if (stundebug)
-                cw_verbose("** DROP: request in removal stun queue %d (too old)\n",req_queue->req_head.id.id[0]);
+                opbx_verbose("** DROP: request in removal stun queue %d (too old)\n",req_queue->req_head.id.id[0]);
             delqueue = req_queue;
             if (req_queue_prev != NULL)
             {
@@ -331,7 +331,7 @@ int stun_remove_request(stun_trans_id *st)
 
 /* ************************************************************************* */
 
-struct stun_request *cw_udp_stun_bindrequest(int fdus,
+struct stun_request *opbx_udp_stun_bindrequest(int fdus,
                                                struct sockaddr_in *suggestion, 
                                                const char *username,
                                                const char *password)
@@ -366,7 +366,7 @@ struct stun_request *cw_udp_stun_bindrequest(int fdus,
         if (stun_send(fdus, suggestion, reqh) != -1)
         {
             if (stundebug) 
-                cw_verbose("** STUN Packet SENT %d %d\n", reqh->id.id[0], myreq->req_head.id.id[0]);
+                opbx_verbose("** STUN Packet SENT %d %d\n", reqh->id.id[0], myreq->req_head.id.id[0]);
             time(&myreq->whendone);
             myreq->next = stun_req_queue;
             stun_req_queue = myreq;
@@ -403,16 +403,16 @@ int stun_handle_packet(int s,
     if (len < sizeof(struct stun_header))
     {
         if (option_debug)
-            cw_log(LOG_DEBUG, "Runt STUN packet (only %zd, wanting at least %zd)\n", len, sizeof(struct stun_header));
+            opbx_log(LOG_DEBUG, "Runt STUN packet (only %zd, wanting at least %zd)\n", len, sizeof(struct stun_header));
         return -1;
     }
     if (stundebug)
-        cw_verbose("STUN Packet, msg %s (%04x), length: %d\n", stun_msg2str(ntohs(hdr->msgtype)), ntohs(hdr->msgtype), ntohs(hdr->msglen));
+        opbx_verbose("STUN Packet, msg %s (%04x), length: %d\n", stun_msg2str(ntohs(hdr->msgtype)), ntohs(hdr->msgtype), ntohs(hdr->msglen));
 
     if (ntohs(hdr->msglen) > len - sizeof(struct stun_header))
     {
         if (option_debug)
-            cw_log(LOG_DEBUG, "Scrambled STUN packet length (got %d, expecting %zd)\n", ntohs(hdr->msglen), len - sizeof(struct stun_header));
+            opbx_log(LOG_DEBUG, "Scrambled STUN packet length (got %d, expecting %zd)\n", ntohs(hdr->msglen), len - sizeof(struct stun_header));
     }
     else
         len = ntohs(hdr->msglen);
@@ -423,21 +423,21 @@ int stun_handle_packet(int s,
         if (len < sizeof(struct stun_attr))
         {
             if (option_debug)
-                cw_log(LOG_DEBUG, "Runt Attribute (got %zd, expecting %zd)\n", len, sizeof(struct stun_attr));
+                opbx_log(LOG_DEBUG, "Runt Attribute (got %zd, expecting %zd)\n", len, sizeof(struct stun_attr));
             break;
         }
         attr = (struct stun_attr *) data;
-        if ((ntohs(attr->len) + sizeof(struct stun_attr)) > len)
+        if (ntohs(attr->len) > len)
         {
             if (option_debug)
-                cw_log(LOG_DEBUG, "Inconsistent Attribute (length %d exceeds remaining msg len %zd)\n", ntohs(attr->len), len);
+                opbx_log(LOG_DEBUG, "Inconsistent Attribute (length %d exceeds remaining msg len %zd)\n", ntohs(attr->len), len);
             break;
         }
 
         if (stun_process_attr(st, attr))
         {
             if (option_debug)
-                cw_log(LOG_DEBUG, "Failed to handle attribute %s (%04x)\n", stun_attr2str(ntohs(attr->attr)), ntohs(attr->attr));
+                opbx_log(LOG_DEBUG, "Failed to handle attribute %s (%04x)\n", stun_attr2str(ntohs(attr->attr)), ntohs(attr->attr));
             break;
         }
         /* Clear attribute in case previous entry was a string */
@@ -463,7 +463,7 @@ int stun_handle_packet(int s,
         case STUN_BINDREQ:
             if (stundebug)
             {
-                cw_verbose("STUN Bind Request, username: %s\n", 
+                opbx_verbose("STUN Bind Request, username: %s\n", 
                              st->username  ?  (const char *) st->username  :  "<none>");
             }
             if (st->username)
@@ -476,7 +476,7 @@ int stun_handle_packet(int s,
             break;
         case STUN_BINDRESP:
             if (stundebug)
-                cw_verbose("** STUN Bind Response\n");
+                opbx_verbose("** STUN Bind Response\n");
             req_queue = stun_req_queue;
             req_queue_prev = NULL;
             while (req_queue != NULL)
@@ -486,14 +486,14 @@ int stun_handle_packet(int s,
                     memcmp((void *) &req_queue->req_head.id, (void *) &st->id, sizeof(stun_trans_id)) == 0)
                 {
                     if (stundebug)
-                        cw_verbose("** Found response in request queue. ID: %d done at: %ld gotresponse: %d\n",req_queue->req_head.id.id[0],(long int)req_queue->whendone,req_queue->got_response);
+                        opbx_verbose("** Found response in request queue. ID: %d done at: %ld gotresponse: %d\n",req_queue->req_head.id.id[0],(long int)req_queue->whendone,req_queue->got_response);
                     req_queue->got_response = 1;
                     memcpy(&req_queue->mapped_addr, st->mapped_addr, sizeof(struct stun_addr));
                 }
                 else
                 {
                     if (stundebug)
-                        cw_verbose("** STUN request not matching. ID: %d done at: %ld gotresponse %d:\n",req_queue->req_head.id.id[0],(long int)req_queue->whendone,req_queue->got_response);
+                        opbx_verbose("** STUN request not matching. ID: %d done at: %ld gotresponse %d:\n",req_queue->req_head.id.id[0],(long int)req_queue->whendone,req_queue->got_response);
                 }
 
                 req_queue_prev = req_queue;
@@ -503,7 +503,7 @@ int stun_handle_packet(int s,
             break;
         default:
             if (stundebug)
-                cw_verbose("Dunno what to do with STUN message %04x (%s)\n", ntohs(hdr->msgtype), stun_msg2str(ntohs(hdr->msgtype)));
+                opbx_verbose("Dunno what to do with STUN message %04x (%s)\n", ntohs(hdr->msgtype), stun_msg2str(ntohs(hdr->msgtype)));
         }
     }
     return ret;
@@ -516,7 +516,7 @@ int stun_do_debug(int fd, int argc, char *argv[])
     if (argc != 2)
         return RESULT_SHOWUSAGE;
     stundebug = 1;
-    cw_cli(fd, "STUN Debugging Enabled\n");
+    opbx_cli(fd, "STUN Debugging Enabled\n");
     return RESULT_SUCCESS;
 }
    
@@ -525,7 +525,7 @@ int stun_no_debug(int fd, int argc, char *argv[])
     if (argc != 3)
         return RESULT_SHOWUSAGE;
     stundebug = 0;
-    cw_cli(fd, "STUN Debugging Disabled\n");
+    opbx_cli(fd, "STUN Debugging Disabled\n");
     return RESULT_SUCCESS;
 }
 
@@ -539,17 +539,17 @@ static char stun_no_debug_usage[] =
   "Usage: stun no debug\n"
   "       Disable STUN debugging\n";
 
-static struct cw_cli_entry  cli_stun_debug =
+static struct opbx_cli_entry  cli_stun_debug =
 {{ "stun", "debug", NULL } , stun_do_debug, "Enable STUN debugging", stun_debug_usage };
 
-static struct cw_cli_entry  cli_stun_no_debug =
+static struct opbx_cli_entry  cli_stun_no_debug =
 {{ "stun", "no", "debug", NULL } , stun_no_debug, "Disable STUN debugging", stun_no_debug_usage };
 
-void cw_stun_init(void)
+void opbx_stun_init(void)
 {
     stundebug = 0;
     stun_active = 0;
     stun_req_queue = NULL;
-    cw_cli_register(&cli_stun_debug);
-    cw_cli_register(&cli_stun_no_debug);
+    opbx_cli_register(&cli_stun_debug);
+    opbx_cli_register(&cli_stun_no_debug);
 }

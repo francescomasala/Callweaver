@@ -19,16 +19,16 @@ diff -ur festival-195orig/festival/lib/tts.scm festival-195/festival/lib/tts.scm
         (utt.synth
  	(eval (list 'Utterance 'Text string))))))
  
-+;; begin tts_textcallweaver
-+(define (tts_textcallweaver string mode)
-+  "(tts_textcallweaver STRING MODE)
++;; begin tts_textopenpbx
++(define (tts_textopenpbx string mode)
++  "(tts_textopenpbx STRING MODE)
 +Apply tts to STRING.  This function is specifically designed for
 +use in server mode so a single function call may synthesize the string.
 +This function name may be added to the server safe functions."
-+  (utt.send.wave.callweaver
++  (utt.send.wave.openpbx
 +   (utt.synth
 +    (eval (list 'Utterance 'Text string)))))
-+;; end tts_textcallweaver
++;; end tts_textopenpbx
 +
  (define (tts_return_to_client)
    "(tts_return_to_client)
@@ -48,8 +48,8 @@ diff -ur festival-195orig/festival/src/arch/festival/wave.cc festival-195/festiv
      return utt;
  }
  
-+// begin utt_send_wave_callweaver()
-+static LISP utt_send_wave_callweaver(LISP utt)
++// begin utt_send_wave_openpbx()
++static LISP utt_send_wave_openpbx(LISP utt)
 +{
 +    // Send the waveform to a client (must be acting as server)
 +    EST_Utterance *u = utterance(utt);
@@ -61,7 +61,7 @@ diff -ur festival-195orig/festival/src/arch/festival/wave.cc festival-195/festiv
 +    w = get_utt_wave(u);
 +    if (ft_server_socket == -1)
 +    {
-+       cerr << "utt_send_wave_callweaver: not in server mode" << endl;
++       cerr << "utt_send_wave_openpbx: not in server mode" << endl;
 +       festival_error();
 +    }
 +       
@@ -84,7 +84,7 @@ diff -ur festival-195orig/festival/src/arch/festival/wave.cc festival-195/festiv
 +
 +    return utt;
 +}
-+// end utt_send_wave_callweaver()
++// end utt_send_wave_openpbx()
 +
  static LISP send_sexpr_to_client(LISP l)
  {
@@ -94,13 +94,13 @@ diff -ur festival-195orig/festival/src/arch/festival/wave.cc festival-195/festiv
    Sends wave in UTT to client.  If not in server mode gives an error\n\
    Note the client must be expecting to receive the waveform.");
 +
-+// begin callweaver mod
-+    init_subr_1("utt.send.wave.callweaver",utt_send_wave_callweaver,
-+ "(utt.send.wave.callweaver UTT)\n\
++// begin openpbx mod
++    init_subr_1("utt.send.wave.openpbx",utt_send_wave_openpbx,
++ "(utt.send.wave.openpbx UTT)\n\
 +  Sends wave in UTT to client.  If not in server mode gives an error\n\
 +  Note the client must be expecting to receive the waveform. The waveform\n\
-+  is rescaled and resampled according to what callweaver needs");
-+// end callweaver mod
++  is rescaled and resampled according to what openpbx needs");
++// end openpbx mod
 +
      init_subr_1("send_sexpr_to_client", send_sexpr_to_client,
   "(send_sexpr_to_client SEXPR)\n\

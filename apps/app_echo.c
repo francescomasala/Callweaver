@@ -1,12 +1,12 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  *
  * Copyright (C) 1999 - 2005, Digium, Inc.
  *
  * Mark Spencer <markster@digium.com>
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -30,90 +30,75 @@
 #include <unistd.h>
 #include <string.h>
 
-#include "callweaver.h"
+#include "openpbx.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/apps/app_echo.c $", "$Revision: 4723 $")
+OPENPBX_FILE_VERSION("$HeadURL$", "$Revision$")
 
-#include "callweaver/lock.h"
-#include "callweaver/file.h"
-#include "callweaver/logger.h"
-#include "callweaver/channel.h"
-#include "callweaver/pbx.h"
-#include "callweaver/module.h"
+#include "openpbx/lock.h"
+#include "openpbx/file.h"
+#include "openpbx/logger.h"
+#include "openpbx/channel.h"
+#include "openpbx/pbx.h"
+#include "openpbx/module.h"
 
 static char *tdesc = "Simple Echo Application";
 
-static void *echo_app;
-static const char *echo_name = "Echo";
-static const char *echo_synopsis = "Echo audio read back to the user";
-static const char *echo_syntax = "Echo()";
-static const char *echo_descrip = 
-"Echo audio read from channel back to the channel. Returns 0\n"
+static char *app = "Echo";
+
+static char *synopsis = "Echo audio read back to the user";
+
+static char *descrip = 
+"  Echo():  Echo audio read from channel back to the channel. Returns 0\n"
 "if the user exits with the '#' key, or -1 if the user hangs up.\n";
 
 STANDARD_LOCAL_USER;
 
 LOCAL_USER_DECL;
 
-static int echo_exec(struct cw_channel *chan, int argc, char **argv)
+static int echo_exec(struct opbx_channel *chan, void *data)
 {
+	int res=-1;
 	struct localuser *u;
-	struct cw_frame *f;
-	int res = -1;
-
-	if (argc != 0) {
-		cw_log(LOG_ERROR, "Syntax: %s\n", echo_syntax);
-		return -1;
-	}
-
+	struct opbx_frame *f;
 	LOCAL_USER_ADD(u);
-
-	cw_set_write_format(chan, cw_best_codec(chan->nativeformats));
-	cw_set_read_format(chan, cw_best_codec(chan->nativeformats));
+	opbx_set_write_format(chan, opbx_best_codec(chan->nativeformats));
+	opbx_set_read_format(chan, opbx_best_codec(chan->nativeformats));
 	/* Do our thing here */
-    f = NULL;
-	while (cw_waitfor(chan, -1) > -1) {
-		f = cw_read(chan);
+	while(opbx_waitfor(chan, -1) > -1) {
+		f = opbx_read(chan);
 		if (!f)
 			break;
 		f->delivery.tv_sec = 0;
 		f->delivery.tv_usec = 0;
-		if (f->frametype == CW_FRAME_VOICE) {
-			if (cw_write(chan, f)) 
+		if (f->frametype == OPBX_FRAME_VOICE) {
+			if (opbx_write(chan, f)) 
 				break;
-		} else if (f->frametype == CW_FRAME_VIDEO) {
-			if (cw_write(chan, f)) 
+		} else if (f->frametype == OPBX_FRAME_VIDEO) {
+			if (opbx_write(chan, f)) 
 				break;
-		} else if (f->frametype == CW_FRAME_DTMF) {
+		} else if (f->frametype == OPBX_FRAME_DTMF) {
 			if (f->subclass == '#') {
 				res = 0;
 				break;
 			} else
-				if (cw_write(chan, f))
+				if (opbx_write(chan, f))
 					break;
 		}
-		cw_fr_free(f);
-        f = NULL;
+		opbx_frfree(f);
 	}
-	if (f)
-		cw_fr_free(f);
-
 	LOCAL_USER_REMOVE(u);
 	return res;
 }
 
 int unload_module(void)
 {
-	int res = 0;
 	STANDARD_HANGUP_LOCALUSERS;
-	res |= cw_unregister_application(echo_app);
-	return res;
+	return opbx_unregister_application(app);
 }
 
 int load_module(void)
 {
-	echo_app = cw_register_application(echo_name, echo_exec, echo_synopsis, echo_syntax, echo_descrip);
-	return 0;
+	return opbx_register_application(app, echo_exec, synopsis, descrip);
 }
 
 char *description(void)

@@ -1,11 +1,11 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  *
  * Copyright (C) 1999 - 2005, Anthony Minessale anthmct@yahoo.com
  * Development of this app Sponsered/Funded  by TAAN Softworks Corp
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -30,61 +30,58 @@
 #include <string.h>
 #include <pthread.h>
 
-#include "callweaver.h"
+#include "openpbx.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/apps/app_forkcdr.c $", "$Revision: 4723 $")
+OPENPBX_FILE_VERSION("$HeadURL$", "$Revision$")
 
-#include "callweaver/file.h"
-#include "callweaver/logger.h"
-#include "callweaver/channel.h"
-#include "callweaver/pbx.h"
-#include "callweaver/cdr.h"
-#include "callweaver/module.h"
+#include "openpbx/file.h"
+#include "openpbx/logger.h"
+#include "openpbx/channel.h"
+#include "openpbx/pbx.h"
+#include "openpbx/cdr.h"
+#include "openpbx/module.h"
 
 static char *tdesc = "Fork The CDR into 2 separate entities.";
-
-static void *forkcdr_app;
-static char *forkcdr_name = "ForkCDR";
-static char *forkcdr_synopsis = "Forks the Call Data Record";
-static char *forkcdr_syntax = "ForkCDR([options])";
-static char *forkcdr_descrip = 
-"Causes the Call Data Record to fork an additional\n"
-"cdr record starting from the time of the fork call\n"
-"If the option 'v' is passed all cdr variables will be passed along also.\n";
+static char *app = "ForkCDR";
+static char *synopsis = 
+"Forks the Call Data Record";
+static char *descrip = 
+"  ForkCDR([options]):  Causes the Call Data Record to fork an additional\n"
+	"cdr record starting from the time of the fork call\n"
+"If the option 'v' is passed all cdr variables will be passed along also.\n"
+"";
 
 
 STANDARD_LOCAL_USER;
 
 LOCAL_USER_DECL;
 
-static void cw_cdr_fork(struct cw_channel *chan) 
+static void opbx_cdr_fork(struct opbx_channel *chan) 
 {
-	struct cw_cdr *cdr;
-	struct cw_cdr *newcdr;
+	struct opbx_cdr *cdr;
+	struct opbx_cdr *newcdr;
 	if (!chan || !(cdr = chan->cdr))
 		return;
 	while (cdr->next)
 		cdr = cdr->next;
-	if (!(newcdr = cw_cdr_dup(cdr)))
+	if (!(newcdr = opbx_cdr_dup(cdr)))
 		return;
-	cw_cdr_append(cdr, newcdr);
-	cw_cdr_reset(newcdr, CW_CDR_FLAG_KEEP_VARS);
-	if (!cw_test_flag(cdr, CW_CDR_FLAG_KEEP_VARS))
-		cw_cdr_free_vars(cdr, 0);
-	cw_set_flag(cdr, CW_CDR_FLAG_CHILD | CW_CDR_FLAG_LOCKED);
+	opbx_cdr_append(cdr, newcdr);
+	opbx_cdr_reset(newcdr, OPBX_CDR_FLAG_KEEP_VARS);
+	if (!opbx_test_flag(cdr, OPBX_CDR_FLAG_KEEP_VARS))
+		opbx_cdr_free_vars(cdr, 0);
+	opbx_set_flag(cdr, OPBX_CDR_FLAG_CHILD | OPBX_CDR_FLAG_LOCKED);
 }
 
-static int forkcdr_exec(struct cw_channel *chan, int argc, char **argv)
+static int forkcdr_exec(struct opbx_channel *chan, void *data)
 {
-	struct localuser *u;
 	int res=0;
-
+	struct localuser *u;
 	LOCAL_USER_ADD(u);
-
-	if (argc > 0)
-		cw_set2_flag(chan->cdr, strchr(argv[0], 'v'), CW_CDR_FLAG_KEEP_VARS);
+	if (!opbx_strlen_zero(data))
+		opbx_set2_flag(chan->cdr, strchr((char *)data, 'v'), OPBX_CDR_FLAG_KEEP_VARS);
 	
-	cw_cdr_fork(chan);
+	opbx_cdr_fork(chan);
 
 	LOCAL_USER_REMOVE(u);
 	return res;
@@ -92,16 +89,13 @@ static int forkcdr_exec(struct cw_channel *chan, int argc, char **argv)
 
 int unload_module(void)
 {
-	int res = 0;
 	STANDARD_HANGUP_LOCALUSERS;
-	res |= cw_unregister_application(forkcdr_app);
-	return res;
+	return opbx_unregister_application(app);
 }
 
 int load_module(void)
 {
-	forkcdr_app = cw_register_application(forkcdr_name, forkcdr_exec, forkcdr_synopsis, forkcdr_syntax, forkcdr_descrip);
-	return 0;
+	return opbx_register_application(app, forkcdr_exec, synopsis, descrip);
 }
 
 char *description(void)

@@ -1,10 +1,10 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  *
  * Copyright (C) 1999 - 2005, Digium, Inc.
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -29,26 +29,26 @@
 #include <string.h>
 #include <stdlib.h>
 
-#include "callweaver.h"
+#include "openpbx.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/apps/app_userevent.c $", "$Revision: 4723 $")
+OPENPBX_FILE_VERSION("$HeadURL$", "$Revision$")
 
-#include "callweaver/lock.h"
-#include "callweaver/file.h"
-#include "callweaver/logger.h"
-#include "callweaver/channel.h"
-#include "callweaver/pbx.h"
-#include "callweaver/module.h"
-#include "callweaver/manager.h"
+#include "openpbx/lock.h"
+#include "openpbx/file.h"
+#include "openpbx/logger.h"
+#include "openpbx/channel.h"
+#include "openpbx/pbx.h"
+#include "openpbx/module.h"
+#include "openpbx/manager.h"
 
 static char *tdesc = "Custom User Event Application";
 
-static void *userevent_app;
-static const char *userevent_name = "UserEvent";
-static const char *userevent_synopsis = "Send an arbitrary event to the manager interface";
-static const char *userevent_syntax = "UserEvent(eventname[, body])";
-static const char *userevent_descrip = 
-"Sends an arbitrary event to the\n"
+static char *app = "UserEvent";
+
+static char *synopsis = "Send an arbitrary event to the manager interface";
+
+static char *descrip = 
+"  UserEvent(eventname[|body]): Sends an arbitrary event to the\n"
 "manager interface, with an optional body representing additional\n"
 "arguments.  The format of the event will be:\n"
 "    Event: UserEvent<specified event name>\n"
@@ -62,27 +62,41 @@ STANDARD_LOCAL_USER;
 
 LOCAL_USER_DECL;
 
-static int userevent_exec(struct cw_channel *chan, int argc, char **argv)
+static int userevent_exec(struct opbx_channel *chan, void *data)
 {
-	char eventname[512];
 	struct localuser *u;
+	char *info;
+	char eventname[512];
+	char *eventbody;
 
-	if (argc < 1 || argc > 2 || !argv[0][0]) {
-		cw_log(LOG_ERROR, "Syntax: %s\n", userevent_syntax);
+	if (opbx_strlen_zero(data)) {
+		opbx_log(LOG_WARNING, "UserEvent requires an argument (eventname|optional event body)\n");
 		return -1;
 	}
 
 	LOCAL_USER_ADD(u);
 
-	snprintf(eventname, sizeof(eventname), "UserEvent%s", argv[0]);
+	info = opbx_strdupa(data);
+	if (!info) {
+		opbx_log(LOG_ERROR, "Out of memory\n");
+		LOCAL_USER_REMOVE(u);
+		return -1;
+	}
 
-	if (argc > 1 && argv[1][0]) {
-            cw_log(LOG_DEBUG, "Sending user event: %s, %s\n", eventname, argv[1]);
+	snprintf(eventname, sizeof(eventname), "UserEvent%s", info);
+	eventbody = strchr(eventname, '|');
+	if (eventbody) {
+		*eventbody = '\0';
+		eventbody++;
+	}
+	
+	if(eventbody) {
+            opbx_log(LOG_DEBUG, "Sending user event: %s, %s\n", eventname, eventbody);
             manager_event(EVENT_FLAG_USER, eventname, 
 			"Channel: %s\r\nUniqueid: %s\r\n%s\r\n",
-			chan->name, chan->uniqueid, argv[1]);
+			chan->name, chan->uniqueid, eventbody);
 	} else {
-            cw_log(LOG_DEBUG, "Sending user event: %s\n", eventname);
+            opbx_log(LOG_DEBUG, "Sending user event: %s\n", eventname);
             manager_event(EVENT_FLAG_USER, eventname, 
 			"Channel: %s\r\nUniqueid: %s\r\n", chan->name, chan->uniqueid);
 	}
@@ -93,16 +107,13 @@ static int userevent_exec(struct cw_channel *chan, int argc, char **argv)
 
 int unload_module(void)
 {
-	int res = 0;
 	STANDARD_HANGUP_LOCALUSERS;
-	res |= cw_unregister_application(userevent_app);
-	return res;
+	return opbx_unregister_application(app);
 }
 
 int load_module(void)
 {
-	userevent_app = cw_register_application(userevent_name, userevent_exec, userevent_synopsis, userevent_syntax, userevent_descrip);
-	return 0;
+	return opbx_register_application(app, userevent_exec, synopsis, descrip);
 }
 
 char *description(void)

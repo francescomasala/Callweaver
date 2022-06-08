@@ -1,12 +1,12 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  *
  * Copyright (C) 1999 - 2005, Digium, Inc.
  *
  * Mark Spencer <markster@digium.com>
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -34,15 +34,15 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-#include "callweaver.h"
+#include "openpbx.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/pbx/dundi-parser.c $", "$Revision: 4723 $")
+OPENPBX_FILE_VERSION("$HeadURL$", "$Revision$")
 
-#include "callweaver/frame.h"
-#include "callweaver/utils.h"
-#include "callweaver/dundi.h"
+#include "openpbx/frame.h"
+#include "openpbx/utils.h"
+#include "openpbx/dundi.h"
 #include "dundi-parser.h"
-#include "callweaver/dundi.h"
+#include "openpbx/dundi.h"
 
 static void internaloutput(const char *str)
 {
@@ -165,7 +165,7 @@ char *dundi_hint2str(char *buf, int bufsiz, int flags)
 		strncat(buf, "UNAFFECTED|", bufsiz - strlen(buf) - 1);
 	}
 	/* Get rid of trailing | */
-	if (cw_strlen_zero(buf))
+	if (opbx_strlen_zero(buf))
 		strcpy(buf, "NONE|");
 	buf[strlen(buf)-1] = '\0';
 	return buf;
@@ -305,7 +305,7 @@ char *dundi_flags2str(char *buf, int bufsiz, int flags)
 		strncat(buf, "NOCOMUNSLTD|", bufsiz - strlen(buf) - 1);
 	}
 	/* Get rid of trailing | */
-	if (cw_strlen_zero(buf))
+	if (opbx_strlen_zero(buf))
 		strcpy(buf, "NONE|");
 	buf[strlen(buf)-1] = '\0';
 	return buf;
@@ -502,7 +502,7 @@ void dundi_showframe(struct dundi_hdr *fhi, int rx, struct sockaddr_in *sin, int
 	snprintf(tmp, (int)sizeof(tmp), 
 		"%s     Flags: %s STrans: %5.5d  DTrans: %5.5d [%s:%d]%s\n", (rx > 1) ? "     " : "",
 		subclass, ntohs(fhi->strans) & ~DUNDI_FLAG_RESERVED, ntohs(fhi->dtrans) & ~DUNDI_FLAG_RETRANS,
-		cw_inet_ntoa(iabuf, sizeof(iabuf), sin->sin_addr), ntohs(sin->sin_port),
+		opbx_inet_ntoa(iabuf, sizeof(iabuf), sin->sin_addr), ntohs(sin->sin_port),
 		fhi->cmdresp & 0x80 ? " (Final)" : "");
 	outputf(tmp);
 	dump_ies(fhi->ies, rx > 1, datalen);

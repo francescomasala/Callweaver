@@ -6,17 +6,17 @@
  * Written by Anthony Minessale II <anthmct at yahoo dot com>
  * Written by Bruce Atherton <bruce at callenish dot com>
  * Additions, Changes and Support by Tim R. Clark <tclark at shaw dot ca>
- * Changed to adopt to jabber interaction and adjusted for CallWeaver.org by
+ * Changed to adopt to jabber interaction and adjusted for OpenPBX.org by
  * Halo Kwadrat Sp. z o.o., Piotr Figurny and Michal Bielicki
  * 
  * This application is a part of:
  * 
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  * Copyright (C) 1999 - 2005, Digium, Inc.
  * Mark Spencer <markster@digium.com>
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -71,7 +71,7 @@
  * too are stored in the list structure.
  *
  * Because it can be locked for insertions and removals, the list structure
- * holds an cw_lock structure.
+ * holds an opbx_lock structure.
  *
  * In addition, it holds an icd_listeners structure to provide listener
  * behaviour to events on the list. A list also has an optional name, a
@@ -93,23 +93,23 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
-#include "callweaver/icd/icd_common.h"
-#include "callweaver/icd/icd_listeners.h"
-#include "callweaver/icd/icd_event.h"
-#include "callweaver/icd/icd_memory.h"
+#include "openpbx/icd/icd_common.h"
+#include "openpbx/icd/icd_listeners.h"
+#include "openpbx/icd/icd_event.h"
+#include "openpbx/icd/icd_memory.h"
 
 /*===== Public APIs =====*/
 
-#include "callweaver/icd/icd_list.h"
+#include "openpbx/icd/icd_list.h"
 
 /*===== Private Types and APIs =====*/
 
-#include "callweaver/icd/icd_list_private.h"
+#include "openpbx/icd/icd_list_private.h"
 
 char *icd_list_state_strings[] = {
     "ICD_LIST_STATE_CREATED", "ICD_LIST_STATE_INITIALIZED",
     "ICD_LIST_STATE_CLEARED", "ICD_LIST_STATE_DESTROYED",
-    "ICD_LIST_STATE_L CW_STANDARD"
+    "ICD_LIST_STATE_L OPBX_STANDARD"
 };
 
 /* Note that none of these functions locks the list. */
@@ -146,7 +146,7 @@ icd_list *create_icd_list(icd_config * data)
             list->created_as_object = 1;
     }
     if (list == NULL) {
-        cw_log(LOG_ERROR, "No memory available to create a new ICD List\n");
+        opbx_log(LOG_ERROR, "No memory available to create a new ICD List\n");
         return NULL;
     }
     list->allocated = 1;
@@ -185,7 +185,7 @@ icd_status destroy_icd_list(icd_list ** listp)
         icd_event_factory__notify(event_factory, *listp, (*listp)->name, module_id, ICD_EVENT_DESTROY, NULL,
         (*listp)->listeners, NULL, (*listp)->dstry_fn, (*listp)->dstry_fn_extra);
     if (vetoed == ICD_EVETO) {
-        cw_log(LOG_NOTICE, "Destruction of ICD List %s has been vetoed\n", icd_list__get_name(*listp));
+        opbx_log(LOG_NOTICE, "Destruction of ICD List %s has been vetoed\n", icd_list__get_name(*listp));
         return ICD_EVETO;
     }
 
@@ -216,7 +216,7 @@ icd_status init_icd_list(icd_list * that, icd_config * data)
 
     assert(that != NULL);
 
-    cw_mutex_init(&(that->lock));
+    opbx_mutex_init(&(that->lock));
     that->category = ICD_LIST_CAT_UNKNOWN;
     that->ins_fn = icd_list__insert_fifo;
     /* TBD - create_icd_listeners() should take an icd_memory * argument */
@@ -275,7 +275,7 @@ icd_status init_icd_list(icd_list * that, icd_config * data)
     ICD_SUBMULTICALLOC(that->cache, that->size, icd_list_node);
     //that->cache = (icd_list_node *) malloc (sizeof(icd_list_node) * that->size);
     if (that->cache == NULL) {
-        cw_log(LOG_ERROR, "No memory available to create an ICD List cache\n");
+        opbx_log(LOG_ERROR, "No memory available to create an ICD List cache\n");
         return ICD_ERESOURCE;
     }
     /* Initialize the free list to the first element in cache */
@@ -323,7 +323,7 @@ icd_status icd_list__clear(icd_list * that)
     /* Notify event hooks and listeners */
     vetoed = icd_event__notify(ICD_EVENT_CLEAR, NULL, that->clr_fn, that->clr_fn_extra);
     if (vetoed == ICD_EVETO) {
-        cw_log(LOG_WARNING, "Clearing of ICD List %s has been vetoed\n", icd_list__get_name(that));
+        opbx_log(LOG_WARNING, "Clearing of ICD List %s has been vetoed\n", icd_list__get_name(that));
         return ICD_EVETO;
     }
 
@@ -339,7 +339,7 @@ icd_status icd_list__clear(icd_list * that)
     }
     count = icd_list__count(that);
     if (count != 0) {
-        cw_log(LOG_WARNING, "Was unable to clear ICD List %s\n", icd_list__get_name(that));
+        opbx_log(LOG_WARNING, "Was unable to clear ICD List %s\n", icd_list__get_name(that));
         return ICD_EGENERAL;
     }
 
@@ -352,10 +352,10 @@ icd_status icd_list__clear(icd_list * that)
             that->name = NULL;
         }
         icd_list__unlock(that);
-        cw_mutex_destroy(&(that->lock));
+        opbx_mutex_destroy(&(that->lock));
         return ICD_SUCCESS;
     }
-    cw_log(LOG_WARNING, "Unable to get a lock on ICD List %s in order to clear it\n", icd_list__get_name(that));
+    opbx_log(LOG_WARNING, "Unable to get a lock on ICD List %s in order to clear it\n", icd_list__get_name(that));
     return ICD_ELOCK;
 }
 
@@ -375,7 +375,7 @@ icd_status icd_list__push(icd_list * that, void *element)
     /* First, notify event hooks and listeners */
     vetoed = icd_event__notify(ICD_EVENT_PUSH, element, that->add_fn, that->add_fn_extra);
     if (vetoed == ICD_EVETO) {
-        cw_log(LOG_NOTICE, "Adding Node to ICD List %s has been vetoed\n", icd_list__get_name(that));
+        opbx_log(LOG_NOTICE, "Adding Node to ICD List %s has been vetoed\n", icd_list__get_name(that));
         return ICD_EVETO;
     }
 
@@ -386,7 +386,7 @@ icd_status icd_list__push(icd_list * that, void *element)
 
         new_node = icd_list__get_node(that);
         if (new_node == NULL) {
-            cw_log(LOG_WARNING, "No room in ICD List %s to push an element\n", icd_list__get_name(that));
+            opbx_log(LOG_WARNING, "No room in ICD List %s to push an element\n", icd_list__get_name(that));
             icd_list__unlock(that);
             return ICD_ERESOURCE;
         }
@@ -406,7 +406,7 @@ icd_status icd_list__push(icd_list * that, void *element)
         icd_list__unlock(that);
         return ICD_SUCCESS;
     }
-    cw_log(LOG_WARNING, "Unable to get a lock on ICD List %s in order to push onto it\n",
+    opbx_log(LOG_WARNING, "Unable to get a lock on ICD List %s in order to push onto it\n",
         icd_list__get_name(that));
     return ICD_ELOCK;
 }
@@ -445,7 +445,7 @@ void *icd_list__pop_locked(icd_list * that)
     /* Notify event hooks and listeners */
     vetoed = icd_event__notify(ICD_EVENT_POP, node->payload, that->del_fn, that->del_fn_extra);
     if (vetoed == ICD_EVETO) {
-        cw_log(LOG_NOTICE, "Removing Node from ICD List %s has been vetoed\n", icd_list__get_name(that));
+        opbx_log(LOG_NOTICE, "Removing Node from ICD List %s has been vetoed\n", icd_list__get_name(that));
         return NULL;
     }
 
@@ -472,7 +472,7 @@ void *icd_list__pop_locked(icd_list * that)
     /* Do we need the return to differentiate between this null, the
        empty list null, and the empty element null? Perhaps this function
        needs an icd_status * parameter. */
-    cw_log(LOG_WARNING, "Unable to get a lock on ICD List %s in order to pop off of it\n",
+    opbx_log(LOG_WARNING, "Unable to get a lock on ICD List %s in order to pop off of it\n",
         icd_list__get_name(that));
     return NULL;
 
@@ -764,15 +764,15 @@ icd_status icd_list__lock(icd_list * that)
     }
    
    if (icd_debug)
-            cw_log(LOG_DEBUG, "List [%s] try to lock\n", that->name);
-    retval = cw_mutex_lock(&that->lock);
+            opbx_log(LOG_DEBUG, "List [%s] try to lock\n", that->name);
+    retval = opbx_mutex_lock(&that->lock);
     if (retval == 0) {
        if (icd_debug)
-            cw_log(LOG_DEBUG, "List [%s] locked\n", that->name);
+            opbx_log(LOG_DEBUG, "List [%s] locked\n", that->name);
         return ICD_SUCCESS;
     }
     if (icd_debug)
-            cw_log(LOG_DEBUG, "List [%s] lock failed\n", that->name);
+            opbx_log(LOG_DEBUG, "List [%s] lock failed\n", that->name);
     return ICD_ELOCK;
 }
 
@@ -787,15 +787,15 @@ icd_status icd_list__unlock(icd_list * that)
         return ICD_ERESOURCE;
     }
     if (icd_debug)
-            cw_log(LOG_DEBUG, "List [%s] try to unlock\n", that->name);
-    retval = cw_mutex_unlock(&that->lock);
+            opbx_log(LOG_DEBUG, "List [%s] try to unlock\n", that->name);
+    retval = opbx_mutex_unlock(&that->lock);
     if (retval == 0) {
         if (icd_debug)
-            cw_log(LOG_DEBUG, "List [%s] unlocked\n", that->name);
+            opbx_log(LOG_DEBUG, "List [%s] unlocked\n", that->name);
         return ICD_SUCCESS;
     }
     if (icd_debug)
-            cw_log(LOG_DEBUG, "List [%s] unlock failed\n", that->name);
+            opbx_log(LOG_DEBUG, "List [%s] unlock failed\n", that->name);
     return ICD_ELOCK;
 }
 
@@ -830,7 +830,7 @@ icd_list_iterator *icd_list__get_iterator(icd_list * that)
     assert(that != NULL);
     ICD_SUBCALLOC(iter, icd_list_iterator);
     if (iter == NULL) {
-        cw_log(LOG_ERROR, "No memory available to create an iterator on ICD list %s\n", icd_list__get_name(that));
+        opbx_log(LOG_ERROR, "No memory available to create an iterator on ICD list %s\n", icd_list__get_name(that));
         return NULL;
     }
     memset(iter, 0, sizeof(icd_list_iterator));
@@ -871,12 +871,12 @@ int icd_list_iterator__has_more(icd_list_iterator * that)
     if (!that->next || !that->parent) {
         return 0;
     }
-    cw_mutex_lock(&that->parent->lock);
+    opbx_mutex_lock(&that->parent->lock);
     if (that && that->next && that->next->state && that->next->state != ICD_NODE_STATE_USED && that->curr
         && that->curr->state && that->curr->state == ICD_NODE_STATE_USED) {
         that->next = that->curr->next;
     }
-    cw_mutex_unlock(&that->parent->lock);
+    opbx_mutex_unlock(&that->parent->lock);
     return (that->next != NULL);
 }
 
@@ -1012,52 +1012,52 @@ icd_status icd_list__standard_dump(icd_list * list, int verbosity, int fd, void 
         skip_opening = *((int *) extra);
     }
     if (skip_opening == 0) {
-        cw_cli(fd, "\nDumping icd_list {\n");
+        opbx_cli(fd, "\nDumping icd_list {\n");
     }
-    cw_cli(fd, "      name=%s\n", icd_list__get_name(list));
-    cw_cli(fd, "     count=%d\n", list->count);
-    cw_cli(fd, "      size=%d\n", list->size);
-    cw_cli(fd, "     state=%d\n", list->state);
-    cw_cli(fd, "  category=%d\n", list->category);
+    opbx_cli(fd, "      name=%s\n", icd_list__get_name(list));
+    opbx_cli(fd, "     count=%d\n", list->count);
+    opbx_cli(fd, "      size=%d\n", list->size);
+    opbx_cli(fd, "     state=%d\n", list->state);
+    opbx_cli(fd, "  category=%d\n", list->category);
     if (verbosity > 2) {
-        cw_cli(fd, "      head=%p\n", list->head);
-        cw_cli(fd, "      tail=%p\n", list->tail);
-        cw_cli(fd, "     cache=%p\n", list->cache);
-        cw_cli(fd, "first_free=%p\n", list->first_free);
-        cw_cli(fd, " listeners=%p\n", list->listeners);
-        cw_cli(fd, "     flags=%u\n", list->flags);
-        cw_cli(fd, "    key_fn=%p\n", list->key_fn);
-        cw_cli(fd, "    ins_fn=%p\n", list->ins_fn);
-        cw_cli(fd, "    add_fn=%p\n", list->add_fn);
-        cw_cli(fd, "    del_fn=%p\n", list->del_fn);
-        cw_cli(fd, "    clr_fn=%p\n", list->clr_fn);
-        cw_cli(fd, "  dstry_fn=%p\n", list->dstry_fn);
-        cw_cli(fd, "   dump_fn=%p\n", list->dump_fn);
+        opbx_cli(fd, "      head=%p\n", list->head);
+        opbx_cli(fd, "      tail=%p\n", list->tail);
+        opbx_cli(fd, "     cache=%p\n", list->cache);
+        opbx_cli(fd, "first_free=%p\n", list->first_free);
+        opbx_cli(fd, " listeners=%p\n", list->listeners);
+        opbx_cli(fd, "     flags=%u\n", list->flags);
+        opbx_cli(fd, "    key_fn=%p\n", list->key_fn);
+        opbx_cli(fd, "    ins_fn=%p\n", list->ins_fn);
+        opbx_cli(fd, "    add_fn=%p\n", list->add_fn);
+        opbx_cli(fd, "    del_fn=%p\n", list->del_fn);
+        opbx_cli(fd, "    clr_fn=%p\n", list->clr_fn);
+        opbx_cli(fd, "  dstry_fn=%p\n", list->dstry_fn);
+        opbx_cli(fd, "   dump_fn=%p\n", list->dump_fn);
     }
     if (verbosity > 3) {
-        cw_cli(fd, " ins_extra=%p\n", list->ins_fn_extra);
-        cw_cli(fd, " add_extra=%p\n", list->add_fn_extra);
-        cw_cli(fd, " del_extra=%p\n", list->del_fn_extra);
-        cw_cli(fd, " clr_extra=%p\n", list->clr_fn_extra);
-        cw_cli(fd, "dstry_xtra=%p\n", list->dstry_fn_extra);
-        cw_cli(fd, " dump_xtra=%p\n", list->dump_fn_extra);
+        opbx_cli(fd, " ins_extra=%p\n", list->ins_fn_extra);
+        opbx_cli(fd, " add_extra=%p\n", list->add_fn_extra);
+        opbx_cli(fd, " del_extra=%p\n", list->del_fn_extra);
+        opbx_cli(fd, " clr_extra=%p\n", list->clr_fn_extra);
+        opbx_cli(fd, "dstry_xtra=%p\n", list->dstry_fn_extra);
+        opbx_cli(fd, " dump_xtra=%p\n", list->dump_fn_extra);
     }
 
     if (skip_opening == 0 && verbosity > 1) {
-        cw_cli(fd, "    nodes {\n");
+        opbx_cli(fd, "    nodes {\n");
         iter = icd_list__get_iterator(list);
         if (iter == NULL) {
             return ICD_ERESOURCE;
         }
         while (icd_list_iterator__has_more(iter)) {
             element = icd_list_iterator__next(iter);
-            cw_cli(fd, "       payload=%p", element);
+            opbx_cli(fd, "       payload=%p", element);
         }
         destroy_icd_list_iterator(&iter);
-        cw_cli(fd, "    }\n");
+        opbx_cli(fd, "    }\n");
     }
     if (skip_opening == 0) {
-        cw_cli(fd, "}\n");
+        opbx_cli(fd, "}\n");
     }
     return ICD_SUCCESS;
 }
@@ -1170,7 +1170,7 @@ icd_status icd_list__drop_node(icd_list * that, void *key, int (*match_fn) (void
             destroy_icd_list_iterator(&iter);
             vetoed = icd_event__notify(ICD_EVENT_REMOVE, node->payload, that->del_fn, that->del_fn_extra);
             if (vetoed == ICD_EVETO) {
-                cw_log(LOG_NOTICE, "Removal of Node from ICD List %s has been vetoed\n", icd_list__get_name(that));
+                opbx_log(LOG_NOTICE, "Removal of Node from ICD List %s has been vetoed\n", icd_list__get_name(that));
                 icd_list__unlock(that);
                 return ICD_EVETO;
             }
@@ -1205,7 +1205,7 @@ icd_list_node *icd_list__get_node(icd_list * list)
 
     node = list->first_free;
     if (node == NULL) {
-        cw_log(LOG_WARNING,
+        opbx_log(LOG_WARNING,
             "Out of nodes to store element in ICD List.\nEither create "
             "the list %s with a larger size, or implement resizing in icd_list.c\n", icd_list__get_name(list));
         return NULL;

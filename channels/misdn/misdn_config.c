@@ -1,12 +1,12 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  * 
  * Copyright (C) 2005, Christian Richter
  *
  * Christian Richter <crich@beronet.com>
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -33,16 +33,16 @@
 
 #include "chan_misdn_config.h"
 
-#include "callweaver/config.h"
-#include "callweaver/channel.h"
-#include "callweaver/logger.h"
-#include "callweaver/lock.h"
-#include "callweaver/pbx.h"
-#include "callweaver/strings.h"
-#include "callweaver/utils.h"
+#include <openpbx/config.h>
+#include <openpbx/channel.h>
+#include <openpbx/logger.h>
+#include <openpbx/lock.h>
+#include <openpbx/pbx.h>
+#include <openpbx/strings.h>
+#include <openpbx/utils.h>
 
-#define CW_LOAD_CFG cw_config_load
-#define CW_DESTROY_CFG cw_config_destroy
+#define OPBX_LOAD_CFG opbx_config_load
+#define OPBX_DESTROY_CFG opbx_config_destroy
 
 #define NO_DEFAULT "<>"
 #define NONE 0
@@ -70,7 +70,7 @@ union misdn_cfg_pt {
 	char *str;
 	int *num;
 	struct msn_list *ml;
-	cw_group_t *grp;
+	opbx_group_t *grp;
 	void *any;
 };
 
@@ -108,7 +108,7 @@ static const struct misdn_cfg_spec port_spec[] = {
 		"\tas well, since chan_misdn has no chance to distinguish if the L1 is down\n"
 		"\tbecause of a lost Link or because the Provider shut it down..." },
 	{ "block_on_alarm", MISDN_CFG_ALARM_BLOCK, MISDN_CTYPE_BOOL, "yes", NONE,
-		"If the port should be blocked, whenever an Alarm comes up."},
+		"If the port should be blocked, whenever an Alarm comes up\n"},
 	{ "hdlc", MISDN_CFG_HDLC, MISDN_CTYPE_BOOL, "no", NONE,
 		"Set this to yes, if you want to bridge a mISDN data channel to\n"
 		"\tanother channel type or to an application." },
@@ -186,7 +186,7 @@ static const struct misdn_cfg_spec port_spec[] = {
 		"These (presentation and screen) are the exact isdn screening and presentation\n"
 		"\tindicators.\n"
 		"\tIf -1 is given for both values, the presentation indicators are used from\n"
-		"\tCallWeavers SetCallerPres application.\n"
+		"\tOpenPBXs SetCallerPres application.\n"
 		"\n"
 		"\tscreen=0, presentation=0 -> callerid presented not screened\n"
 		"\tscreen=1, presentation=1 -> callerid presented but screened (the remote end doesn't see it!)" },
@@ -194,7 +194,7 @@ static const struct misdn_cfg_spec port_spec[] = {
 		"These (presentation and screen) are the exact isdn screening and presentation\n"
 		"\tindicators.\n"
 		"\tIf -1 is given for both values, the presentation indicators are used from\n"
-		"\tCallWeavers SetCallerPres application.\n"
+		"\tOpenPBXs SetCallerPres application.\n"
 		"\n"
 		"\tscreen=0, presentation=0 -> callerid presented not screened\n"
 		"\tscreen=1, presentation=1 -> callerid presented but screened (the remote end doesn't see it!)" },
@@ -295,7 +295,7 @@ static const struct misdn_cfg_spec port_spec[] = {
 		"\n"
 		"\tThis option is only read at loading time of chan_misdn, which\n"
 		"\tmeans you need to unload and load chan_misdn to change the value,\n"
-		"\tan CallWeaver restart should do the trick." },
+		"\tan OpenPBX restart should do the trick." },
 	{ "overlap_dial", MISDN_CFG_OVERLAP_DIAL, MISDN_CTYPE_BOOLINT, "0", 4,
 		"Enables overlap dial for the given amount of seconds.\n"
 		"\tPossible values are positive integers or:\n"
@@ -303,7 +303,7 @@ static const struct misdn_cfg_spec port_spec[] = {
 		"\t   no  (= 0 seconds = disabled)" },
 	{ "msns", MISDN_CFG_MSNS, MISDN_CTYPE_MSNLIST, NO_DEFAULT, NONE,
 		"MSN's for TE ports, listen on those numbers on the above ports, and\n"
-		"\tindicate the incoming calls to CallWeaver.\n"
+		"\tindicate the incoming calls to OpenPBX.\n"
 		"\tHere you can give a comma seperated list, or simply an '*' for any msn." },
 };
 
@@ -317,7 +317,7 @@ static const struct misdn_cfg_spec gen_spec[] = {
 		"\t4 - even more Verbose than 3" },
 	{ "misdn_init", MISDN_GEN_MISDN_INIT, MISDN_CTYPE_STR, "/etc/misdn-init.conf", NONE,
 		"Set the path to the misdn-init.conf (for nt_ptp mode checking)." },
-	{ "tracefile", MISDN_GEN_TRACEFILE, MISDN_CTYPE_STR, "/var/log/callweaver.org/misdn.log", NONE,
+	{ "tracefile", MISDN_GEN_TRACEFILE, MISDN_CTYPE_STR, "/var/log/openpbx.org/misdn.log", NONE,
 		"Set the path to the massively growing trace file, if you want that." },
 	{ "bridging", MISDN_GEN_BRIDGING, MISDN_CTYPE_BOOL, "yes", NONE,
 		"Set this to yes if you want mISDN_dsp to bridge the calls in HW." },
@@ -349,10 +349,10 @@ static int *ptp;
 /* maps enum config elements to array positions */
 static int *map;
 
-static cw_mutex_t config_mutex; 
+static opbx_mutex_t config_mutex; 
 
 #define CLI_ERROR(name, value, section) ({ \
-	cw_log(LOG_WARNING, "misdn.conf: \"%s=%s\" (section: %s) invalid or out of range. " \
+	opbx_log(LOG_WARNING, "misdn.conf: \"%s=%s\" (section: %s) invalid or out of range. " \
 		"Please edit your misdn.conf and then do a \"misdn reload\".\n", name, value, section); \
 })
 
@@ -372,7 +372,7 @@ static int _enum_array_map (void)
 			}
 		}
 		if (!ok) {
-			cw_log(LOG_WARNING, "Enum element %d in misdn_cfg_elements (port section) has no corresponding element in the config struct!\n", i);
+			opbx_log(LOG_WARNING, "Enum element %d in misdn_cfg_elements (port section) has no corresponding element in the config struct!\n", i);
 			return -1;
 		}
 	}
@@ -386,7 +386,7 @@ static int _enum_array_map (void)
 			}
 		}
 		if (!ok) {
-			cw_log(LOG_WARNING, "Enum element %d in misdn_cfg_elements (general section) has no corresponding element in the config struct!\n", i);
+			opbx_log(LOG_WARNING, "Enum element %d in misdn_cfg_elements (general section) has no corresponding element in the config struct!\n", i);
 			return -1;
 		}
 	}
@@ -416,12 +416,12 @@ static int get_cfg_position (char *name, int type)
 
 static inline void misdn_cfg_lock (void)
 {
-	cw_mutex_lock(&config_mutex);
+	opbx_mutex_lock(&config_mutex);
 }
 
 static inline void misdn_cfg_unlock (void)
 {
-	cw_mutex_unlock(&config_mutex);
+	opbx_mutex_unlock(&config_mutex);
 }
 
 static void _free_msn_list (struct msn_list* iter)
@@ -481,7 +481,7 @@ void misdn_cfg_get (int port, enum misdn_cfg_elements elem, void *buf, int bufsi
 
 	if ((elem < MISDN_CFG_LAST) && !misdn_cfg_is_port_valid(port)) {
 		memset(buf, 0, bufsize);
-		cw_log(LOG_WARNING, "Invalid call to misdn_cfg_get! Port number %d is not valid.\n", port);
+		opbx_log(LOG_WARNING, "Invalid call to misdn_cfg_get! Port number %d is not valid.\n", port);
 		return;
 	}
 
@@ -492,7 +492,7 @@ void misdn_cfg_get (int port, enum misdn_cfg_elements elem, void *buf, int bufsi
 	} else {
 		if ((place = map[elem]) < 0) {
 			memset (buf, 0, bufsize);
-			cw_log(LOG_WARNING, "Invalid call to misdn_cfg_get! Invalid element (%d) requested.\n", elem);
+			opbx_log(LOG_WARNING, "Invalid call to misdn_cfg_get! Invalid element (%d) requested.\n", elem);
 		} else {
 			if (elem < MISDN_CFG_LAST) {
 				switch (port_spec[place].type) {
@@ -619,7 +619,7 @@ int misdn_cfg_is_msn_valid (int port, char* msn)
 
 	if (!misdn_cfg_is_port_valid(port))
     {
-		cw_log(LOG_WARNING, "Invalid call to misdn_cfg_is_msn_valid! Port number %d is not valid.\n", port);
+		opbx_log(LOG_WARNING, "Invalid call to misdn_cfg_is_msn_valid! Port number %d is not valid.\n", port);
 		return 0;
 	}
 
@@ -636,7 +636,7 @@ int misdn_cfg_is_msn_valid (int port, char* msn)
 		}
         else
         {
-            switch (cw_extension_pattern_match(msn, iter->msn))
+            switch (opbx_extension_pattern_match(msn, iter->msn))
             {
             case EXTENSION_MATCH_EXACT:
             case EXTENSION_MATCH_STRETCHABLE:
@@ -718,7 +718,7 @@ void misdn_cfg_get_config_string (int port, enum misdn_cfg_elements elem, char* 
 
 	if ((elem < MISDN_CFG_LAST) && !misdn_cfg_is_port_valid(port)) {
 		*buf = 0;
-		cw_log(LOG_WARNING, "Invalid call to misdn_cfg_get_config_string! Port number %d is not valid.\n", port);
+		opbx_log(LOG_WARNING, "Invalid call to misdn_cfg_get_config_string! Port number %d is not valid.\n", port);
 		return;
 	}
 
@@ -750,10 +750,10 @@ void misdn_cfg_get_config_string (int port, enum misdn_cfg_elements elem, char* 
 		case MISDN_CTYPE_ASTGROUP:
 			if (port_cfg[port][place].grp)
 				snprintf(buf, bufsize, " -> %s: %s", port_spec[place].name, 
-						 cw_print_group(tempbuf, sizeof(tempbuf), *port_cfg[port][place].grp));
+						 opbx_print_group(tempbuf, sizeof(tempbuf), *port_cfg[port][place].grp));
 			else if (port_cfg[0][place].grp)
 				snprintf(buf, bufsize, " -> %s: %s", port_spec[place].name, 
-						 cw_print_group(tempbuf, sizeof(tempbuf), *port_cfg[0][place].grp));
+						 opbx_print_group(tempbuf, sizeof(tempbuf), *port_cfg[0][place].grp));
 			else
 				snprintf(buf, bufsize, " -> %s:", port_spec[place].name);
 			break;
@@ -807,7 +807,7 @@ void misdn_cfg_get_config_string (int port, enum misdn_cfg_elements elem, char* 
 		}
 	} else {
 		*buf = 0;
-		cw_log(LOG_WARNING, "Invalid call to misdn_cfg_get_config_string! Invalid config element (%d) requested.\n", elem);
+		opbx_log(LOG_WARNING, "Invalid call to misdn_cfg_get_config_string! Invalid config element (%d) requested.\n", elem);
 	}
 	misdn_cfg_unlock();
 }
@@ -868,14 +868,14 @@ static int _parse (union misdn_cfg_pt *dest, char *value, enum misdn_cfg_type ty
 		break;
 	case MISDN_CTYPE_BOOL:
 		dest->num = (int *)malloc(sizeof(int));
-		*(dest->num) = (cw_true(value) ? 1 : 0);
+		*(dest->num) = (opbx_true(value) ? 1 : 0);
 		break;
 	case MISDN_CTYPE_BOOLINT:
 		dest->num = (int *)malloc(sizeof(int));
 		if (sscanf(value, "%d", &tmp)) {
 			memcpy(dest->num, &tmp, sizeof(int));
 		} else {
-			*(dest->num) = (cw_true(value) ? boolint_def : 0);
+			*(dest->num) = (opbx_true(value) ? boolint_def : 0);
 		}
 		break;
 	case MISDN_CTYPE_MSNLIST:
@@ -890,15 +890,15 @@ static int _parse (union misdn_cfg_pt *dest, char *value, enum misdn_cfg_type ty
 		}
 		break;
 	case MISDN_CTYPE_ASTGROUP:
-		dest->grp = (cw_group_t *)malloc(sizeof(cw_group_t));
-		*(dest->grp) = cw_get_group(value);
+		dest->grp = (opbx_group_t *)malloc(sizeof(opbx_group_t));
+		*(dest->grp) = opbx_get_group(value);
 		break;
 	}
 
 	return re;
 }
 
-static void _build_general_config (struct cw_variable *v)
+static void _build_general_config (struct opbx_variable *v)
 {
 	int pos;
 
@@ -909,7 +909,7 @@ static void _build_general_config (struct cw_variable *v)
 	}
 }
 
-static void _build_port_config (struct cw_variable *v, char *cat)
+static void _build_port_config (struct opbx_variable *v, char *cat)
 {
 	int pos, i;
 	union misdn_cfg_pt cfg_tmp[NUM_PORT_ELEMENTS];
@@ -1001,7 +1001,7 @@ void misdn_cfg_update_ptp (void)
 			}
 			fclose(fp);
 		} else {
-			cw_log(LOG_WARNING,"Couldn't open %s: %s\n", misdn_init, strerror(errno));
+			opbx_log(LOG_WARNING,"Couldn't open %s: %s\n", misdn_init, strerror(errno));
 		}
 	}
 }
@@ -1038,7 +1038,7 @@ void misdn_cfg_destroy (void)
 	free(map);
 
 	misdn_cfg_unlock();
-	cw_mutex_destroy(&config_mutex);
+	opbx_mutex_destroy(&config_mutex);
 }
 
 int misdn_cfg_init (int this_max_ports)
@@ -1046,15 +1046,15 @@ int misdn_cfg_init (int this_max_ports)
 	char config[] = "misdn.conf";
 	char *cat, *p;
 	int i;
-	struct cw_config *cfg;
-	struct cw_variable *v;
+	struct opbx_config *cfg;
+	struct opbx_variable *v;
 
-	if (!(cfg = CW_LOAD_CFG(config))) {
-		cw_log(LOG_WARNING, "missing file: misdn.conf\n");
+	if (!(cfg = OPBX_LOAD_CFG(config))) {
+		opbx_log(LOG_WARNING, "missing file: misdn.conf\n");
 		return -1;
 	}
 
-	cw_mutex_init(&config_mutex);
+	opbx_mutex_init(&config_mutex);
 
 	misdn_cfg_lock();
 
@@ -1084,22 +1084,22 @@ int misdn_cfg_init (int this_max_ports)
 		memset(ptp, 0, sizeof(int) * (max_ports + 1));
 	}
 
-	cat = cw_category_browse(cfg, NULL);
+	cat = opbx_category_browse(cfg, NULL);
 
 	while(cat) {
-		v = cw_variable_browse(cfg, cat);
+		v = opbx_variable_browse(cfg, cat);
 		if (!strcasecmp(cat, "general")) {
 			_build_general_config(v);
 		} else {
 			_build_port_config(v, cat);
 		}
-		cat = cw_category_browse(cfg, cat);
+		cat = opbx_category_browse(cfg, cat);
 	}
 
 	_fill_defaults();
 
 	misdn_cfg_unlock();
-	CW_DESTROY_CFG(cfg);
+	OPBX_DESTROY_CFG(cfg);
 
 	return 0;
 }

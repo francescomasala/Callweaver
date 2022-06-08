@@ -1,10 +1,10 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * Openpbx -- An open source telephony toolkit.
  *
  * Copyright (C) 2004 - 2006, Steve Underwod <steveu@coppice.org>
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the Openpbx project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -12,19 +12,17 @@
  * This program is free software, distributed under the terms of
  * the GNU General Public License Version 2. See the LICENSE file
  * at the top of the source tree.
- *
- * $Id$
  */
 
 /* Definitions for the land line SMS protocols in ETSI ES 201 912
  * Protocol 1 */
 
-#define DLL_SMS_P1_DATA                         0x11
-#define DLL_SMS_P1_ERROR                        0x12
-#define DLL_SMS_P1_EST                          0x13
-#define DLL_SMS_P1_REL                          0x14
-#define DLL_SMS_P1_ACK                          0x15
-#define DLL_SMS_P1_NACK                         0x16
+#define DLL_SMS_P1_DATA         0x11
+#define DLL_SMS_P1_ERROR        0x12
+#define DLL_SMS_P1_EST          0x13
+#define DLL_SMS_P1_REL          0x14
+#define DLL_SMS_P1_ACK          0x15
+#define DLL_SMS_P1_NACK         0x16
 
 
 #define DLL_SMS_ERROR_WRONG_CHECKSUM            0x01
@@ -34,37 +32,36 @@
 #define DLL_SMS_ERROR_UNSPECIFIED_ERROR         0xFF
 
 /* Times in ms */
-#define DLL_SMS_T10                             100
-#define DLL_SMS_T11                             100
-#define DLL_SMS_T12                             400
+#define DLL_SMS_T10             100
+#define DLL_SMS_T11             100
+#define DLL_SMS_T12             400
 
 
-/* Definitions for the land line SMS protocols in ETSI ES 201 912
- * Protocol 2 */
+/* Protocol 2 */
 
-#define DLL_SMS_P2_INFO_MO                      0x10
-#define DLL_SMS_P2_INFO_MT                      0x11
-#define DLL_SMS_P2_INFO_STA                     0x12
-#define DLL_SMS_P2_NACK                         0x13
-#define DLL_SMS_P2_ACK0                         0x14
-#define DLL_SMS_P2_ACK1                         0x15
-#define DLL_SMS_P2_ENQ                          0x16
-#define DLL_SMS_P2_REL                          0x17
+#define DLL_SMS_P2_INFO_MO      0x10
+#define DLL_SMS_P2_INFO_MT      0x11
+#define DLL_SMS_P2_INFO_STA     0x12
+#define DLL_SMS_P2_NACK         0x13
+#define DLL_SMS_P2_ACK0         0x14
+#define DLL_SMS_P2_ACK1         0x15
+#define DLL_SMS_P2_ENQ          0x16
+#define DLL_SMS_P2_REL          0x17
 
 /* Times in ms. Tolerance +-10% */
-#define DLL_SMS_TM1                              800
-#define DLL_SMS_TM2                             7600
-#define DLL_SMS_TM3                             7500
-#define DLL_SMS_TM4                             3500
-#define DLL_SMS_TM5                              800
-#define DLL_SMS_TM6                              200
-#define DLL_SMS_TM7                             3500
-#define DLL_SMS_T1                               200
-#define DLL_SMS_T2                               200
-#define DLL_SMS_T3                               100
+#define DLL_SMS_TM1          800
+#define DLL_SMS_TM2         7600
+#define DLL_SMS_TM3         7500
+#define DLL_SMS_TM4         3500
+#define DLL_SMS_TM5          800
+#define DLL_SMS_TM6          200
+#define DLL_SMS_TM7         3500
+#define DLL_SMS_T1           200
+#define DLL_SMS_T2           200
+#define DLL_SMS_T3           100
 
-#define DLL_SMS_NRETRY              2
-#define DLL_SMS_NWAIT               49
+#define DLL_SMS_NRETRY      2
+#define DLL_SMS_NWAIT       49
 
 #define DLL_PARM_MEDIA_IDENTIFIER   0x10    /* Media Identifier (length: 1) */
 #define DLL_PARM_FIRMWARE           0x11    /* Firmware Version (length: 6) */

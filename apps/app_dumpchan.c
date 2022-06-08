@@ -1,5 +1,5 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  *
  * Copyright (C) 2004 - 2005, Anthony Minessale II.
  *
@@ -7,8 +7,8 @@
  *
  * disclaimed to Digium
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -32,27 +32,25 @@
 #include <unistd.h>
 #include <string.h>
 
-#include "callweaver.h"
+#include "openpbx.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/apps/app_dumpchan.c $", "$Revision: 4723 $")
+OPENPBX_FILE_VERSION("$HeadURL$", "$Revision$")
 
-#include "callweaver/file.h"
-#include "callweaver/logger.h"
-#include "callweaver/channel.h"
-#include "callweaver/pbx.h"
-#include "callweaver/module.h"
-#include "callweaver/options.h"
-#include "callweaver/utils.h"
-#include "callweaver/lock.h"
-#include "callweaver/utils.h"
+#include "openpbx/file.h"
+#include "openpbx/logger.h"
+#include "openpbx/channel.h"
+#include "openpbx/pbx.h"
+#include "openpbx/module.h"
+#include "openpbx/options.h"
+#include "openpbx/utils.h"
+#include "openpbx/lock.h"
+#include "openpbx/utils.h"
 
 static char *tdesc = "Dump Info About The Calling Channel";
-
-static void *dumpchan_app;
-static char *dumpchan_name = "DumpChan";
-static char *dumpchan_synopsis = "Dump Info About The Calling Channel";
-static char *dumpchan_syntax = "DumpChan([min_verbose_level])";
-static char *dumpchan_descrip = 
+static char *app = "DumpChan";
+static char *synopsis = "Dump Info About The Calling Channel";
+static char *desc = 
+"   DumpChan([<min_verbose_level>])\n"
 "Displays information on channel and listing of all channel\n"
 "variables. If min_verbose_level is specified, output is only\n"
 "displayed when the verbose level is currently set to that number\n"
@@ -62,7 +60,7 @@ STANDARD_LOCAL_USER;
 
 LOCAL_USER_DECL;
 
-static int cw_serialize_showchan(struct cw_channel *c, char *buf, size_t size)
+static int opbx_serialize_showchan(struct opbx_channel *c, char *buf, size_t size)
 {
 	struct timeval now;
 	long elapsed_seconds=0;
@@ -70,7 +68,7 @@ static int cw_serialize_showchan(struct cw_channel *c, char *buf, size_t size)
 	char cgrp[256];
 	char pgrp[256];
 	
-	now = cw_tvnow();
+	now = opbx_tvnow();
 	memset(buf,0,size);
 	if (!c)
 		return 0;
@@ -105,6 +103,7 @@ static int cw_serialize_showchan(struct cw_channel *c, char *buf, size_t size)
 			 "CallGroup=          %s\n"
 			 "PickupGroup=        %s\n"
 			 "Application=        %s\n"
+			 "Data=               %s\n"
 			 "Blocking_in=        %s\n",
 			 c->name,
 			 c->type,
@@ -112,7 +111,7 @@ static int cw_serialize_showchan(struct cw_channel *c, char *buf, size_t size)
 			 (c->cid.cid_num ? c->cid.cid_num : "(N/A)"),
 			 (c->cid.cid_name ? c->cid.cid_name : "(N/A)"),
 			 (c->cid.cid_dnid ? c->cid.cid_dnid : "(N/A)" ),
-			 cw_state2str(c->_state),
+			 opbx_state2str(c->_state),
 			 c->_state,
 			 c->rings,
 			 c->nativeformats,
@@ -126,48 +125,49 @@ static int cw_serialize_showchan(struct cw_channel *c, char *buf, size_t size)
 			 c->context,
 			 c->exten,
 			 c->priority,
-			 cw_print_group(cgrp, sizeof(cgrp), c->callgroup),
-			 cw_print_group(pgrp, sizeof(pgrp), c->pickupgroup),
+			 opbx_print_group(cgrp, sizeof(cgrp), c->callgroup),
+			 opbx_print_group(pgrp, sizeof(pgrp), c->pickupgroup),
 			 ( c->appl ? c->appl : "(N/A)" ),
-			 (cw_test_flag(c, CW_FLAG_BLOCKING) ? c->blockproc : "(Not Blocking)"));
+			 ( c-> data ? (!opbx_strlen_zero(c->data) ? c->data : "(Empty)") : "(None)"),
+			 (opbx_test_flag(c, OPBX_FLAG_BLOCKING) ? c->blockproc : "(Not Blocking)"));
 
 	return 0;
 }
 
-static int dumpchan_exec(struct cw_channel *chan, int argc, char **argv)
+static int dumpchan_exec(struct opbx_channel *chan, void *data)
 {
-	static char *line = "================================================================================";
+	int res=0;
+	struct localuser *u;
 	char vars[1024];
 	char info[1024];
-	struct localuser *u;
-	int level;
+	int level = 0;
+	static char *line = "================================================================================";
 	
 	LOCAL_USER_ADD(u);
 
-	level = (argc > 0 ? atoi(argv[0]) : 0);
-
-	if (option_verbose >= level) {
-		cw_serialize_showchan(chan, info, sizeof(info));
-		pbx_builtin_serialize_variables(chan, vars, sizeof(vars));
-		cw_verbose("\nDumping Info For Channel: %s:\n%s\nInfo:\n%s\nVariables:\n%s%s\n", chan->name, line, info, vars, line);
+	if (!opbx_strlen_zero(data)) {
+		level = atoi(data);
 	}
 
+	pbx_builtin_serialize_variables(chan, vars, sizeof(vars));
+	opbx_serialize_showchan(chan, info, sizeof(info));
+	if (option_verbose >= level)
+		opbx_verbose("\nDumping Info For Channel: %s:\n%s\nInfo:\n%s\nVariables:\n%s%s\n",chan->name, line, info, vars, line);
+
 	LOCAL_USER_REMOVE(u);
-	return 0;
+	
+	return res;
 }
 
 int unload_module(void)
 {
-	int res = 0;
 	STANDARD_HANGUP_LOCALUSERS;
-	res |= cw_unregister_application(dumpchan_app);
-	return res;
+	return opbx_unregister_application(app);
 }
 
 int load_module(void)
 {
-	dumpchan_app = cw_register_application(dumpchan_name, dumpchan_exec, dumpchan_synopsis, dumpchan_syntax, dumpchan_descrip);
-	return 0;
+	return opbx_register_application(app, dumpchan_exec, synopsis, desc);
 }
 
 char *description(void)

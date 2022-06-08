@@ -18,8 +18,8 @@ T38FaxMaxDatagram = 400
 ;
 ; The number of error correction entries in a UDPTL packet
 ;
-UDPTLFECentries = 2
+udptlfecentries = 3
 ;
 ; The span over which parity is calculated for FEC in a UDPTL packet
 ;
-UDPTLFECspan = 3
+udptlfecspan = 3

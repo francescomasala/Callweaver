@@ -12,7 +12,7 @@ table is as follows:
 | msgnum         | int(11)     | YES  |     | NULL    |       |
 | dir            | varchar(80) | YES  | MUL | NULL    |       |
 | context        | varchar(80) | YES  |     | NULL    |       |
-| proc_context   | varchar(80) | YES  |     | NULL    |       |
+| macrocontext   | varchar(80) | YES  |     | NULL    |       |
 | callerid       | varchar(40) | YES  |     | NULL    |       |
 | origtime       | varchar(40) | YES  |     | NULL    |       |
 | duration       | varchar(20) | YES  |     | NULL    |       |
@@ -24,7 +24,7 @@ table is as follows:
 *=Denotes new fieldnames, define EXTENDED_ODBC_STORAGE in
 apps/Makefile to enable the functionality.
 
-The database name (from /etc/callweaver/res_odbc.conf) is in the 
+The database name (from /etc/openpbx/res_odbc.conf) is in the 
 "odbcstorage" variable in the general section of voicemail.conf.
 
 You may modify the voicemessages table name by using 

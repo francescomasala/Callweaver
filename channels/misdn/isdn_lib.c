@@ -1,5 +1,5 @@
 /*
- * Chan_Misdn -- Channel Driver for CallWeaver
+ * Chan_Misdn -- Channel Driver for OpenPBX
  *
  * Interface to mISDN
  *
@@ -14,7 +14,7 @@
 
 #include <syslog.h>
 #include "isdn_lib_intern.h"
-#include <isdn_debug.h>
+#include <mISDNuser/isdn_debug.h>
 
 void misdn_join_conf(struct misdn_bchannel *bc, int conf_id);
 void misdn_split_conf(struct misdn_bchannel *bc, int conf_id);
@@ -148,8 +148,8 @@ enum global_states {
 static enum global_states  global_state=MISDN_INITIALIZING;
 
 
-#include <net_l2.h>
-#include <tone.h>
+#include <mISDNuser/net_l2.h>
+#include <mISDNuser/tone.h>
 #include <unistd.h>
 #include <semaphore.h>
 #include <pthread.h>
@@ -2579,7 +2579,6 @@ int handle_frm(msg_t *msg)
     
 		bc=find_bc_by_l3id(stack, frm->dinfo);
     
-handle_frm_bc:
 		if (bc ) {
 			enum event_e event = isdn_msg_get_event(msgs_g, msg, 0);
 			enum event_response_e response=RESPONSE_OK;
@@ -2635,13 +2634,7 @@ handle_frm_bc:
 #endif
       
 		} else {
-			cb_log(0, stack->port, " --> Didn't find BC so temporarly creating dummy BC (l3id:%x) on this port.\n", frm->dinfo);
-			struct misdn_bchannel dummybc;
-			memset (&dummybc,0,sizeof(dummybc));
-			dummybc.port=stack->port;
-			dummybc.l3_id=frm->dinfo;
-			bc=&dummybc; 
-			goto handle_frm_bc;
+			cb_log(0, stack->port, "NO BC FOR STACK\n");		
 		}
 	}
 
@@ -2931,7 +2924,7 @@ static void misdn_lib_isdn_event_catcher(void *arg)
 		
 		frm = (iframe_t*) msg->data;
 		
-		/** When we make a call from NT2Opbx we get this frames **/
+		/** When we make a call from NT2Ast we get this frames **/
 		if (frm->len == 0 && frm->addr == 0 && frm->dinfo == 0 && frm->prim == 0 ) {
 			zero_frm++; 
 			free_msg(msg);

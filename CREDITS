@@ -1,11 +1,11 @@
 
 === DEVELOPMENT SUPPORT ===
 I'd like to thank the following companies for helping fund development of
-CallWeaver:
+OpenPBX:
 
-Pilosoft, Inc. - for supporting ADSI development in CallWeaver
+Pilosoft, Inc. - for supporting ADSI development in OpenPBX
 
-Asterlink, Inc. - for supporting broad CallWeaver development
+Asterlink, Inc. - for supporting broad OpenPBX development
 
 GFS - for supporting ALSA development
 
@@ -34,7 +34,7 @@ PhoneJack and Linejack card to the project.  (http://www.quicknet.net)
 Anthony Minessale - Countless big and small fixes, and relentless forward push
        anthmct@yahoo.com              http://www.asterlink.com
 James Golovich - Innumerable contributions
-       You can find him and callweaver-perl at http://callweaver.gnuinter.net
+       You can find him and openpbx-perl at http://openpbx.gnuinter.net
 Andre Bierwirth - Extension hints and status
 Oliver Daudey - ISDN4Linux fixes
 Pauline Middelink - ISDN4Linux patches and some general patches.
@@ -52,10 +52,10 @@ Ross Finlayson - Dynamic RTP payload support
 Mahmut Fettahlioglu - Audio recording, music-on-hold changes, alaw file
        format, and various fixes. Can be contacted at mahmut@oa.com.au
 James Dennis - Cisco SIP compatibility patches to work with SIP service
-       providers. Can be contacted at callweaver@jdennis.net
-Tilghman Lesher - - Route lookup code; cw_localtime(), cw_say_date_with_format(); 
+       providers. Can be contacted at openpbx@jdennis.net
+Tilghman Lesher - - Route lookup code; opbx_localtime(), opbx_say_date_with_format(); 
                     GotoIfTime, Random, SayUnixTime, HasNewVoicemail, and Cut applications, 
-		    along with various other patches. http://asterisk.drunkcoder.com/
+		    along with various other patches. http://openpbx.drunkcoder.com/
 Jayson Vantuyl - Manager protocol changes, various other bugs.
 	jvantuyl@computingedge.net
 Thorsten Lockert - OpenBSD, FreeBSD ports, making MacOS X port run on 10.3,
@@ -83,5 +83,47 @@ Michael Bielicki & co. Intelligent Call Distribution (ICD)
 === OTHER CONTRIBUTIONS ===
 John Todd - Monkey sounds and associated teletorture prompt
 
-=== OTHER SOURCE CODE IN CALLWEAVER ===
+=== OTHER SOURCE CODE IN OPENPBX ===
 
+I did not implement the codecs in openpbx.  Here is the copyright on the
+GSM source:
+
+Copyright 1992, 1993, 1994 by Jutta Degener and Carsten Bormann,
+Technische Universitaet Berlin
+
+Any use of this software is permitted provided that this notice is not
+removed and that neither the authors nor the Technische Universitaet Berlin
+are deemed to have made any representations as to the suitability of this
+software for any purpose nor are held responsible for any defects of
+this software.  THERE IS ABSOLUTELY NO WARRANTY FOR THIS SOFTWARE.
+
+As a matter of courtesy, the authors request to be informed about uses
+this software has found, about bugs in this software, and about any
+improvements that may be of general interest.
+
+Berlin, 28.11.1994
+Jutta Degener
+Carsten Bormann
+
+And the copyright on the ADPCM source:
+
+Copyright 1992 by Stichting Mathematisch Centrum, Amsterdam, The
+Netherlands.
+
+                        All Rights Reserved
+
+Permission to use, copy, modify, and distribute this software and its
+documentation for any purpose and without fee is hereby granted,
+provided that the above copyright notice appear in all copies and that
+both that copyright notice and this permission notice appear in
+supporting documentation, and that the names of Stichting Mathematisch
+Centrum or CWI not be used in advertising or publicity pertaining to
+distribution of the software without specific, written prior permission.
+
+STICHTING MATHEMATISCH CENTRUM DISCLAIMS ALL WARRANTIES WITH REGARD TO
+THIS SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND
+FITNESS, IN NO EVENT SHALL STICHTING MATHEMATISCH CENTRUM BE LIABLE
+FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT
+OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.

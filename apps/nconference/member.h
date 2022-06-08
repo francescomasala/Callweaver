@@ -2,7 +2,7 @@
  * app_nconference
  *
  * NConference
- * A channel independent conference application for CallWeaver
+ * A channel independent conference application for Openpbx
  *
  * Copyright (C) 2002, 2003 Navynet SRL
  * http://www.navynet.it
@@ -14,7 +14,7 @@
  *
  */
 
-extern struct cw_generator membergen;
+extern struct opbx_generator membergen;
 
 
 enum member_types {
@@ -25,16 +25,16 @@ enum member_types {
     MEMBERTYPE_CONSULTANT
 };
 
-struct cw_conf_member 
+struct opbx_conf_member 
 {
-	cw_mutex_t lock ; 		// member data mutex
+	opbx_mutex_t lock ; 		// member data mutex
 	
-	struct cw_channel* chan ; 	// member's channel  
+	struct opbx_channel* chan ; 	// member's channel  
 	char* channel_name ; 		// member's channel name
-	struct cw_conference *conf;	// reference to theconference the member is in
+	struct opbx_conference *conf;	// reference to theconference the member is in
 
 	// pointer to next member in single-linked list	
-	struct cw_conf_member *next ;
+	struct opbx_conf_member *next ;
 
 	//User number
 	//int user_no;
@@ -105,7 +105,7 @@ struct cw_conf_member
 	int read_format ;
 
 	// input/output smoother
-	struct cw_smoother *inSmoother;
+	struct opbx_smoother *inSmoother;
 	int smooth_size_in;
 	int smooth_size_out;
 
@@ -114,20 +114,20 @@ struct cw_conf_member
 	int silence_nr;
 
 	// To play sounds
-	struct cw_conf_soundq *soundq;
+	struct opbx_conf_soundq *soundq;
 
-	struct cw_trans_pvt* to_slinear ;
-	struct cw_trans_pvt* from_slinear ;
+	struct opbx_trans_pvt* to_slinear ;
+	struct opbx_trans_pvt* from_slinear ;
 
 	// THOSE ARE PASSED TO THE CONFERENCE
 	short auto_destroy;
 } ;
 
 
-void send_state_change_notifications( struct cw_conf_member* member );
-int member_exec( struct cw_channel* chan, int argc, char **argv );
-struct cw_conf_member* create_member( struct cw_channel *chan, int argc, char **argv ) ;
-struct cw_conf_member* delete_member( struct cw_conf_member* member ) ;
-int cw_conf_member_genactivate( struct cw_conf_member *member ) ;
+void send_state_change_notifications( struct opbx_conf_member* member );
+int member_exec( struct opbx_channel* chan, void* data );
+struct opbx_conf_member* create_member( struct opbx_channel *chan, const char* data ) ;
+struct opbx_conf_member* delete_member( struct opbx_conf_member* member ) ;
+int opbx_conf_member_genactivate( struct opbx_conf_member *member ) ;
 char *membertypetostring  (int member_type);
 

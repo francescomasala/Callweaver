@@ -1,8 +1,8 @@
 [general]
 ;
-; Define whether callbacklogins should be stored in cwdb for
+; Define whether callbacklogins should be stored in opbxdb for
 ; persistence. Persistent logins will be reloaded after
-; CallWeaver restarts.
+; OpenPBX restarts.
 ;
 persistentagents=yes
 ;
@@ -64,7 +64,7 @@ persistentagents=yes
 ;urlprefix=http://localhost/calls/
 ;
 ; The optional directory to save the conversations in. The default is
-; /var/spool/callweaver/monitor
+; /var/spool/openpbx/monitor
 ;savecallsin=/var/calls
 ;
 ; An optional custom beep sound file to play to always-connected agents. 

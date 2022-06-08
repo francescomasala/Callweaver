@@ -1,10 +1,10 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  *
  * Copyright (C) 1999 - 2005, Digium, Inc.
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -28,61 +28,60 @@
 #include <string.h>
 #include <sys/types.h>
 
-#include "callweaver.h"
+#include "openpbx.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/funcs/func_env.c $", "$Revision: 4723 $")
+OPENPBX_FILE_VERSION("$HeadURL$", "$Revision$")
 
-#include "callweaver/module.h"
-#include "callweaver/channel.h"
-#include "callweaver/pbx.h"
-#include "callweaver/logger.h"
-#include "callweaver/utils.h"
-#include "callweaver/app.h"
+#include "openpbx/module.h"
+#include "openpbx/channel.h"
+#include "openpbx/pbx.h"
+#include "openpbx/logger.h"
+#include "openpbx/utils.h"
+#include "openpbx/app.h"
 
-
-static void *env_function;
-static const char *env_func_name = "ENV";
-static const char *env_func_synopsis = "Gets or sets the environment variable specified";
-static const char *env_func_syntax = "ENV(envname)";
-static const char *env_func_desc = "";
-
-
-static char *builtin_function_env_read(struct cw_channel *chan, int argc, char **argv, char *buf, size_t len) 
+static char *builtin_function_env_read(struct opbx_channel *chan, char *cmd, char *data, char *buf, size_t len) 
 {
 	char *ret = "";
 
-	if (argv[0]) {
-		ret = getenv(argv[0]);
+	if (data) {
+		ret = getenv(data);
 		if (!ret)
 			ret = "";
 	}
-	cw_copy_string(buf, ret, len);
+	opbx_copy_string(buf, ret, len);
 
 	return buf;
 }
 
-static void builtin_function_env_write(struct cw_channel *chan, int argc, char **argv, const char *value) 
+static void builtin_function_env_write(struct opbx_channel *chan, char *cmd, char *data, const char *value) 
 {
-	if (argc > 0 && argv[0][0]) {
-		if (value && *value) {
-			setenv(argv[0], value, 1);
+	if (data && !opbx_strlen_zero(data)) {
+		if (value && !opbx_strlen_zero(value)) {
+			setenv(data, value, 1);
 		} else {
-			unsetenv(argv[0]);
+			unsetenv(data);
 		}
 	}
 }
+
+static struct opbx_custom_function env_function = {
+	.name = "ENV",
+	.synopsis = "Gets or sets the environment variable specified",
+	.syntax = "ENV(<envname>)",
+	.read = builtin_function_env_read,
+	.write = builtin_function_env_write,
+};
 
 static char *tdesc = "Get or set environment variables.";
 
 int unload_module(void)
 {
-       return cw_unregister_function(env_function);
+       return opbx_custom_function_unregister(&env_function);
 }
 
 int load_module(void)
 {
-       env_function = cw_register_function(env_func_name, builtin_function_env_read, builtin_function_env_write, env_func_synopsis, env_func_syntax, env_func_desc);
-       return 0;
+       return opbx_custom_function_register(&env_function);
 }
 
 char *description(void)

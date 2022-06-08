@@ -6,17 +6,17 @@
  * Written by Anthony Minessale II <anthmct at yahoo dot com>
  * Written by Bruce Atherton <bruce at callenish dot com>
  * Additions, Changes and Support by Tim R. Clark <tclark at shaw dot ca>
- * Changed to adopt to jabber interaction and adjusted for CallWeaver.org by
+ * Changed to adopt to jabber interaction and adjusted for OpenPBX.org by
  * Halo Kwadrat Sp. z o.o., Piotr Figurny and Michal Bielicki
  * 
  * This application is a part of:
  * 
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  * Copyright (C) 1999 - 2005, Digium, Inc.
  * Mark Spencer <markster@digium.com>
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -45,19 +45,19 @@
 #include "confdefs.h"
 #endif 
 
-#include "callweaver/icd/icd_common.h"
-#include "callweaver/icd/icd_member.h"
-#include "callweaver/icd/icd_caller.h"
-#include "callweaver/icd/icd_queue.h"
-#include "callweaver/icd/icd_distributor.h"
-#include "callweaver/icd/icd_fieldset.h"
+#include "openpbx/icd/icd_common.h"
+#include "openpbx/icd/icd_member.h"
+#include "openpbx/icd/icd_caller.h"
+#include "openpbx/icd/icd_queue.h"
+#include "openpbx/icd/icd_distributor.h"
+#include "openpbx/icd/icd_fieldset.h"
 
 static icd_module module_id = ICD_MEMBER;
 
 typedef enum {
     ICD_MEMBER_STATE_CREATED, ICD_MEMBER_STATE_INITIALIZED,
     ICD_MEMBER_STATE_CLEARED, ICD_MEMBER_STATE_DESTROYED,
-    ICD_MEMBER_STATE_L, CW_STANDARD
+    ICD_MEMBER_STATE_L, OPBX_STANDARD
 } icd_member_state;
 
 struct icd_member {
@@ -78,7 +78,7 @@ struct icd_member {
     icd_listeners *listeners;
     icd_memory *memory;
     int allocated;
-    cw_mutex_t lock;
+    opbx_mutex_t lock;
 };
 
 /*===== Private APIs =====*/
@@ -99,7 +99,7 @@ icd_member *create_icd_member(icd_queue * queue, icd_caller * caller, icd_config
     /* make a new member object from scratch */
     ICD_MALLOC(member, sizeof(icd_member));
     if (member == NULL) {
-        cw_log(LOG_ERROR, "No memory available to create a new ICD Member\n");
+        opbx_log(LOG_ERROR, "No memory available to create a new ICD Member\n");
         return NULL;
     }
     member->allocated = 1;
@@ -138,7 +138,7 @@ icd_status destroy_icd_member(icd_member ** memberp)
         icd_event_factory__generate(event_factory, *memberp, (*memberp)->name, module_id, ICD_EVENT_DESTROY, NULL,
         (*memberp)->listeners, NULL);
     if (vetoed == ICD_EVETO) {
-        cw_log(LOG_NOTICE, "Destruction of ICD Member %s has been vetoed\n", icd_member__get_name(*memberp));
+        opbx_log(LOG_NOTICE, "Destruction of ICD Member %s has been vetoed\n", icd_member__get_name(*memberp));
         return ICD_EVETO;
     }
 
@@ -167,7 +167,7 @@ icd_status init_icd_member(icd_member * that, icd_queue * queue, icd_caller * ca
 
     if (that->allocated != 1)
         ICD_MEMSET_ZERO(that, sizeof(icd_member));
-    cw_mutex_init(&that->lock);
+    opbx_mutex_init(&that->lock);
     that->queue = queue;
     that->caller = caller;
     that->distributor = icd_queue__get_distributor(queue);
@@ -227,12 +227,12 @@ icd_status icd_member__clear(icd_member * that)
         destroy_icd_listeners(&(that->listeners));
         that->params = NULL;
         icd_member__unlock(that);
-        cw_mutex_destroy(&(that->lock));
+        opbx_mutex_destroy(&(that->lock));
         /* the clear call was above the unlock call causing it to fail -Tony */
         that->state = ICD_MEMBER_STATE_CLEARED;
         return ICD_SUCCESS;
     }
-    cw_log(LOG_WARNING, "Unable to get a lock on ICD Member %s in order to clear it\n",
+    opbx_log(LOG_WARNING, "Unable to get a lock on ICD Member %s in order to clear it\n",
         icd_member__get_name(that));
     return ICD_ELOCK;
 }
@@ -684,7 +684,7 @@ icd_status icd_member__lock(icd_member * that)
     if (that->state == ICD_MEMBER_STATE_CLEARED || that->state == ICD_MEMBER_STATE_DESTROYED) {
         return ICD_ERESOURCE;
     }
-    result = cw_mutex_lock(&that->lock);
+    result = opbx_mutex_lock(&that->lock);
     if (result == 0) {
         return ICD_SUCCESS;
     }
@@ -701,7 +701,7 @@ icd_status icd_member__unlock(icd_member * that)
     if (that->state == ICD_MEMBER_STATE_CLEARED || that->state == ICD_MEMBER_STATE_DESTROYED) {
         return ICD_ERESOURCE;
     }
-    result = cw_mutex_unlock(&that->lock);
+    result = opbx_mutex_unlock(&that->lock);
     if (result == 0) {
         return ICD_SUCCESS;
     }

@@ -1,5 +1,5 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  *
  * Copyright (C) 1999 - 2005, Digium, Inc.
  * Copyright (C) 2003, Jefferson Noxon
@@ -7,8 +7,8 @@
  * Mark Spencer <markster@digium.com>
  * Jefferson Noxon <jeff@debian.org>
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -35,61 +35,96 @@
 #include <string.h>
 #include <sys/types.h>
 
-#include "callweaver.h"
+#include "openpbx.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/apps/app_getextstate.c $", "$Revision: 4723 $")
+OPENPBX_FILE_VERSION("$HeadURL: svn://svn.openpbx.org/openpbx/trunk/apps/app_getextstate.c $", "$Revision: 1055 $")
 
-#include "callweaver/options.h"
-#include "callweaver/file.h"
-#include "callweaver/logger.h"
-#include "callweaver/channel.h"
-#include "callweaver/pbx.h"
-#include "callweaver/module.h"
-#include "callweaver/callweaver_db.h"
-#include "callweaver/lock.h"
-#include "callweaver/devicestate.h"
-#include "callweaver/cli.h"	//Needed to have RESULT_SUCCESS and RESULT_FAILURE
+#include "openpbx/options.h"
+#include "openpbx/file.h"
+#include "openpbx/logger.h"
+#include "openpbx/channel.h"
+#include "openpbx/pbx.h"
+#include "openpbx/module.h"
+#include "openpbx/opbxdb.h"
+#include "openpbx/lock.h"
+#include "openpbx/devicestate.h"
+#include "openpbx/cli.h"	//Needed to have RESULT_SUCCESS and RESULT_FAILURE
 
 static char *tdesc = "Get state for given extension in a context (show hints)";
 
-static void *g_app;
-static char *g_name = "GetExtState";
-static char *g_synopsis = "Get state for given extension in a context (show hints)";
-static char *g_syntax = "GetExtState(extensions1[&extension2], context)";
+static char *g_app = "GetExtState";
+
 static char *g_descrip =
+	"  GetExtState(extensions1[&extension2]|context): \n"
 	"Report the extension state for given extension in a context and saves it in EXTSTATE variable. \n"
 	"Valid EXTSTATE values are:\n"
 	"0 = idle, 1 = inuse; 2 = busy, \n"
 	"4 = unavail, 8 = ringing; -1 unknown; \n"
-	"Example: GetExtState(715&523, default)\n";
+	"Example: GetExtState(715&523|default)\n";
 
+static char *g_synopsis = "Get state for given extension in a context (show hints)";
 
 STANDARD_LOCAL_USER;
 
 LOCAL_USER_DECL;
 
-static int get_extstate(struct cw_channel *chan, int argc, char **argv)
+static int get_extstate(struct opbx_channel *chan, void *data)
 {
+	char *argv;
 	struct localuser *u;
 
 	int res=-1;
 	char resc[8]="-1";
 
-	char hint[CW_MAX_EXTENSION] = "";
+	char *exten,*ext;
+	char *context;
+	char hint[OPBX_MAX_EXTENSION] = "";
 	char hints[1024] = "";
 
 	char *cur, *rest;
 	int allunavailable = 1, allbusy = 1, allfree = 1;
 	int busy = 0, inuse = 0, ring = 0;
 			
-	if (argc != 2 || !argv[0][0] || !argv[1][0]) {
-		cw_log(LOG_ERROR, "Syntax: %s\n", g_syntax);
-		return -1;
-	}
-
 	LOCAL_USER_ADD(u);
 
-	cur = argv[0];
+	argv = opbx_strdupa(data);
+	
+	if (!argv) {
+		opbx_log(LOG_ERROR, "Memory allocation failed\n");
+		pbx_builtin_setvar_helper(chan, "EXTSTATE", resc );	
+		LOCAL_USER_REMOVE(u);
+		return RESULT_FAILURE;
+	}
+
+	exten   = argv;
+	context = strchr(argv, '|');
+	if (context) {
+            *context = '\0';
+	    context++;
+	} else {
+	    opbx_log(LOG_ERROR, "Ignoring, no context\n");
+	    pbx_builtin_setvar_helper(chan, "EXTSTATE", resc );	
+	    LOCAL_USER_REMOVE(u);
+	    return RESULT_FAILURE;
+	}
+
+        if (opbx_strlen_zero(exten)) {
+	    opbx_log(LOG_ERROR, "Ignoring, no extension\n");
+	    pbx_builtin_setvar_helper(chan, "EXTSTATE", resc );	
+	    LOCAL_USER_REMOVE(u);
+	    return RESULT_FAILURE;
+	}
+
+
+	ext = opbx_strdupa(exten);
+	if (!ext) {
+		opbx_log(LOG_ERROR, "Memory allocation failed\n");
+		pbx_builtin_setvar_helper(chan, "EXTSTATE", resc );	
+		LOCAL_USER_REMOVE(u);
+		return RESULT_FAILURE;
+	}
+	
+	cur=ext;
 
 	do {
 		rest = strchr(cur, '&');
@@ -97,20 +132,20 @@ static int get_extstate(struct cw_channel *chan, int argc, char **argv)
 			*rest = 0;
 			rest++;
 		}
-	    cw_get_hint(hint, sizeof(hint) - 1, NULL, 0, NULL, argv[1], cur);
-	    //cw_log(LOG_DEBUG,"HINT: %s Context: %s Exten: %s\n",hint,argv[1],cur);
-	    if (!cw_strlen_zero(hint)) {
+	    opbx_get_hint(hint, sizeof(hint) - 1, NULL, 0, NULL, context, cur);
+	    //opbx_log(LOG_DEBUG,"HINT: %s Context: %s Exten: %s\n",hint,context,cur);
+	    if (!opbx_strlen_zero(hint)) {
 		//let's concat hints!
 		if ( strlen(hint)+strlen(hints)+2<sizeof(hints) ) {
 		    if ( strlen(hints) ) strcat(hints,"&");
 		    strcat(hints,hint);
 		}
 	    }
-	    //cw_log(LOG_DEBUG,"HINTS: %s \n",hints);
+	    //opbx_log(LOG_DEBUG,"HINTS: %s \n",hints);
 	    cur=rest;
 	} while (cur);
-	//res=cw_device_state(hint);
-	//res=cw_extension_state2(hint);
+	//res=opbx_device_state(hint);
+	//res=opbx_extension_state2(hint);
 
 	cur=hints;
 	do {
@@ -120,30 +155,30 @@ static int get_extstate(struct cw_channel *chan, int argc, char **argv)
 			rest++;
 		}
 	
-		res = cw_device_state(cur);
-		//cw_log(LOG_DEBUG,"Ext: %s State: %d \n",cur,res);
+		res = opbx_device_state(cur);
+		//opbx_log(LOG_DEBUG,"Ext: %s State: %d \n",cur,res);
 		switch (res) {
-		case CW_DEVICE_NOT_INUSE:
+		case OPBX_DEVICE_NOT_INUSE:
 			allunavailable = 0;
 			allbusy = 0;
 			break;
-		case CW_DEVICE_INUSE:
+		case OPBX_DEVICE_INUSE:
 			inuse = 1;
 			allunavailable = 0;
 			allfree = 0;
 			break;
-		case CW_DEVICE_RINGING:
+		case OPBX_DEVICE_RINGING:
 			ring = 1;
 			allunavailable = 0;
 			allfree = 0;
 			break;
-		case CW_DEVICE_BUSY:
+		case OPBX_DEVICE_BUSY:
 			allunavailable = 0;
 			allfree = 0;
 			busy = 1;
 			break;
-		case CW_DEVICE_UNAVAILABLE:
-		case CW_DEVICE_INVALID:
+		case OPBX_DEVICE_UNAVAILABLE:
+		case OPBX_DEVICE_INVALID:
 			allbusy = 0;
 			allfree = 0;
 			break;
@@ -156,7 +191,7 @@ static int get_extstate(struct cw_channel *chan, int argc, char **argv)
 	} while (cur);
 
         // 0-idle; 1-inuse; 2-busy; 4-unavail 8-ringing
-	//cw_log(LOG_VERBOSE, "allunavailable %d, allbusy %d, allfree %d, busy %d, inuse %d, ring %d \n", allunavailable, allbusy, allfree, busy, inuse, ring );
+	//opbx_log(LOG_VERBOSE, "allunavailable %d, allbusy %d, allfree %d, busy %d, inuse %d, ring %d \n", allunavailable, allbusy, allfree, busy, inuse, ring );
 	if      (!inuse && ring)
 		res=8;
 	else if (inuse && ring)
@@ -173,8 +208,8 @@ static int get_extstate(struct cw_channel *chan, int argc, char **argv)
 		res=2;
 	else 	res=-1;
 	
-        cw_log(LOG_DEBUG, "app_getextstate setting EXTSTATE to %d for extension %s in context %s\n",
-               res, argv[0], argv[1]);
+        opbx_log(LOG_DEBUG, "app_getextstate setting EXTSTATE to %d for extension %s in context %s\n",
+               res, exten, context);
 	snprintf(resc,sizeof(resc),"%d",res);
 	pbx_builtin_setvar_helper(chan, "EXTSTATE", resc );	
 
@@ -185,17 +220,21 @@ static int get_extstate(struct cw_channel *chan, int argc, char **argv)
 
 int unload_module(void)
 {
-	int res = 0;
+	int retval;
 
 	STANDARD_HANGUP_LOCALUSERS;
-	res |= cw_unregister_application(g_app);
-	return res;
+	retval = opbx_unregister_application(g_app);
+
+	return retval;
 }
 
 int load_module(void)
 {
-	g_app = cw_register_application(g_name, get_extstate, g_synopsis, g_syntax, g_descrip);
-	return 0;
+	int retval;
+
+	retval = opbx_register_application(g_app, get_extstate, g_synopsis, g_descrip);
+	
+	return retval;
 }
 
 char *description(void)

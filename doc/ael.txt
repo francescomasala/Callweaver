@@ -2,7 +2,7 @@ The Asterisk Extension Language - v 2
 =====================================
 
 AEL is a specialized language intended purely for 
-describing CallWeaver dial plans.
+describing Asterisk dial plans.
 
 The current version was written by Steve Murphy, and is a rewrite of 
 the original version.
@@ -17,7 +17,7 @@ AEL is really the merger of 4 different 'languages', or syntaxes:
       provided near the end of this document.
 
     * The second syntax is the Expression Syntax, which is normally
-     handled by CallWeaver extension engine, as expressions enclosed in
+     handled by Asterisk extension engine, as expressions enclosed in
      $[...]. The right hand side of assignments are wrapped in $[ ... ] 
      by AEL, and so are the if and while expressions, among others.
 
@@ -32,7 +32,7 @@ AEL is really the merger of 4 different 'languages', or syntaxes:
       extension language is what you see in extensions.conf, and AEL
       compiles the higher level AEL language into extensions and
       priorities, and passes them via function calls into
-      CallWeaver. Embedded in this language is the Application/OGI
+      Asterisk. Embedded in this language is the Application/OGI
       commands, of which one application call per step, or priority
       can be made. You can think of this as a "macro assembler"
       language, that AEL will compile into.
@@ -41,11 +41,11 @@ AEL is really the merger of 4 different 'languages', or syntaxes:
 Any programmer of AEL should be familiar with it's syntax, of course,
 as well as the Expression syntax, and the Variable syntax.
 
-****************************
-* CallWeaver in a Nutshell *
-****************************
+**************************
+* Asterisk in a Nutshell *
+**************************
 
-CallWeaver acts as a server. Devices involved in telephony, like Zapata
+Asterisk acts as a server. Devices involved in telephony, like Zapata
 cards, or Voip phones, all indicate some context that should be
 activated in their behalf. See the config file formats for IAX, SIP,
 zapata.conf, etc. They all help describe a device, and they all
@@ -71,7 +71,7 @@ going to be run. Other extensions are the timeout "t" extension, the
 invalid response, or "i" extension, and there's a "fax" extension. For
 instance, a normal call will activate the "s" extension, but an
 incoming FAX call will come into the "fax" extension, if it
-exists. (BTW, CallWeaver can tell it's a fax call by the little "beep"
+exists. (BTW, asterisk can tell it's a fax call by the little "beep"
 that the calling fax machine emits every so many seconds.).
 
 Extensions contain several priorities, which are individual
@@ -79,7 +79,7 @@ instructions to perform. Some are as simple as setting a variable to a
 value. Others are as complex as initiating the Voicemail application,
 for instance. Priorities are executed in order.
 
-When the 's" extension completes, CallWeaver waits until the timeout for
+When the 's" extension completes, asterisk waits until the timeout for
 a response. If the response matches an extension's pattern in the
 context, then control is transferred to that extension. Usually the
 responses are tones emitted when a user presses a button on their
@@ -94,15 +94,15 @@ The extensions can also contain "goto" or "jump" commands to skip to
 extensions in other contexts. Conditionals provide the ability to
 react to different stimiuli, and there you have it.
 
-Procs
+Macros
 ------
 
-Think of a proc as a combination of a context with one nameless
+Think of a macro as a combination of a context with one nameless
 extension, and a subroutine. It has arguments like a subroutine
-might. A proc call can be made within an extension, and the
+might. A macro call can be made within an extension, and the
 individual statements there are executed until it ends. At this point,
-execution returns to the next statement after the proc call. Procs
-can call other procs. And they work just like function calls.
+execution returns to the next statement after the macro call. Macros
+can call other macros. And they work just like function calls.
 
 Applications
 ------------
@@ -115,7 +115,7 @@ applications do fairly simple things, some provide amazingly complex
 services.
 
 Hopefully, the above objects will allow you do anything you need to in
-the CallWeaver environment!
+the Asterisk environment!
 
 
 *******************
@@ -125,9 +125,9 @@ the CallWeaver environment!
 The AEL parser (pbx_ael.so) is completely separate from the module
 that parses extensions.conf (pbx_config.so). To use AEL, the only
 thing that has to be done is the module pbx_ael.so must be loaded by
-CallWeaver. This will be done automatically if using 'autoload=yes' in
-/etc/callweaver/modules.conf. When the module is loaded, it will look
-for 'extensions.ael' in /etc/callweaver/. extensions.conf and
+Asterisk. This will be done automatically if using 'autoload=yes' in
+/etc/asterisk/modules.conf. When the module is loaded, it will look
+for 'extensions.ael' in /etc/asterisk/. extensions.conf and
 extensions.ael can be used in conjunction with
 each other if that is what is desired. Some users may want to keep
 extensions.conf for the features that are configured in the 'general'
@@ -154,8 +154,8 @@ nothing:
 Enable AEL contexts debug
    *CLI> ael debug contexts 
 
-Enable AEL procs debug
-   *CLI> ael debug procs 
+Enable AEL macros debug
+   *CLI> ael debug macros 
 
 Enable AEL read debug
    *CLI> ael debug read
@@ -169,8 +169,8 @@ Disable AEL debug messages
 If things are going wrong in your dialplan, you can use the following
 facilities to debug your file:
 
-1. The messages log in /var/log/callweaver. (from the checks done at load time).
-2. the "show dialplan" command in CallWeaver
+1. The messages log in /var/log/asterisk. (from the checks done at load time).
+2. the "show dialplan" command in asterisk
 3. the standalone executable, "aelparse" built in the utils/ dir in the source.
 
 
@@ -179,23 +179,23 @@ facilities to debug your file:
 *****************************
 
 You can use the "aelparse" program to check your extensions.ael
-file before feeding it to CallWeaver. Wouldn't it be nice to eliminate
-most errors before giving the file to CallWeaver?
+file before feeding it to asterisk. Wouldn't it be nice to eliminate
+most errors before giving the file to asterisk?
 
-aelparse is compiled in the utils directory of the CallWeaver release.
+aelparse is compiled in the utils directory of the asterisk release.
 It isn't installed anywhere (yet). You can copy it to your favorite
 spot in your PATH.
 
 aelparse has two optional arguments:
 
 -d   - Override the normal location of the config file dir, (usually
-       /etc/callweaver), and use the current directory instead as the
+       /etc/asterisk), and use the current directory instead as the
        config file dir. Aelparse will then expect to find the file
        "./extensions.ael" in the current directory, and any included
        files in the current directory as well.
 
 -n   - don't show all the function calls to set priorities and contexts
-       within CallWeaver. It will just show the errors and warnings from
+       within asterisk. It will just show the errors and warnings from
        the parsing and semantic checking phases.
 
 
@@ -211,37 +211,37 @@ be included on a single line. Whatever you think is best!
 
 You can just as easily say,
 
-if(${x}=1) { NoOp(hello!); goto s,3; } else { NoOp(Goodbye!); goto s,12; }
+if(${x}=1) { NoOp(hello!); goto s|3; } else { NoOp(Goodbye!); goto s|12; }
 
 as you can say:
 
 if(${x}=1)
 {
        NoOp(hello!);
-   goto s,3;
+   goto s|3;
 }
 else
 {
        NoOp(Goodbye!);
-       goto s,12;
+       goto s|12;
 }
 
 or:
 
 if(${x}=1) {
        NoOp(hello!);
-   goto s,3;
+   goto s|3;
 } else {
        NoOp(Goodbye!);
-       goto s,12;
+       goto s|12;
 }
 
 or:
 
 if (${x}=1) {
-       NoOp(hello!); goto s,3;
+       NoOp(hello!); goto s|3;
 } else {
-       NoOp(Goodbye!); goto s,12;
+       NoOp(Goodbye!); goto s|12;
 }
 
 or even:
@@ -250,12 +250,12 @@ if
 (${x}=1)
 {
 NoOp(hello!);
-goto s,3;
+goto s|3;
 }
 else
 {
 NoOp(Goodbye!);
-goto s,12;
+goto s|12;
 }
 
 
@@ -267,14 +267,14 @@ The AEL keywords are case-sensitive. If an application name and a
 keyword overlap, there is probably good reason, and you should
 consider replacing the application call with an AEL statement. If you
 do not wish to do so, you can still use the application, by using a
-capitalized letter somewhere in its name. In the CallWeaver extension
+capitalized letter somewhere in its name. In the Asterisk extension
 language, application names are NOT case-sensitive.
 
 The following are keywords in the AEL language:
 
     * abstract
     * context
-    * proc
+    * macro
     * globals
     * ignorepat
     * switch
@@ -319,7 +319,7 @@ After that, it is freed from memory.
 A program could be written that could build a tree of pval structures, and
 a pretty printing function is provided, that would dump the data to a file,
 or the tree could be handed to the compiler to merge the data into the 
-CallWeaver dialplan. The modularity of the design offers several opportunities
+asterisk dialplan. The modularity of the design offers several opportunities
 for developers to simplify apps to generate dialplan data.
 
 
@@ -351,7 +351,7 @@ First, some basic objects
 
 
 <object> :==  <context>
-         | <proc>
+         | <macro>
          | <globals>
          | ';'
 
@@ -366,10 +366,10 @@ First, some basic objects
             | 'abstract'  'context' 'default' '{' '}'
 
 
-<proc> :== 'proc' <word> '(' <arglist> ')' '{' <proc_statements> '}'
-       | 'proc' <word> '(' <arglist> ')' '{'  '}'
-       | 'proc' <word> '(' ')' '{' <proc_statements> '}'
-       | 'proc' <word> '(' ')' '{'  '}'
+<macro> :== 'macro' <word> '(' <arglist> ')' '{' <macro_statements> '}'
+       | 'macro' <word> '(' <arglist> ')' '{'  '}'
+       | 'macro' <word> '(' ')' '{' <macro_statements> '}'
+       | 'macro' <word> '(' ')' '{'  '}'
 
 
 <globals> :== 'globals' '{' <global_statements> '}'
@@ -416,8 +416,8 @@ First, some basic objects
 
 <random_head> :== 'random' '(' <collected-word> ')'
 
-<ifTime_head> :== 'ifTime' '(' <word3-list> ':' <word3-list> ':' <word3-list> ',' <word3-list> ',' <word3-list> ',' <word3-list> ')'
-                       | 'ifTime' '(' <word> ',' <word3-list> ',' <word3-list> ',' <word3-list> ')'
+<ifTime_head> :== 'ifTime' '(' <word3-list> ':' <word3-list> ':' <word3-list> '|' <word3-list> '|' <word3-list> '|' <word3-list> ')'
+                       | 'ifTime' '(' <word> '|' <word3-list> '|' <word3-list> '|' <word3-list> ')'
 
 
 <word3-list> :== <word>
@@ -436,7 +436,7 @@ First, some basic objects
        | 'while' '('  <collected-word> ')' <statement>
        | <switch_head> '}'
        | <switch_head> <case_statements> '}'
-       | '&' proc_call ';'
+       | '&' macro_call ';'
        | <application_call> ';'
        | <application_call> '='  <collected-word> ';'
        | 'break' ';'
@@ -451,9 +451,9 @@ First, some basic objects
        | ';'
 
 <target> :== <word>
-       | <word> ',' <word>
-       | <word> ',' <word> ',' <word>
-       | 'default' ',' <word> ',' <word>
+       | <word> '|' <word>
+       | <word> '|' <word> '|' <word>
+       | 'default' '|' <word> '|' <word>
        | <word> ',' <word>
        | <word> ',' <word> ',' <word>
        | 'default' ',' <word> ',' <word>
@@ -465,7 +465,7 @@ First, some basic objects
                | <word> ',' <word> '@' 'default'
                | <word> '@' 'default'
 
-<proc_call> :== <word> '(' <eval_arglist> ')'
+<macro_call> :== <word> '(' <eval_arglist> ')'
        | <word> '(' ')'
 
 <application_call_head> :== <word>  '('
@@ -489,10 +489,10 @@ First, some basic objects
        | 'default' ':'
        | 'pattern' <word> ':'
 
-<proc_statements> :== <proc_statement>
-       | <proc_statements> <proc_statement>
+<macro_statements> :== <macro_statement>
+       | <macro_statements> <macro_statement>
 
-<proc_statement> :== <statement>
+<macro_statement> :== <statement>
        | 'catch' <word> '{' <statements> '}'
 
 <switches> :== 'switches' '{' <switchlist> '}'
@@ -505,11 +505,11 @@ First, some basic objects
        | <switchlist> <word> ';'
 
 <includeslist> :== <includedname> ';'
-       | <includedname> ',' <word3-list> ':' <word3-list> ':' <word3-list> ',' <word3-list> ',' <word3-list> ',' <word3-list> ';'
-       | <includedname> ',' <word> ',' <word3-list> ',' <word3-list> ',' <word3-list> ';'
+       | <includedname> '|' <word3-list> ':' <word3-list> ':' <word3-list> '|' <word3-list> '|' <word3-list> '|' <word3-list> ';'
+       | <includedname> '|' <word> '|' <word3-list> '|' <word3-list> '|' <word3-list> ';'
        | <includeslist> <includedname> ';'
-       | <includeslist> <includedname> ',' <word3-list> ':' <word3-list> ':' <word3-list> ',' <word3-list> ',' <word3-list> ',' <word3-list> ';'
-       | <includeslist> <includedname> ',' <word> ',' <word3-list> ',' <word3-list> ',' <word3-list> ';'
+       | <includeslist> <includedname> '|' <word3-list> ':' <word3-list> ':' <word3-list> '|' <word3-list> '|' <word3-list> '|' <word3-list> ';'
+       | <includeslist> <includedname> '|' <word> '|' <word3-list> '|' <word3-list> '|' <word3-list> ';'
 
 <includedname> :== <word>
         | 'default'
@@ -638,14 +638,14 @@ context default {
 
 
 Time-limited inclusions can be specified, as in extensions.conf
-format, with the fields described in the wiki page CallWeaver cmd
+format, with the fields described in the wiki page Asterisk cmd
 GotoIfTime.
 
 
 context default {
     includes {
          local;
-         longdistance,16:00-23:59,mon-fri,*,*;
+         longdistance|16:00-23:59|mon-fri|*|*;
          international;
     }
 }
@@ -657,16 +657,16 @@ context default {
 You can include other files with the #include "filepath" construct.
 
 
-   #include "/etc/callweaver/testfor.ael"
+   #include "/etc/asterisk/testfor.ael"
 
 
 An interesting property of the #include, is that you can use it almost
 anywhere in the .ael file. It is possible to include the contents of
-a file in a proc, context, or even extension.  The #include does not
+a file in a macro, context, or even extension.  The #include does not
 have to occur at the beginning of a line. Included files can include
 other files, up to 50 levels deep. If the path provided in quotes is a
 relative path, the parser looks in the config file directory for the
-file (usually /etc/callweaver).
+file (usually /etc/asterisk).
 
 
 
@@ -674,7 +674,7 @@ Dialplan Switches
 =================
 
 Switches are listed in their own block within a context. For clues as
-to what these are used for, see CallWeaver - dual servers, and CallWeaver
+to what these are used for, see Asterisk - dual servers, and Asterisk
 config extensions.conf.
 
 
@@ -708,7 +708,7 @@ context outgoing {
 Variables
 =========
 
-Variables in CallWeaver do not have a type, so to define a variable, it
+Variables in Asterisk do not have a type, so to define a variable, it
 just has to be specified with a value.
 
 Global variables are set in their own block.
@@ -800,15 +800,15 @@ context conditional {
          if ("${DIALSTATUS}" = "BUSY")
          {
               NoOp(yessir);
-              Voicemail(${EXTEN},b);
+              Voicemail(${EXTEN}|b);
          }
          else
-              Voicemail(${EXTEN},u);
-         ifTime (14:00-25:00,sat-sun,*,*) 
-              Voicemail(${EXTEN},b);
+              Voicemail(${EXTEN}|u);
+         ifTime (14:00-25:00|sat-sun|*|*) 
+              Voicemail(${EXTEN}|b);
          else
          {
-              Voicemail(${EXTEN},u);
+              Voicemail(${EXTEN}|u);
               NoOp(hi, there!);
          }
          random(51) NoOp(This should appear 51% of the time);
@@ -863,10 +863,10 @@ NOTE: AEL generates each case as a separate extension. case clauses
 NOTE: AEL introduces the ifTime keyword/statement, which works just
       like the if() statement, but the expression is a time value,
       exactly like that used by the application GotoIfTime(). See
-      CallWeaver cmd GotoIfTime
+      Asterisk cmd GotoIfTime
 
 NOTE: The pattern statement makes sure the new extension that is
-      created has an '_' preceding it to make sure CallWeaver recognizes
+      created has an '_' preceding it to make sure asterisk recognizes
       the extension name as a pattern.
 
 NOTE: Every character enclosed by the switch expression's parenthesis
@@ -894,7 +894,7 @@ test will then be performed. In the case of the while loop, the
 continue will jump to the test at the top of the loop.
 
 The return keyword will cause an immediate jump to the end of the
-context, or proc, and can be used anywhere.
+context, or macro, and can be used anywhere.
 
 
 
@@ -912,17 +912,17 @@ begin:
          goto begin;    // go to label in same extension
     }
     3 => {
-            goto s,begin;   // go to label in different extension
+            goto s|begin;   // go to label in different extension
      }
      4 => {
-            goto gotoexample,s,begin;  // overkill go to label in same context
+            goto gotoexample|s|begin;  // overkill go to label in same context
      }
 }
 
 context gotoexample2 {
      s =>  {
    end: 
-           goto gotoexample,s,begin;   // go to label in different context
+           goto gotoexample|s|begin;   // go to label in different context
      }
 }
 
@@ -931,7 +931,7 @@ statements. It means the "first" statement in the extension. I would
 not advise trying to use numeric labels other than "1" in goto's or
 jumps, nor would I advise declaring a "1" label anywhere! As a matter
 of fact, it would be bad form to declare a numeric label, and it might
-confllict with the priority numbers used internally by CallWeaver.
+confllict with the priority numbers used internally by asterisk.
 
 The syntax of the jump statement is: jump
 extension[,priority][@context] If priority is absent, it defaults to
@@ -965,9 +965,9 @@ NOTE: goto labels follow the same requirements as the Goto()
       application, except the last value has to be a label. If the
       label does not exist, you will have run-time errors. If the
       label exists, but in a different extension, you have to specify
-      both the extension name and label in the goto, as in: goto s,z;
+      both the extension name and label in the goto, as in: goto s|z;
       if the label is in a different context, you specify
-      context,extension,label. There is a note about using goto's in a
+      context|extension|label. There is a note about using goto's in a
       switch statement below...
 
 NOTE  AEL introduces the special label "1", which is the beginning
@@ -980,16 +980,16 @@ NOTE: A NEW addition to AEL: you can now use ',' instead of '|' to
 
 
 
-Procs
-=====
+Macros
+======
 
-A proc is defined in its own block like this. The arguments to the
-proc are specified with the name of the proc. They are then referred
+A macro is defined in its own block like this. The arguments to the
+macro are specified with the name of the macro. They are then referred
 to by that same name. A catch block can be specified to catch special
 extensions.
 
 
-proc std-exten( ext , dev ) {
+macro std-exten( ext , dev ) {
        Dial(${dev}/${ext},20);
        switch(${DIALSTATUS) {
        case BUSY:
@@ -1006,7 +1006,7 @@ proc std-exten( ext , dev ) {
 }
 
 
-A proc is then called by preceeding the proc name with an
+A macro is then called by preceeding the macro name with an
 ampersand. Empty arguments can be passed simply with nothing between
 comments(0.11).
 
@@ -1040,31 +1040,31 @@ instructions:
     }
     2 => {
          Background(demo-moreinfo);
-         goto s,instructions;
+         goto s|instructions;
     }
     3 => {
          LANGUAGE()=fr;
-         goto s,restart;
+         goto s|restart;
     }
 
     500 => {
          Playback(demo-abouttotry);
          Dial(IAX2/guest@misery.digium.com);
          Playback(demo-nogo);
-         goto s,instructions;
+         goto s|instructions;
     }
     600 => {
          Playback(demo-echotest);
          Echo();
          Playback(demo-echodone);
-         goto s,instructions;
+         goto s|instructions;
     }
     # => {
 hangup:
          Playback(demo-thanks);
          Hangup();
     }
-    t => goto #,hangup;
+    t => goto #|hangup;
     i => Playback(invalid);
 }
 
@@ -1076,10 +1076,10 @@ Semantic Checks
 AEL, after parsing, but before compiling, traverses the dialplan
 tree, and makes several checks:
 
-    * Proc calls to non-existent procs.
-    * Proc calls to contexts.
-    * Proc calls with argument count not matching the definition.
-    * application call to proc. (missing the '&')
+    * Macro calls to non-existent macros.
+    * Macro calls to contexts.
+    * Macro calls with argument count not matching the definition.
+    * application call to macro. (missing the '&')
     * application calls to "GotoIf", "GotoIfTime", "while",
       "endwhile", "Random", and "execIf", will generate a message to
       consider converting the call to AEL goto, while, etc. constructs.
@@ -1104,7 +1104,7 @@ tree, and makes several checks:
     * (0.13) Issue a warning if a label is a numeric value. 
 
 There are a subset of checks that have been removed until the proposed
-AAL (Asterisk Argument Language) is developed and incorporated into CallWeaver.
+AAL (Asterisk Argument Language) is developed and incorporated into Asterisk.
 These checks will be:
 
     * (if the application argument analyzer is working: the presence
@@ -1120,7 +1120,7 @@ These checks will be:
       the application that would set that variable is not called in
       the same extension. This is a warning only...
     * Calls to applications not in the "applist" database (installed
-      in /var/lib/callweaver/applist" on most systems).
+      in /var/lib/asterisk/applist" on most systems).
     * In an assignment statement, if the assignment is to a function,
       the function name used is checked to see if it one of the
       currently known functions. A warning is issued if it is not.
@@ -1154,19 +1154,19 @@ Differences with the original version of AEL
    8. A pretty printer function is available within pbx_ael.so.
    9. In the utils directory, two standalone programs are supplied for
       debugging AEL files. One is called "aelparse", and it reads in
-      the /etc/callweaver/extensions.ael file, and shows the results of
+      the /etc/asterisk/extensions.ael file, and shows the results of
       syntax and semantic checking on stdout, and also shows the
       results of compilation to stdout. The other is "aelparse1",
       which uses the original ael compiler to do the same work,
-      reading in "/etc/callweaver/extensions.ael", using the original
+      reading in "/etc/asterisk/extensions.ael", using the original
       'pbx_ael.so' instead.
   10. AEL supports the "jump" statement, and the "pattern" statement
       in switch constructs. Hopefully these will be documented in the
       AEL README.
   11. Added the "return" keyword, which will jump to the end of an
-      extension/Proc.
-  12. Added the ifTime (<time range>,<days of week>,<days of
-      month>,<months> ) {} [else {}] construct, which executes much
+      extension/Macro.
+  12. Added the ifTime (<time range>|<days of week>|<days of
+      month>|<months> ) {} [else {}] construct, which executes much
       like an if () statement, but the decision is based on the
       current time, and the time spec provided in the ifTime. See the
       example above. (Note: all the other time-dependent Applications
@@ -1189,7 +1189,7 @@ Differences with the original version of AEL
       expected. (0.6)
   17. A trailing label in an extension, will automatically have a
       NoOp() added, to make sure the label exists in the extension on
-      CallWeaverk. (0.6)
+      Asterisk. (0.6)
   18. (0.9) the semicolon is no longer required after a closing brace!
       (i.e. "];" ===> "}". You can have them there if you like, but
       they are not necessary. Someday they may be rejected as a syntax
@@ -1231,15 +1231,15 @@ Hints and Bugs
 The Full Power of AEL
 ==============================
 
-A newcomer to CallWeaver will look at the above constructs and
+A newcomer to Asterisk will look at the above constructs and
 descriptions, and ask, "Where's the string manipulation functions?",
 "Where's all the cool operators that other languages have to offer?",
 etc.
 
-The answer is that the rich capabilities of CallWeaver are made
+The answer is that the rich capabilities of Asterisk are made
 available through AEL, via:
 
-    * Applications: See CallWeaver - documentation of application
+    * Applications: See Asterisk - documentation of application
       commands
 
     * Functions: Functions were implemented inside ${ .. } variable
@@ -1249,12 +1249,12 @@ available through AEL, via:
       wrapped inside $[...]. This includes some string manipulation
       facilities, arithmetic expressions, etc. 
 
-    * Application Gateway Interface: CallWeaver can fork external
+    * Application Gateway Interface: Asterisk can fork external
       processes that communicate via pipe. OGI applications can be
       written in any language. Very powerful applications can be added
       this way. 
 
     * Variables: Channels of communication have variables associated
-      with them, and CallWeaver provides some global variables. These can be
+      with them, and asterisk provides some global variables. These can be
       manipulated and/or consulted by the above mechanisms. 
 

@@ -13,7 +13,7 @@ For an overview of NAPTR records, and the use of NAPTRs in the ENUM
 global phone-number-to-DNS mapping scheme, please see
 http://www.voip-info.org/tiki-index.php?page=ENUM for more detail.
 
-Using ENUM within CallWeaver can be simple or complex, depending on how
+Using ENUM within Asterisk can be simple or complex, depending on how
 many failover methods and redundancy procedures you wish to utilize.
 Implementation of ENUM paths is supposedly defined by the person
 creating the NAPTR records, but the local administrator may choose to
@@ -49,7 +49,7 @@ service_type = tel, sip, h323, iax2, mailto, ...[any other string],
      in an ordinal list starting with 1. The position <number>
      specified will then be returned, starting with 1 as the first
      record (lowest value) in the list.  The service types are not
-     hardcoded in CallWeaver except for the default (sip) if no other
+     hardcoded in Asterisk except for the default (sip) if no other
      service type specified; any method type string (IANA-approved or
      not) may be used except for the string "ALL".  
 
@@ -143,7 +143,7 @@ Usage notes and subtle features:
   in the DNS aren't getting matched by the system or are returned with
   a null string result.  This is due to the NAPTR reply requiring a
   "+" in the regular expression matching sequence.  Older versions of
-  CallWeaver add a "+" from within the code, which may confuse
+  Asterisk add a "+" from within the code, which may confuse
   administrators converting to the new function.  Please ensure that
   all ENUM (e164.arpa) lookups contain a leading "+" before lookup, so
   ensure your lookup includes the leading plus sign.  Other DNS trees
@@ -164,7 +164,7 @@ Usage notes and subtle features:
   since that is the intent of ENUM.  However, some obscure future
   cases may have wildly changing NAPTR records within several seconds.
   This is a corner case, and probably only worth noting as a very rare
-  circumstance. (note: I do not object to CallWeaver's dnsmgr method of
+  circumstance. (note: I do not object to Asterisk's dnsmgr method of
   locally caching DNS replies, but this method needs to honor the TTL
   given by the remote zone master.  Currently, the ENUMLOOKUP function
   does not use the dnsmgr method of caching local DNS replies.)
@@ -251,7 +251,7 @@ exten => _011.,n,Dial(Zap/g1/${EXTEN})
 ;  the lookup, and dial each in order.  If none work (or none
 ;  exist) then send the call out a PRI, group 1.
 ;
-exten => _011.,1,Set(sipcount=${ENUMLOOKUP(${EXTEN:3},sip,c)},counter=0)
+exten => _011.,1,Set(sipcount=${ENUMLOOKUP(${EXTEN:3},sip,c)}|counter=0)
 exten => _011.,n,While($["${counter}"<"${sipcount}"])
 exten => _011.,n,Set(counter=$[${counter}+1])
 exten => _011.,n,Dial(SIP/${ENUMLOOKUP(+${EXTEN:3},sip,${counter})})
@@ -270,13 +270,13 @@ exten => _011.,n,Dial(Zap/g1/${EXTEN})
 ;
 ; Start first with e164.arpa zone...
 ;
-exten => _X.,1,Set(sipcount=${ENUMLOOKUP(+${EXTEN},sip,c)},counter=0)
+exten => _X.,1,Set(sipcount=${ENUMLOOKUP(+${EXTEN},sip,c)}|counter=0)
 exten => _X.,2,GotoIf($["${counter}"<"${sipcount}"]?3:6)
 exten => _X.,3,Set(counter=$[${counter}+1])
 exten => _X.,4,Dial(SIP/${ENUMLOOKUP(+${EXTEN},sip,${counter})})
 exten => _X.,5,GotoIf($["${counter}"<"${sipcount}"]?3:6)
 ;
-exten => _X.,6,Set(iaxcount=${ENUMLOOKUP(+${EXTEN},iax2,c)},counter=0)
+exten => _X.,6,Set(iaxcount=${ENUMLOOKUP(+${EXTEN},iax2,c)}|counter=0)
 exten => _X.,7,GotoIf($["${counter}"<"${iaxcount}"]?8:11)
 exten => _X.,8,Set(counter=$[${counter}+1])
 exten => _X.,9,Dial(IAX2/${ENUMLOOKUP(+${EXTEN},iax2,${counter})})
@@ -286,13 +286,13 @@ exten => _X.,11,NoOp("No valid entries in e164.arpa for ${EXTEN} - checking in e
 ;
 ; ...then also try e164.org, and look for SIP and IAX NAPTRs...
 ;
-exten => _X.,12,Set(sipcount=${ENUMLOOKUP(+${EXTEN},sip,c,e164.org)},counter=0)
+exten => _X.,12,Set(sipcount=${ENUMLOOKUP(+${EXTEN},sip,c,e164.org)}|counter=0)
 exten => _X.,13,GotoIf($["${counter}"<"${sipcount}"]?14:17)
 exten => _X.,14,Set(counter=$[${counter}+1])
 exten => _X.,15,Dial(SIP/${ENUMLOOKUP(+${EXTEN},sip,${counter},e164.org)})
 exten => _X.,16,GotoIf($["${counter}"<"${sipcount}"]?14:17)
 ;
-exten => _X.,17,Set(iaxcount=${ENUMLOOKUP(+${EXTEN},iax2,c,e164.org)},counter=0)
+exten => _X.,17,Set(iaxcount=${ENUMLOOKUP(+${EXTEN},iax2,c,e164.org)}|counter=0)
 exten => _X.,18,GotoIf($["${counter}"<"${iaxcount}"]?19:22)
 exten => _X.,19,Set(counter=$[${counter}+1])
 exten => _X.,20,Dial(IAX2/${ENUMLOOKUP(+${EXTEN},iax2,${counter},e164.org)})

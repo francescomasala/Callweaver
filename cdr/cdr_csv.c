@@ -1,5 +1,5 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  *
  * Copyright (C) 1999 - 2005, Digium, Inc.
  *
@@ -7,8 +7,8 @@
  *
  * Includes code and algorithms from the Zapata library.
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -22,7 +22,7 @@
  *
  * \brief Comma Separated Value CDR records.
  * 
- * \arg See also \ref cwCDR
+ * \arg See also \ref AstCDR
  */
 #ifdef HAVE_CONFIG_H
 #include "confdefs.h"
@@ -31,15 +31,15 @@
 #include <stdio.h>
 #include <sys/types.h>
 
-#include "callweaver.h"
+#include "openpbx.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/cdr/cdr_csv.c $", "$Revision: 4723 $")
+OPENPBX_FILE_VERSION("$HeadURL$", "$Revision$")
 
-#include "callweaver/channel.h"
-#include "callweaver/cdr.h"
-#include "callweaver/module.h"
-#include "callweaver/logger.h"
-#include "callweaver/utils.h"
+#include "openpbx/channel.h"
+#include "openpbx/cdr.h"
+#include "openpbx/module.h"
+#include "openpbx/logger.h"
+#include "openpbx/utils.h"
 
 #define CSV_LOG_DIR "/cdr-csv"
 #define CSV_MASTER  "/Master.csv"
@@ -89,6 +89,7 @@ static char *desc = "Comma Separated Values CDR Backend";
 
 static char *name = "csv";
 
+static FILE *mf = NULL;
 
 static int append_string(char *buf, char *s, size_t bufsize)
 {
@@ -137,7 +138,7 @@ static int append_date(char *buf, struct timeval tv, size_t bufsize)
 	t = tv.tv_sec;
 	if (strlen(buf) > bufsize - 3)
 		return -1;
-	if (cw_tvzero(tv)) {
+	if (opbx_tvzero(tv)) {
 		strncat(buf, ",", bufsize - strlen(buf) - 1);
 		return 0;
 	}
@@ -146,7 +147,7 @@ static int append_date(char *buf, struct timeval tv, size_t bufsize)
 	return append_string(buf, tmp, bufsize);
 }
 
-static int build_csv_record(char *buf, size_t bufsize, struct cw_cdr *cdr)
+static int build_csv_record(char *buf, size_t bufsize, struct opbx_cdr *cdr)
 {
 
 	buf[0] = '\0';
@@ -179,9 +180,9 @@ static int build_csv_record(char *buf, size_t bufsize, struct cw_cdr *cdr)
 	/* Billable seconds */
 	append_int(buf, cdr->billsec, bufsize);
 	/* Disposition */
-	append_string(buf, cw_cdr_disp2str(cdr->disposition), bufsize);
+	append_string(buf, opbx_cdr_disp2str(cdr->disposition), bufsize);
 	/* AMA Flags */
-	append_string(buf, cw_cdr_flags2str(cdr->amaflags), bufsize);
+	append_string(buf, opbx_cdr_flags2str(cdr->amaflags), bufsize);
 
 #ifdef CSV_LOGUNIQUEID
 	/* Unique ID */
@@ -203,13 +204,13 @@ static int build_csv_record(char *buf, size_t bufsize, struct cw_cdr *cdr)
 
 static int writefile(char *s, char *acc)
 {
-	char tmp[CW_CONFIG_MAX_PATH];
+	char tmp[OPBX_CONFIG_MAX_PATH];
 	FILE *f;
 	if (strchr(acc, '/') || (acc[0] == '.')) {
-		cw_log(LOG_WARNING, "Account code '%s' insecure for writing file\n", acc);
+		opbx_log(LOG_WARNING, "Account code '%s' insecure for writing file\n", acc);
 		return -1;
 	}
-	snprintf(tmp, sizeof(tmp), "%s/%s/%s.csv", (char *)cw_config_CW_LOG_DIR,CSV_LOG_DIR, acc);
+	snprintf(tmp, sizeof(tmp), "%s/%s/%s.csv", (char *)opbx_config_OPBX_LOG_DIR,CSV_LOG_DIR, acc);
 	f = fopen(tmp, "a");
 	if (!f)
 		return -1;
@@ -220,32 +221,34 @@ static int writefile(char *s, char *acc)
 }
 
 
-static int csv_log(struct cw_cdr *cdr)
+static int csv_log(struct opbx_cdr *cdr)
 {
 	/* Make sure we have a big enough buf */
 	char buf[1024];
-	char csvmaster[CW_CONFIG_MAX_PATH];
-	FILE *mf = NULL;
-
-	snprintf(csvmaster, sizeof(csvmaster),"%s/%s/%s", cw_config_CW_LOG_DIR, CSV_LOG_DIR, CSV_MASTER);
+	char csvmaster[OPBX_CONFIG_MAX_PATH];
+	snprintf(csvmaster, sizeof(csvmaster),"%s/%s/%s", opbx_config_OPBX_LOG_DIR, CSV_LOG_DIR, CSV_MASTER);
 #if 0
-	printf("[CDR] %s ('%s' -> '%s') Dur: %ds Bill: %ds Disp: %s Flags: %s Account: [%s]\n", cdr->channel, cdr->src, cdr->dst, cdr->duration, cdr->billsec, cw_cdr_disp2str(cdr->disposition), cw_cdr_flags2str(cdr->amaflags), cdr->accountcode);
+	printf("[CDR] %s ('%s' -> '%s') Dur: %ds Bill: %ds Disp: %s Flags: %s Account: [%s]\n", cdr->channel, cdr->src, cdr->dst, cdr->duration, cdr->billsec, opbx_cdr_disp2str(cdr->disposition), opbx_cdr_flags2str(cdr->amaflags), cdr->accountcode);
 #endif
 	if (build_csv_record(buf, sizeof(buf), cdr)) {
-		cw_log(LOG_WARNING, "Unable to create CSV record in %d bytes.  CDR not recorded!\n", (int)sizeof(buf));
+		opbx_log(LOG_WARNING, "Unable to create CSV record in %d bytes.  CDR not recorded!\n", (int)sizeof(buf));
 	} else {
 		/* because of the absolutely unconditional need for the
 		   highest reliability possible in writing billing records,
 		   we open write and close the log file each time */
-		if ((mf = fopen(csvmaster, "a"))) {
+		mf = fopen(csvmaster, "a");
+		if (!mf) {
+			opbx_log(LOG_ERROR, "Unable to re-open master file %s : %s\n", csvmaster, strerror(errno));
+		}
+		if (mf) {
 			fputs(buf, mf);
+			fflush(mf); /* be particularly anal here */
 			fclose(mf);
-		} else
-			cw_log(LOG_ERROR, "Unable to re-open master file %s : %s\n", csvmaster, strerror(errno));
-
-		if (!cw_strlen_zero(cdr->accountcode)) {
+			mf = NULL;
+		}
+		if (!opbx_strlen_zero(cdr->accountcode)) {
 			if (writefile(buf, cdr->accountcode))
-				cw_log(LOG_WARNING, "Unable to write CSV record to account file '%s' : %s\n", cdr->accountcode, strerror(errno));
+				opbx_log(LOG_WARNING, "Unable to write CSV record to account file '%s' : %s\n", cdr->accountcode, strerror(errno));
 		}
 	}
 	return 0;
@@ -258,7 +261,9 @@ char *description(void)
 
 int unload_module(void)
 {
-	cw_cdr_unregister(name);
+	if (mf)
+		fclose(mf);
+	opbx_cdr_unregister(name);
 	return 0;
 }
 
@@ -266,9 +271,12 @@ int load_module(void)
 {
 	int res;
 
-	res = cw_cdr_register(name, desc, csv_log);
-	if (res)
-		cw_log(LOG_ERROR, "Unable to register CSV CDR handling\n");
+	res = opbx_cdr_register(name, desc, csv_log);
+	if (res) {
+		opbx_log(LOG_ERROR, "Unable to register CSV CDR handling\n");
+		if (mf)
+			fclose(mf);
+	}
 	return res;
 }
 

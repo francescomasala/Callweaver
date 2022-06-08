@@ -4,5 +4,5 @@
 [intro]
 alignment = center
 greeting => Welcome to the
-greeting => CallWeaver
+greeting => OpenPBX
 greeting => Open Source PBX

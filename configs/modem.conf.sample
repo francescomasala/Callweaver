@@ -19,7 +19,7 @@ driver=aopen	; modem by AOpen
 ;language=en
 ;
 ; We can optionally override the auto detection.  This is necessary
-; particularly if callweaver does not know about our kind of modem.
+; particularly if openpbx does not know about our kind of modem.
 ;
 ;type=autodetect
 ;type=aopen
@@ -71,7 +71,7 @@ mode=immediate
 ;
 
 ; Set DTMF-detection/generation mode to:
-;  callweaver: Let CallWeaver do inband detection (default)
+;  openpbx: Let OpenPBX do inband detection (default)
 ;  i4l:      Use the inband detection made by ISDN4Linux
 ;  none:     Don't detect inband DTMF
 ;  both:     Transmit using both in-band and out of band (generation only)
@@ -79,10 +79,10 @@ mode=immediate
 ; You may specify either one mode, or the detection/generation mode
 ; individually separated by a '/'.
 ;
-;dtmfmode=callweaver			; Detect using CallWeaver
-;dtmfmode=callweaver/both		; Detect using CallWeaver, generate w/ both
+;dtmfmode=openpbx			; Detect using OpenPBX
+;dtmfmode=openpbx/both		; Detect using OpenPBX, generate w/ both
 ; two other devices, which are in group '1' and are used when an
-; outgoing dial used: exten => s,1,Dial,Modem/g1:1234,60,r
+; outgoing dial used: exten => s,1,Dial,Modem/g1:1234|60|r
 ; (we do not need more outgoing devices, since ISDN2 has only 2 channels.)
 ; Lines can be in more than one group (0-63); comma separated list.
 ;

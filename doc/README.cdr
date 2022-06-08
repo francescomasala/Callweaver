@@ -1,11 +1,11 @@
-CallWeaver billing support - Call Detail Records
+OpenPBX billing support - Call Detail Records
 ----------------------------------------------
-CallWeaver generates Call Detail Records in a database or in a comma
+OpenPBX generates Call Detail Records in a database or in a comma
 separated text file. 
 
    * cdr_csv supports comma separated text file storage, this is the
      default driver
-   * cdr_manager supports CDR information via the AMI, The CallWeaver Manager
+   * cdr_manager supports CDR information via the AMI, The OpenPBX Manager
      interface
    * cdr_odbc supports UnixODBC databases, see http://www.unixodbc.org
      for an updated list of supported databases, from MySQL to MsSQL
@@ -14,7 +14,7 @@ separated text file.
    * cdr_sqlite supports SQlite
    * cdr_pgsql supports PostgreSQL
 
-In the callweaver-addons cvs archive, there's a cdr_mysql driver for
+In the openpbx-addons cvs archive, there's a cdr_mysql driver for
 MySQL.
 
 
@@ -36,7 +36,7 @@ You can set default account codes and AMA flags for devices in
 channel configuration files, like sip.conf, iax.conf etc.
 
 
-Fields of the CDR in CallWeaver
+Fields of the CDR in OpenPBX
 -----------------------------
 
    1. accountcode: What account number to use, (string, 20 characters)
@@ -108,7 +108,7 @@ cdr_csv2
 This module is an experimental new cdr module to demonstrate the cdr vars.
 usage(
 
-*) Create a file called cdr.conf and place it in your /etc/callweaver (or wherever your config files are) in the [cdr_csv2] section.
+*) Create a file called cdr.conf and place it in your /etc/openpbx (or wherever your config files are) in the [cdr_csv2] section.
 *) Add an entry called format to indicate any format you want for the output.
 
 The following format string will emulate the regular cdr file format:

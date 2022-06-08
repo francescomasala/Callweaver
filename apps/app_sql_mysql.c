@@ -1,5 +1,5 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- A telephony toolkit for Linux.
  *
  * Connect to MySQL
  * 
@@ -12,9 +12,7 @@
  * the GNU General Public License
  */
 
-#ifdef HAVE_CONFIG_H
-#include "confdefs.h"
-#endif
+#include <openpbx.h>
 
 #include <stdlib.h>
 #include <unistd.h>
@@ -26,31 +24,29 @@
 
 #include <mysql/mysql.h>
 
-#include "callweaver.h"
-
-#include "callweaver/file.h"
-#include "callweaver/logger.h"
-#include "callweaver/channel.h"
-#include "callweaver/pbx.h"
-#include "callweaver/module.h"
-#include "callweaver/linkedlists.h"
-#include "callweaver/chanvars.h"
-#include "callweaver/lock.h"
+#include <openpbx/file.h>
+#include <openpbx/logger.h>
+#include <openpbx/channel.h>
+#include <openpbx/pbx.h>
+#include <openpbx/module.h>
+#include <openpbx/linkedlists.h>
+#include <openpbx/chanvars.h>
+#include <openpbx/lock.h>
 
 STANDARD_LOCAL_USER;
 
 LOCAL_USER_DECL;
 
-#define CW_MODULE "app_addon_sql_mysql"
+#define OPBX_MODULE "app_addon_sql_mysql"
 
 #define EXTRA_LOG 0
 
-static void *app;
-static const char *name = "MYSQL";
-static const char *synopsis = "Do several mySQLy things";
-static const char *syntax = "MYSQL()";
-static const char *descrip = 
-"Do several mySQLy things\n"
+static char *app = "MYSQL";
+
+static char *synopsis = "Do several mySQLy things";
+
+static char *descrip = 
+"MYSQL():  Do several mySQLy things\n"
 "Syntax:\n"
 "  MYSQL(Connect connid dhhost dbuser dbpass dbname)\n"
 "    Connects to a database.  Arguments contain standard MySQL parameters\n"
@@ -73,7 +69,7 @@ static const char *descrip =
 /*	
 EXAMPLES OF USE : 
 
-exten => s,2,MYSQL(Connect connid localhost callweaver mypass credit)
+exten => s,2,MYSQL(Connect connid localhost openpbx mypass credit)
 exten => s,3,MYSQL(Query resultid ${connid} SELECT username,credit FROM credit WHERE callerid=${CALLERIDNUM})
 exten => s,4,MYSQL(Fetch fetchid ${resultid} datavar1 datavar2)
 exten => s,5,GotoIf(${fetchid}?6:8)
@@ -83,35 +79,35 @@ exten => s,8,MYSQL(Clear ${resultid})
 exten => s,9,MYSQL(Disconnect ${connid})
 */
 
-CW_MUTEX_DEFINE_STATIC(_mysql_mutex);
+OPBX_MUTEX_DEFINE_STATIC(_mysql_mutex);
 
-#define CW_MYSQL_ID_DUMMY   0
-#define CW_MYSQL_ID_CONNID  1
-#define CW_MYSQL_ID_RESID   2
-#define CW_MYSQL_ID_FETCHID 3
+#define OPBX_MYSQL_ID_DUMMY   0
+#define OPBX_MYSQL_ID_CONNID  1
+#define OPBX_MYSQL_ID_RESID   2
+#define OPBX_MYSQL_ID_FETCHID 3
 
-struct cw_MYSQL_id {
+struct opbx_MYSQL_id {
 	int identifier_type; /* 0=dummy, 1=connid, 2=resultid */
 	int identifier;
 	void *data;
-	CW_LIST_ENTRY(cw_MYSQL_id) entries;
-} *cw_MYSQL_id;
+	OPBX_LIST_ENTRY(opbx_MYSQL_id) entries;
+} *opbx_MYSQL_id;
 
-CW_LIST_HEAD(MYSQLidshead,cw_MYSQL_id) _mysql_ids_head;
+OPBX_LIST_HEAD(MYSQLidshead,opbx_MYSQL_id) _mysql_ids_head;
 
 /* helpful procs */
 static void *find_identifier(int identifier,int identifier_type) {
 	struct MYSQLidshead *headp;
-	struct cw_MYSQL_id *i;
+	struct opbx_MYSQL_id *i;
 	void *res=NULL;
 	int found=0;
 	
 	headp=&_mysql_ids_head;
 	
-	if (CW_LIST_LOCK(headp)) {
-		cw_log(LOG_WARNING,"Unable to lock identifiers list\n");
+	if (OPBX_LIST_LOCK(headp)) {
+		opbx_log(LOG_WARNING,"Unable to lock identifiers list\n");
 	} else {
-		CW_LIST_TRAVERSE(headp,i,entries) {
+		OPBX_LIST_TRAVERSE(headp,i,entries) {
 			if ((i->identifier==identifier) && (i->identifier_type==identifier_type)) {
 				found=1;
 				res=i->data;
@@ -119,16 +115,16 @@ static void *find_identifier(int identifier,int identifier_type) {
 			}
 		}
 		if (!found) {
-			cw_log(LOG_WARNING,"Identifier %d, identifier_type %d not found in identifier list\n",identifier,identifier_type);
+			opbx_log(LOG_WARNING,"Identifier %d, identifier_type %d not found in identifier list\n",identifier,identifier_type);
 		}
-		CW_LIST_UNLOCK(headp);
+		OPBX_LIST_UNLOCK(headp);
 	}
 	
 	return res;
 }
 
 static int add_identifier(int identifier_type,void *data) {
-	struct cw_MYSQL_id *i,*j;
+	struct opbx_MYSQL_id *i,*j;
 	struct MYSQLidshead *headp;
 	int maxidentifier=0;
 	
@@ -136,12 +132,12 @@ static int add_identifier(int identifier_type,void *data) {
 	i=NULL;
 	j=NULL;
 	
-	if (CW_LIST_LOCK(headp)) {
-		cw_log(LOG_WARNING,"Unable to lock identifiers list\n");
+	if (OPBX_LIST_LOCK(headp)) {
+		opbx_log(LOG_WARNING,"Unable to lock identifiers list\n");
 		return(-1);
 	} else {
- 		i=malloc(sizeof(struct cw_MYSQL_id));
-		CW_LIST_TRAVERSE(headp,j,entries) {
+ 		i=malloc(sizeof(struct opbx_MYSQL_id));
+		OPBX_LIST_TRAVERSE(headp,j,entries) {
 			if (j->identifier>maxidentifier) {
 				maxidentifier=j->identifier;
 			}
@@ -149,56 +145,56 @@ static int add_identifier(int identifier_type,void *data) {
 		i->identifier=maxidentifier+1;
 		i->identifier_type=identifier_type;
 		i->data=data;
-		CW_LIST_INSERT_HEAD(headp,i,entries);
-		CW_LIST_UNLOCK(headp);
+		OPBX_LIST_INSERT_HEAD(headp,i,entries);
+		OPBX_LIST_UNLOCK(headp);
 	}
 	return i->identifier;
 }
 
 static int del_identifier(int identifier,int identifier_type) {
-	struct cw_MYSQL_id *i;
+	struct opbx_MYSQL_id *i;
 	struct MYSQLidshead *headp;
 	int found=0;
 	
         headp=&_mysql_ids_head;
         
-        if (CW_LIST_LOCK(headp)) {
-		cw_log(LOG_WARNING,"Unable to lock identifiers list\n");
+        if (OPBX_LIST_LOCK(headp)) {
+		opbx_log(LOG_WARNING,"Unable to lock identifiers list\n");
 	} else {
-		CW_LIST_TRAVERSE(headp,i,entries) {
+		OPBX_LIST_TRAVERSE(headp,i,entries) {
 			if ((i->identifier==identifier) && 
 			    (i->identifier_type==identifier_type)) {
-				CW_LIST_REMOVE(headp,i,entries);
+				OPBX_LIST_REMOVE(headp,i,entries);
 				free(i);
 				found=1;
 				break;
 			}
 		}
-		CW_LIST_UNLOCK(headp);
+		OPBX_LIST_UNLOCK(headp);
 	}
 	                
 	if (found==0) {
-		cw_log(LOG_WARNING,"Could not find identifier %d, identifier_type %d in list to delete\n",identifier,identifier_type);
+		opbx_log(LOG_WARNING,"Could not find identifier %d, identifier_type %d in list to delete\n",identifier,identifier_type);
 		return(-1);
 	} else {
 		return(0);
 	}
 }
 
-static int set_callweaver_int(struct cw_channel *chan, char *varname, int id) {
+static int set_openpbx_int(struct opbx_channel *chan, char *varname, int id) {
 	if( id>=0 ) {
 		char s[100] = "";
 		snprintf(s, sizeof(s)-1, "%d", id);
 #if EXTRA_LOG
-		cw_log(LOG_WARNING,"MYSQL: setting var '%s' to value '%s'\n",varname,s);
+		opbx_log(LOG_WARNING,"MYSQL: setting var '%s' to value '%s'\n",varname,s);
 #endif
 		pbx_builtin_setvar_helper(chan,varname,s);
 	}
 	return id;
 }
 
-static int add_identifier_and_set_callweaver_int(struct cw_channel *chan, char *varname, int identifier_type, void *data) {
-	return set_callweaver_int(chan,varname,add_identifier(identifier_type,data));
+static int add_identifier_and_set_openpbx_int(struct opbx_channel *chan, char *varname, int identifier_type, void *data) {
+	return set_openpbx_int(chan,varname,add_identifier(identifier_type,data));
 }
 
 static int safe_scan_int( char** data, char* delim, int def ) {
@@ -213,7 +209,7 @@ static int safe_scan_int( char** data, char* delim, int def ) {
 }
 
 /* MYSQL operations */
-static int aMYSQL_connect(struct cw_channel *chan, char *data) {
+static int aMYSQL_connect(struct opbx_channel *chan, char *data) {
 	
 	MYSQL *mysql;
 
@@ -235,25 +231,25 @@ static int aMYSQL_connect(struct cw_channel *chan, char *data) {
 		mysql = mysql_init(NULL);
 		if (mysql) {
 			if (mysql_real_connect(mysql,dbhost,dbuser,dbpass,dbname,0,NULL,0)) {
-				add_identifier_and_set_callweaver_int(chan,connid_var,CW_MYSQL_ID_CONNID,mysql);
+				add_identifier_and_set_openpbx_int(chan,connid_var,OPBX_MYSQL_ID_CONNID,mysql);
 				return 0;
 			}
 			else {
-				cw_log(LOG_WARNING,"mysql_real_connect(mysql,%s,%s,dbpass,%s,...) failed\n",dbhost,dbuser,dbname);
+				opbx_log(LOG_WARNING,"mysql_real_connect(mysql,%s,%s,dbpass,%s,...) failed\n",dbhost,dbuser,dbname);
 			}
 		}
 		else {
-			cw_log(LOG_WARNING,"myslq_init returned NULL\n");
+			opbx_log(LOG_WARNING,"myslq_init returned NULL\n");
 		}
  	}
 	else {
-		cw_log(LOG_WARNING,"MYSQL(connect is missing some arguments\n");
+		opbx_log(LOG_WARNING,"MYSQL(connect is missing some arguments\n");
 	}
 
 	return -1;
 }
 
-static int aMYSQL_query(struct cw_channel *chan, char *data) {
+static int aMYSQL_query(struct opbx_channel *chan, char *data) {
 	
 	MYSQL       *mysql;
 	MYSQL_RES   *mysqlres;
@@ -269,32 +265,32 @@ static int aMYSQL_query(struct cw_channel *chan, char *data) {
 	querystring  = strsep(&data,"\n");
 
 	if (resultid_var && (connid>=0) && querystring) {
-		if ((mysql=find_identifier(connid,CW_MYSQL_ID_CONNID))!=NULL) {
+		if ((mysql=find_identifier(connid,OPBX_MYSQL_ID_CONNID))!=NULL) {
 			mysql_query(mysql,querystring);
 			if ((mysqlres=mysql_use_result(mysql))!=NULL) {
-				add_identifier_and_set_callweaver_int(chan,resultid_var,CW_MYSQL_ID_RESID,mysqlres);
+				add_identifier_and_set_openpbx_int(chan,resultid_var,OPBX_MYSQL_ID_RESID,mysqlres);
 				return 0;
 			}
 			else if( mysql_field_count(mysql)==0 ) {
 				return 0;  // See http://dev.mysql.com/doc/mysql/en/mysql_field_count.html
 			}
 			else {
-				cw_log(LOG_WARNING,"aMYSQL_query: mysql_store_result() failed on query %s\n",querystring);
+				opbx_log(LOG_WARNING,"aMYSQL_query: mysql_store_result() failed on query %s\n",querystring);
 			}
 		}
 		else {
-			cw_log(LOG_WARNING,"aMYSQL_query: Invalid connection identifier %d passed in aMYSQL_query\n",connid);
+			opbx_log(LOG_WARNING,"aMYSQL_query: Invalid connection identifier %d passed in aMYSQL_query\n",connid);
 		}
 	}
 	else {
-		cw_log(LOG_WARNING,"aMYSQL_query: missing some arguments\n");
+		opbx_log(LOG_WARNING,"aMYSQL_query: missing some arguments\n");
 	}
 	
 	return -1;
 }
 
 
-static int aMYSQL_fetch(struct cw_channel *chan, char *data) {
+static int aMYSQL_fetch(struct opbx_channel *chan, char *data) {
 	
 	MYSQL_RES *mysqlres;
 	MYSQL_ROW mysqlrow;
@@ -308,114 +304,114 @@ static int aMYSQL_fetch(struct cw_channel *chan, char *data) {
 	resultid    = safe_scan_int(&data," ",-1);
 
 	if (fetchid_var && (resultid>=0) ) {
-		if ((mysqlres=find_identifier(resultid,CW_MYSQL_ID_RESID))!=NULL) {
+		if ((mysqlres=find_identifier(resultid,OPBX_MYSQL_ID_RESID))!=NULL) {
 			/* Grab the next row */
 			if ((mysqlrow=mysql_fetch_row(mysqlres))!=NULL) {
 				numFields=mysql_num_fields(mysqlres);
 				for (j=0;j<numFields;j++) {
 					s5=strsep(&data," ");
 					if (s5==NULL) {
-						cw_log(LOG_WARNING,"cw_MYSQL_fetch: More fields (%d) than variables (%d)\n",numFields,j);
+						opbx_log(LOG_WARNING,"opbx_MYSQL_fetch: More fields (%d) than variables (%d)\n",numFields,j);
 						break;
 					}
 					s6=mysqlrow[j];
 					pbx_builtin_setvar_helper(chan,s5, s6 ? s6 : "NULL");
 				}
 #if EXTRA_LOG
-				cw_log(LOG_WARNING,"cw_MYSQL_fetch: numFields=%d\n",numFields);
+				opbx_log(LOG_WARNING,"opbx_MYSQL_fetch: numFields=%d\n",numFields);
 #endif
-				set_callweaver_int(chan,fetchid_var,1); // try more rows
+				set_openpbx_int(chan,fetchid_var,1); // try more rows
 			} else {
 #if EXTRA_LOG
-				cw_log(LOG_WARNING,"cw_MYSQL_fetch : EOF\n");
+				opbx_log(LOG_WARNING,"opbx_MYSQL_fetch : EOF\n");
 #endif
-				set_callweaver_int(chan,fetchid_var,0); // no more rows
+				set_openpbx_int(chan,fetchid_var,0); // no more rows
 			}
 			return 0;
 		}
 		else {
-			cw_log(LOG_WARNING,"aMYSQL_fetch: Invalid result identifier %d passed\n",resultid);
+			opbx_log(LOG_WARNING,"aMYSQL_fetch: Invalid result identifier %d passed\n",resultid);
 		}
 	}
 	else {
-		cw_log(LOG_WARNING,"aMYSQL_fetch: missing some arguments\n");
+		opbx_log(LOG_WARNING,"aMYSQL_fetch: missing some arguments\n");
 	}
 
 	return -1;
 }
 
-static int aMYSQL_clear(struct cw_channel *chan, char *data) {
+static int aMYSQL_clear(struct opbx_channel *chan, char *data) {
 
 	MYSQL_RES *mysqlres;
 
 	int id;
 	strsep(&data," "); // eat the first token, we already know it :P 
 	id = safe_scan_int(&data," \n",-1);
-	if ((mysqlres=find_identifier(id,CW_MYSQL_ID_RESID))==NULL) {
-		cw_log(LOG_WARNING,"Invalid result identifier %d passed in aMYSQL_clear\n",id);
+	if ((mysqlres=find_identifier(id,OPBX_MYSQL_ID_RESID))==NULL) {
+		opbx_log(LOG_WARNING,"Invalid result identifier %d passed in aMYSQL_clear\n",id);
 	} else {
 		mysql_free_result(mysqlres);
-		del_identifier(id,CW_MYSQL_ID_RESID);
+		del_identifier(id,OPBX_MYSQL_ID_RESID);
 	}
 
 	return 0;
 }
 
-static int aMYSQL_disconnect(struct cw_channel *chan, char *data) {
+static int aMYSQL_disconnect(struct opbx_channel *chan, char *data) {
 	
 	MYSQL *mysql;
 	int id;
 	strsep(&data," "); // eat the first token, we already know it :P 
 
 	id = safe_scan_int(&data," \n",-1);
-	if ((mysql=find_identifier(id,CW_MYSQL_ID_CONNID))==NULL) {
-		cw_log(LOG_WARNING,"Invalid connection identifier %d passed in aMYSQL_disconnect\n",id);
+	if ((mysql=find_identifier(id,OPBX_MYSQL_ID_CONNID))==NULL) {
+		opbx_log(LOG_WARNING,"Invalid connection identifier %d passed in aMYSQL_disconnect\n",id);
 	} else {
 		mysql_close(mysql);
-		del_identifier(id,CW_MYSQL_ID_CONNID);
+		del_identifier(id,OPBX_MYSQL_ID_CONNID);
 	} 
 
 	return 0;
 }
 
-static int MYSQL_exec(struct cw_channel *chan, int argc, char **argv)
+static int MYSQL_exec(struct opbx_channel *chan, void *data)
 {
-	struct localuser *u;
+	struct opbx_module_user *u;
 	int result;
 	char sresult[10];
 
-	if (argc == 0 || !argv[0][0]) {
-		cw_log(LOG_WARNING, "APP_MYSQL requires an argument (see manual)\n");
+#if EXTRA_LOG
+	fprintf(stderr,"MYSQL_exec: data=%s\n",(char*)data);
+#endif
+
+	if (!data) {
+		opbx_log(LOG_WARNING, "APP_MYSQL requires an argument (see manual)\n");
 		return -1;
 	}
 
-#if EXTRA_LOG
-	fprintf(stderr,"MYSQL_exec: arg=%s\n", argv[0]);
-#endif
-
-	LOCAL_USER_ADD(u);
+	u = opbx_module_user_add(chan);
 	result=0;
 
-	cw_mutex_lock(&_mysql_mutex);
+	opbx_mutex_lock(&_mysql_mutex);
 
-	if (strncasecmp("connect",argv[0],strlen("connect"))==0) {
-		result=aMYSQL_connect(chan,cw_strdupa(argv[0]));
-	} else 	if (strncasecmp("query",argv[0],strlen("query"))==0) {
-		result=aMYSQL_query(chan,cw_strdupa(argv[0]));
-	} else 	if (strncasecmp("fetch",argv[0],strlen("fetch"))==0) {
-		result=aMYSQL_fetch(chan,cw_strdupa(argv[0]));
-	} else 	if (strncasecmp("clear",argv[0],strlen("clear"))==0) {
-		result=aMYSQL_clear(chan,cw_strdupa(argv[0]));
-	} else 	if (strncasecmp("disconnect",argv[0],strlen("disconnect"))==0) {
-		result=aMYSQL_disconnect(chan,cw_strdupa(argv[0]));
+	if (strncasecmp("connect",data,strlen("connect"))==0) {
+		result=aMYSQL_connect(chan,opbx_strdupa(data));
+	} else 	if (strncasecmp("query",data,strlen("query"))==0) {
+		result=aMYSQL_query(chan,opbx_strdupa(data));
+	} else 	if (strncasecmp("fetch",data,strlen("fetch"))==0) {
+		result=aMYSQL_fetch(chan,opbx_strdupa(data));
+	} else 	if (strncasecmp("clear",data,strlen("clear"))==0) {
+		result=aMYSQL_clear(chan,opbx_strdupa(data));
+	} else 	if (strncasecmp("disconnect",data,strlen("disconnect"))==0) {
+		result=aMYSQL_disconnect(chan,opbx_strdupa(data));
 	} else {
-		cw_log(LOG_WARNING, "Unknown argument to MYSQL application : %s\n", argv[0]);
+		opbx_log(LOG_WARNING, "Unknown argument to MYSQL application : %s\n",(char *)data);
 		result=-1;	
 	}
 		
-	cw_mutex_unlock(&_mysql_mutex);
+	opbx_mutex_unlock(&_mysql_mutex);
 
-	LOCAL_USER_REMOVE(u);
+	opbx_module_user_remove(u);
 	snprintf(sresult, sizeof(sresult), "%d", result);
 	pbx_builtin_setvar_helper(chan, "MYSQL_STATUS", sresult);
 	return 0;
@@ -423,18 +419,15 @@ static int MYSQL_exec(struct cw_channel *chan, int argc, char **argv)
 
 int unload_module(void)
 {
-	int res = 0;
-	STANDARD_HANGUP_LOCALUSERS;
-	res |= cw_unregister_application(app);
-	return res;
+	opbx_module_user_hangup_all();
+	return opbx_unregister_application(app);
 }
 
 int load_module(void)
 {
 	struct MYSQLidshead *headp = &_mysql_ids_head;
-	CW_LIST_HEAD_INIT(headp);
-	app = cw_register_application(name, MYSQL_exec, synopsis, syntax, descrip);
-	return 0;
+	OPBX_LIST_HEAD_INIT(headp);
+	return opbx_register_application(app, MYSQL_exec, synopsis, descrip);
 }
 
 char *description(void)

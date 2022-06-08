@@ -1,5 +1,5 @@
 ;
-; SIP Configuration example for CallWeaver
+; SIP Configuration example for OpenPBX
 ;
 ; Syntax for specifying a SIP device in extensions.conf is
 ; SIP/devicename where devicename is defined in a section below.
@@ -26,22 +26,22 @@
 [general]
 context=default			; Default context for incoming calls
 ;allowguest=no			; Allow or reject guest calls (default is yes, this can also be set to 'osp'
-				; if callweaver was compiled with OSP support.
+				; if openpbx was compiled with OSP support.
 ;realm=mydomain.tld		; Realm for digest authentication
-				; defaults to "callweaver"
+				; defaults to "openpbx"
 				; Realms MUST be globally unique according to RFC 3261
 				; Set this to your host name or domain name
 bindport=5060			; UDP Port to bind to (SIP standard port is 5060)
 bindaddr=0.0.0.0		; IP address to bind to (0.0.0.0 binds to all)
 srvlookup=yes			; Enable DNS SRV lookups on outbound calls
-				; Note: CallWeaver only uses the first host 
+				; Note: OpenPBX only uses the first host 
 				; in SRV records
 				; Disabling DNS SRV lookups disables the 
 				; ability to place SIP calls based on domain 
 				; names to some other SIP users on the Internet
 				
 ;domain=mydomain.tld		; Set default domain for this host
-				; If configured, CallWeaver will only allow
+				; If configured, OpenPBX will only allow
 				; INVITE and REFER to non-local domains
 				; Use "sip show domains" to list local domains
 ;domain=mydomain.tld,mydomain-incoming
@@ -51,7 +51,7 @@ srvlookup=yes			; Enable DNS SRV lookups on outbound calls
 				; You can have several "domain" settings
 ;allowexternalinvites=no	; Disable INVITE and REFER to non-local domains
 				; Default is yes
-;autodomain=yes			; Turn this on to have CallWeaver add local host
+;autodomain=yes			; Turn this on to have OpenPBX add local host
 				; name and local IP to domain list.
 ;pedantic=yes			; Enable slow, pedantic checking for Pingtel
 				; and multiline formatted headers for strict
@@ -64,7 +64,7 @@ srvlookup=yes			; Enable DNS SRV lookups on outbound calls
 ;checkmwi=10			; Default time between mailbox checks for peers
 ;vmexten=voicemail      ; dialplan extension to reach mailbox sets the 
 						; Message-Account in the MWI notify message 
-						; defaults to "callweaver"
+						; defaults to "openpbx"
 ;videosupport=yes		; Turn on support for SIP video
 ;t38udptlsupport=yes		; Turn on support for T.38 UDPTL
 ;t38rtpsupport=yes		; Turn on support for T.38 RTP	- *** NOT YET IMPLEMENTED ***
@@ -89,7 +89,7 @@ srvlookup=yes			; Enable DNS SRV lookups on outbound calls
 ;progressinband=never		; If we should generate in-band ringing always
 				; use 'never' to never use in-band signalling, even in cases
 				; where some buggy devices might not render it
-;useragent=CallWeaver		; Allows you to change the user agent string
+;useragent=OpenPBX		; Allows you to change the user agent string
 ;promiscredir = no      	; If yes, allows 302 or REDIR to non-local SIP address
 	                       	; Note that promiscredir when redirects are made to the
        	                	; local system will cause loops since SIP is incapable
@@ -110,14 +110,8 @@ srvlookup=yes			; Enable DNS SRV lookups on outbound calls
 				; Settable per peer/user also
 ;notifyringing = yes		; Notify subscriptions on RINGING state
 
-;maxinvitetries = 7		; How many INVITEs to send before giving up. Using the default of 7
-				; gives a timeout of 64*T1 (where T1 is RTT if known or 500ms) as
-				; required by RC3261. However if you need to have calls to previously
-				; unknown peers (i.e. unknown RTT) fail quickly you may want to give
-				; up sooner. Note, though, that this would violate the standard.
-
 ;
-; If regcontext is specified, CallWeaver will dynamically create and destroy a
+; If regcontext is specified, OpenPBX will dynamically create and destroy a
 ; NoOp priority 1 extension for a given peer who registers or unregisters with
 ; us.  The actual extension is the 'regexten' parameter of the registering
 ; peer or its name if 'regexten' is not provided.  More than one regexten may
@@ -125,7 +119,7 @@ srvlookup=yes			; Enable DNS SRV lookups on outbound calls
 ;
 ;regcontext=sipregistrations
 ;
-; CallWeaver can register as a SIP user agent to a SIP proxy (provider)
+; OpenPBX can register as a SIP user agent to a SIP proxy (provider)
 ; Format for the register statement is:
 ;       register => user[:secret[:authuser]]@host[:port][/extension]
 ;
@@ -161,7 +155,7 @@ srvlookup=yes			; Enable DNS SRV lookups on outbound calls
 ;callevents=no			; generate manager events when sip ua performs events (e.g. hold)
 
 ;----------------------------------------- NAT SUPPORT ------------------------
-; The externip, externhost and localnet settings are used if you use CallWeaver
+; The externip, externhost and localnet settings are used if you use OpenPBX
 ; behind a NAT device to communicate with services on the outside.
 
 ;externip = 200.201.202.203	; Address that we're going to put in outbound SIP messages
@@ -171,7 +165,7 @@ srvlookup=yes			; Enable DNS SRV lookups on outbound calls
 				; when registering and communicating with other proxies
 				; that we're registered with
 ;externhost=foo.dyndns.net	; Alternatively you can specify an 
-				; external host, and CallWeaver will 
+				; external host, and OpenPBX will 
 				; perform DNS queries periodically.  Not
 				; recommended for production 
 				; environments!  Use externip instead
@@ -181,7 +175,7 @@ srvlookup=yes			; Enable DNS SRV lookups on outbound calls
 				; are:
 
 ;stunserver_host=your.stun.server.here ; decommenting this and inserting a valid stun server, 
-				; makes callweaver work behind nat without problems.
+				; makes openpbx work behind nat without problems.
 				; Please note that if STUN fails, the old externip behaviour is retained so
 				; setting externip could still be valid to have a failover.
 ;stunserver_port=3478		; default id 3478
@@ -192,10 +186,10 @@ srvlookup=yes			; Enable DNS SRV lookups on outbound calls
 ;localnet=172.16.0.0/12		; Another RFC1918 with CIDR notation
 ;localnet=169.254.0.0/255.255.0.0 ;Zero conf local network
 
-; The nat= setting is used when CallWeaver is on a public IP, communicating with
+; The nat= setting is used when OpenPBX is on a public IP, communicating with
 ; devices hidden behind a NAT device (broadband router).  If you have one-way
 ; audio problems, you usually have problems with your NAT configuration or your
-; firewall's support of SIP+RTP ports.  You configure CallWeaver choice of RTP
+; firewall's support of SIP+RTP ports.  You configure OpenPBX choice of RTP
 ; ports for incoming audio in rtp.conf
 ;
 ;nat=no				; Global NAT settings  (Affects all peers and users)
@@ -224,7 +218,7 @@ srvlookup=yes			; Enable DNS SRV lookups on outbound calls
 ;ignoreregexpire=yes		; Enabling this setting has two functions:
 				;
 				; For non-realtime peers, when their registration expires, the information
-				; will _not_ be removed from memory or the CallWeaver database; if you attempt
+				; will _not_ be removed from memory or the OpenPBX database; if you attempt
 				; to place a call to the peer, the existing information will be used in spite
 				; of it having expired
 				;
@@ -241,7 +235,7 @@ srvlookup=yes			; Enable DNS SRV lookups on outbound calls
 ; Domains can be specified using:
 ; domain=<domain>[,<context>]
 ; Examples:
-; domain=mycallweaver.dom
+; domain=myopenpbx.dom
 ; domain=customer.com,customer-context
 ;
 ; In addition, all the 'default' domains associated with a server should be
@@ -258,10 +252,10 @@ srvlookup=yes			; Enable DNS SRV lookups on outbound calls
 
 [authentication]
 ; Global credentials for outbound calls, i.e. when a proxy challenges your
-; CallWeaver server for authentication. These credentials override
+; OpenPBX server for authentication. These credentials override
 ; any credentials in peer/register definition if realm is matched.
 ;
-; This way, CallWeaver can authenticate for outbound calls to other
+; This way, OpenPBX can authenticate for outbound calls to other
 ; realms. We match realm on the proxy challenge and pick an set of 
 ; credentials from this list
 ; Syntax:
@@ -347,7 +341,7 @@ srvlookup=yes			; Enable DNS SRV lookups on outbound calls
 ; For local phones, type=friend works most of the time
 ;
 ; If you have one-way audio, you propably have NAT problems. 
-; If CallWeaver is on a public IP, and the phone is inside of a NAT device
+; If OpenPBX is on a public IP, and the phone is inside of a NAT device
 ; you will need to configure nat option for those phones.
 ; Also, turn on qualify=yes to keep the nat session open
 
@@ -357,11 +351,11 @@ srvlookup=yes			; Enable DNS SRV lookups on outbound calls
 ;callerid=John Doe <1234>	; Full caller ID, to override the phones config
 ;host=192.168.0.23		; we have a static but private IP address
 				; No registration allowed
-;nat=no				; there is not NAT between phone and CallWeaver
-;canreinvite=yes		; allow RTP voice traffic to bypass CallWeaver
+;nat=no				; there is not NAT between phone and OpenPBX
+;canreinvite=yes		; allow RTP voice traffic to bypass OpenPBX
 ;dtmfmode=info			; either RFC2833 or INFO for the BudgeTone
 ;call-limit=1			; permit only 1 outgoing call and 1 incoming call at a time
-				; from the phone to callweaver
+				; from the phone to openpbx
 				; (1 for the explicit peer, 1 for the explicit user,
 				; remember that a friend equals 1 peer and 1 user in
 				; memory)
@@ -370,9 +364,9 @@ srvlookup=yes			; Enable DNS SRV lookups on outbound calls
 ;allow=ulaw			; Note: In user sections the order of codecs
 				; listed with allow= does NOT matter!
 ;allow=alaw
-;allow=g723.1			; CallWeaver only supports g723.1 pass-thru!
+;allow=g723.1			; OpenPBX only supports g723.1 pass-thru!
 ;allow=g729			; Pass-thru only unless g729 license obtained
-;cwdb=chan2ext/SIP/grandstream1=1234	; ensures an cwdb entry exists
+;opbxdb=chan2ext/SIP/grandstream1=1234	; ensures an opbxdb entry exists
 
 
 ;[xlite1]
@@ -403,7 +397,7 @@ srvlookup=yes			; Enable DNS SRV lookups on outbound calls
 ;mailbox=1234@context,2345      ; Mailbox(-es) for message waiting indicator
 ;vmexten=voicemail      ; dialplan extension to reach mailbox 
                         ; sets the Message-Account in the MWI notify message
-                        ; defaults to global vmexten which defaults to "callweaver"
+                        ; defaults to global vmexten which defaults to "openpbx"
 ;restrictcid=yes		; To have the callerid restriced -> sent as ANI
 ;disallow=all
 ;allow=ulaw			; dtmfmode=inband only works with ulaw or alaw!
@@ -444,7 +438,7 @@ srvlookup=yes			; Enable DNS SRV lookups on outbound calls
 				; Send SIP and RTP to the IP address that packet is 
 				; received from instead of trusting SIP headers 
 ;host=dynamic			; This device registers with us
-;canreinvite=no			; CallWeaver by default tries to redirect the
+;canreinvite=no			; OpenPBX by default tries to redirect the
 				; RTP media stream (audio) to go directly from
 				; the caller to the callee.  Some devices do not
 				; support this (especially if one of them is 

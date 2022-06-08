@@ -1,30 +1,24 @@
-# Main Autoconf configuration file for the CallWeaver.org project
-# Copyright <c> 2005, 2006, 2007 by CallWeaver.org
-#
+# Main Autoconf configuration file for the OpnePBX.org project
+# Copyright <c> 2005 by OpenPBX org
 # For a list of Authors check the AUTHORS file in the same directory
 # as this file
-#
 # Work on the automake stuff was partly sponsored by Halo Kwadrat Sp. z o.o.
-# User definable profiles for directory layouts by Sunrise Telephone Systems Ltd.
 #
-# This program is free software and it comes WITHOUT any warranty.
-# You may redistribute it and/or modify it under the terms of the
-# GNU General Public License (GPL) version 2 as published by the
-# Free Software Foundation, but not any later version of the GPL.
+#       This program is free software; you can redistribute it and/or
+#       modify it under the terms of the GNU General Public License
+#       as published by the Free Software Foundation; either version
+#       2 of the License, or (at your option) any later version.     
 # 
 # Process this file with autoconf to produce a configure script.
-
-######
-#
-# Initialisation of the GNU AutoTools Packages
 #
 ######
-
-
+#
+# initialisation of the GNU AutoTools Packages
+#
+######
 AC_PREREQ(2.59)
-AC_INIT(CallWeaver,1.2.0.1,callweaver-dev@callweaver.org)
-AM_INIT_AUTOMAKE(CallWeaver,1.2.0.1)
-
+AC_INIT(OpenPBX.org,1.2-RC3,openpbx-dev@openpbx.org)
+AM_INIT_AUTOMAKE(OpenPBX.org,1.2-RC3)
 dnl define GNU Source to make sure every compiler and tool 
 dnl  knows that we use GNU compliant macros etc
 AC_GNU_SOURCE
@@ -36,7 +30,6 @@ AC_C_CONST
 # Define and check for prerequisite programs
 #
 ######
-
 AC_PATH_PROG([GROUPADD], [groupadd])
 AC_PATH_PROGS(GREP, ggrep grep,[echo Missing grep so skipping but I doubt we will get anywhere])
 AC_PATH_PROGS(SVN, svn, [echo Missing subversion so some stuff will be borked],${PATH}:/opt/csw/bin)
@@ -44,8 +37,6 @@ AC_PATH_PROGS(SHELL,bash sh,[echo No compatible shell found])
 AC_PATH_PROGS(SH,bash sh,[echo No compatible shell found])
 AC_PATH_PROGS(M4,gm4 m4,[echo No m4 found, who will process my macros now ?])
 AC_PATH_PROGS(SED,gsed sed,[echo sed not found, doh!])
-AC_PATH_PROGS(CAT,cat,[echo cat not found, Doh!])
-AC_PATH_PROGS(TR,tr,[echo tr not found, need this for upper/lowercase conversions])
 AC_PATH_PROGS(UNAME,uname,[echo uname not found so no version info will be available])
 AC_PROG_CXX
 AC_PROG_YACC
@@ -55,30 +46,15 @@ AC_PROG_CPP
 AM_PROG_LEX
 AX_SYS_PERLSHARPBANG
 AC_PROG_INSTALL
-AC_FUNC_STRERROR_R
 
-
-dnl SVN Revision number, needed for CW_VERSION and inclusion into files version number
-if test -r "SVNVERSION" ; then
-	svnver=" SVN r`${CAT} SVNVERSION`"
-	svndesc="SVN revision from tarball \"SVNVERSION\" file"
-elif test -n "$SVN" ; then
-	x="`${SVN} info`"
-	if test -n "$x" ; then
-		svnurl="`${SVN} info | ${AWK} '/^URL: / { sub("^.*/callweaver/", "", $2); print $2 }'`"
-		svnrev="`${SVN} info | ${AWK} '/^Revision: / { print $2 }'`"
-		svnver=" SVN $svnurl r$svnrev"
-		svndesc="SVN revision as given by \"svn info\""
-	else
-		svnver=""
-		svndesc="No output from \"svn info\""
-	fi
+dnl SVN Revision number, needed for OPBX_VERSION and inclusion into files version number
+if test -n "$SVN" ; then
+	AC_DEFINE_UNQUOTED([SVN_VERSION],"`${SVN} info | ${GREP} Revision | ${AWK} '{ print $2 }'`",[Which Subversion revision are we building here ?] )
+	AC_SUBST([SVN_VERSION])
 else
-	svnver=""
-	svndesc="Unknown SVN revision because svn is not on this machine."
-fi
-AC_DEFINE_UNQUOTED([SVN_VERSION],"$svnver","$svndesc")
-AC_SUBST([SVN_VERSION])
+	AC_DEFINE_UNQUOTED([SVN_VERSION],"UNKNOWN",[Unknown Subversion because it's not on this machine.] )
+	AC_SUBST([SVN_VERSION])
+fi   
 
 dnl ###########################################################################
 dnl ###########################################################################
@@ -114,63 +90,47 @@ case "${host}" in
         AC_DEFINE([__Darwin__],,[Define if Darwin])
         AC_SUBST(__Darwin__)
 	no_libcap=yes
-	ostype=bsd
         ;;
   *-*-freebsd*)
 	no_libcap=yes
-	ostype=bsd
         ;;
-  *-*-netbsd*)
-	no_libcap=yes
-	ostype=bsd
-	;;
-  *-*-openbsd*)
-	no_libcap=yes
-	ostype=bsd
-	;;
   *-aix*)
     AC_DEFINE(AIX,,[Define if AIX])
      broken_types=yes
 	no_libcap=yes
-	ostype=aix
     ;;
   *-osf4*)
     AC_DEFINE(OSF1,,[Define if OSF1])
     tru64_types=yes
 	no_libcap=yes
-	ostype=osf
     ;;
   *-osf5.1*)
     AC_DEFINE(OSF1)
 	no_libcap=yes
-	ostype=osf
     ;;
   *-tru64*)
     AC_DEFINE(OSF1)
-	tru64_types=yes
-	no_libcap=yes
-	ostype=osf
+    tru64_types=yes
+    no_libcap=yes
     ;;
-  *-*-linux*)
-	ostype=linux
+  *-*-linux* )
         ;;
   *cygwin*)
         AC_DEFINE([_WIN32_WINNT],[0x0500],[Heya, it's windows])
         AC_DEFINE([INET_ADDRSTRLEN],[16],[cygwin detection does not work for that, anybody has an idea ?])
         AC_DEFINE([INET6_ADDRSTRLEN],[46],[cygwin detection does not work for that, anybody has an idea ?])
 	AC_DEFINE([__CYGWIN__],[1],[make sure __CYGWIN__ is defined ...])
-	ostype=cygwin
+        ;;
+  *-*-netbsd*)
+	no_libcap=yes
         ;;
   *-*-solaris2*)
         AC_DEFINE([SOLARIS],[1],[needed for optional declarations to be visible])
 	no_libcap=yes
-	ostype=solaris
-	force_generic_timers=yes
         ;;
   *)
         AC_MSG_RESULT(Unsupported operating system: ${host})
 	no_libcap=yes
-	ostype=unknown
         ;;
 esac  
 
@@ -179,6 +139,7 @@ esac
 # Build paths and variables
 #
 ######     
+
 
 dnl Create the relevant Build variables
 
@@ -207,368 +168,224 @@ if test "$have_host_cc" = "no"; then
 fi
 AC_SUBST(HOST_CC)
 
-dnl ##########################
-dnl #
-dnl # Installation directories
-dnl #
-dnl ##########################
+dnl Installation directories
+dnl Prefer modern Filesystem Hierarchy Standard over antiquated GNU standards.
 
-# ==========================================================================
-# Directory layouts are defined in separate layout profiles:
-# --------------------------------------------------------------------------
-# profile     filename          description
-# --------------------------------------------------------------------------
-#  bsd         layout.bsd        follow convention used by BSD ports system
-#  bsd-romfs   layout.bsd-romfs  BSD embedded devices with ROM filesystems
-#  fhs         layout.fhs        follow Filesystem Hierarchy Standard (FHS)
-#  lsb         layout.lsb        follow Linux Standards Base (LSB) standard
-#  lsb-romfs   layout.lsb-romfs  Linux embedded devices with ROM filesystems
-#  singledir   built-in          install everything under a single directory
-# --------------------------------------------------------------------------
-#
-# The default directory layout is OS dependent:
-# --------------------------------------------------------------------------
-# OS type     default profile
-# --------------------------------------------------------------------------
-#  BSD         bsd
-#  Linux       lsb
-#  Solaris     singledir, using prefix /opt/csw/callweaver
-# --------------------------------------------------------------------------
-#
-# Directory layout profiles contain a list of key=value pairs, *without* any
-# spaces or tabs, one pair per line. The following keys are defined:
-#  cwprefix, cwexecdir, cwutilsdir, cwconfdir, cwlibdir,
-#  cwvardir, cwlogdir, cwrundir, cwspooldir, cwdatadir,
-#  cwmandir and  cwdocdir
-#
-# Values are the full pathnames for the respective directories *without* any
-# quotation marks. Any lines with a leading # character and lines containing
-# pairs with invalid keys are ignored.
-# ==========================================================================
+AC_ARG_WITH([directory-layout],     
+	[AC_HELP_STRING([--with-directory-layout],[Choose installation directory layout: singledir, lsb, fhs (default=singledir).])],,[with_directory_layout="singledir"])
 
-# ----------------------------------------------------------
-# Function isavail_directory_layout()
-# ----------------------------------------------------------
-# synopsis:
-#   test whether a profile is available for a given layout
-#
-# input parameter:
-#   $1 - name of the layout to be checked
-#
-# return values:
-#   0 - no profile is available for the layout
-#   1 - profile is available for the layout
-# ----------------------------------------------------------
-isavail_directory_layout() {
-# return 0 if no parameter is passed to this function
-   if test -z "$1"; then
-        return 0;
-   fi
-# test parameter against each profile name found
-   profilelist=`ls -1 ${srcdir}/layout.*`
-   for file in $profilelist;
-        do
-             if test "${srcdir}/layout.$1" = "$file"; then
-		return 1;
-	     fi
-        done
-# parameter not found in the list
-   return 0;
-}
-# END isavail_directory_layout
+case "${with_directory_layout}" in
+     singledir)
+	AC_MSG_NOTICE([You have chosen the SINGLEDIR directory layout...])
+	ac_default_prefix='/opt/openpbx.org'
+	;;
+     lsb)
+	AC_MSG_NOTICE([You have chosen the LSB directory layout...])
+	ac_default_prefix='/usr/local'
+        ;;
+     fhs)
+	AC_MSG_NOTICE([You have chosen the FHS directory layout...])
+	ac_default_prefix='/opt/openpbx.org'
+        ;;
+     *)
+	AC_MSG_ERROR([Unknown directory layout ${with_directory_layout}])
+	;;
+esac
 
-# ----------------------------------------------------------
-# List of valid install directory variables separated by LF
-# ----------------------------------------------------------
-cwdirs=`${CAT} << EOF
-cwprefix
-cwexecdir
-cwutilsdir
-cwconfdir
-cwlibdir
-cwvardir
-cwlogdir
-cwrundir
-cwspooldir
-cwdatadir
-cwmandir
-cwdocdir
-EOF`
-# END list
-
-# ----------------------------------------------------------
-# Function is_cw_dir()
-# ----------------------------------------------------------
-# synopsis:
-#   test whether a given name is a valid install directory
-#   variable as defined in the variable cwdirs
-#
-# input parameter:
-#   $1 - name to be checked
-#
-# return values:
-#   0 - input name is not an install directory variable
-#   1 - input name is an install directory variable
-# ----------------------------------------------------------
-is_cw_dir() {
-# return 0 if no parameter is passed to this function
-   if test -z "$1"; then
-        return 0;
-   fi
-# test parameter against each variable name in cwdirs
-   for var in $cwdirs;
-   do
-        if test $1 = $var; then
-             return 1;
-        fi
-   done
-# parameter not found in cwdirs
-   return 0;
-}
-# END is_cw_dirs
-
-# ----------------------------------------------------------
-# Function load_directory_profile()
-# ----------------------------------------------------------
-# synopsis:
-#   load a directory profile from disk and assign install
-#   directory variables from values defined in the profile
-#
-# input parameter:
-#   $1 - name of directory profile to load
-#
-# return values:
-#   0 - error, profile could not be found or read
-#   1 - profile successfully loaded
-# ----------------------------------------------------------
-load_directory_profile() {
-# return 0 if no parameter is passed to this function
-   if test -z "$1"; then
-        return 0;
-   fi
-#
-# for future use - extract the help string from the profile
-#   helpstr=`${CAT} ${srcdir}/layout.$1 | ${GREP} "^helpstring=*" | ${SED} -e 's/^helpstring=//'`
-#   helpstr=`echo $helpstr | ${SED} -e 's/^"//' | ${SED} -e 's/"$//'`
-#
-# read all directory variables from the profile
-#   profile=`${CAT} ${srcdir}/layout.$1 | ${SED} -e 's/#.*//' -e 's/\s*=\s*/=/' -e 's/\\\\ /|/g' -e 's/^\s*//' -e 's/\s.*//' | ${GREP} "^cw.*="`
-   profile=`${CAT} ${srcdir}/layout.$1 | ${SED} -e 's/#.*//' -e 's/[[:blank:]]*=[[:blank:]]*/=/' -e 's/\\\\ /|/g' -e 's/^[[:blank:]]*//' -e 's/[[:blank:]].*//' | ${GREP} "^cw.*="`
-
-   for line in $profile;
-   do
-        key=`echo "$line" | ${SED} -e 's/=.*$//'`;
-        value=`echo "$line" | ${SED} -e 's/^[[a-z]]*=[['\''"]]*//' -e 's/[['\''"]]$//' -e 's/|/ /g'`;
-        is_cw_dir ${key}
-        if test $? -ne 1; then
-             echo "ignoring '${key}' in ${srcdir}/layout.$1 because it is not a valid install directory variable" >&2;
-        else
-             eval ${key}="'${value}'"
-        fi
-   done
-   return 1;
-}
-# END load_directory_profile
-
-# define commandline parameter --with-directory-layout
-AC_ARG_WITH([directory-layout],
-	[AC_HELP_STRING([--with-directory-layout],[Specify an installation directory layout, either a pre-defined or a user-defined profile. Pre-defined profiles are bsd, bsd-romfs, fhs, lsb, lsb-romfs and singledir. The default is OS dependent.])],,[with_directory_layout="automatic"])
-
-# use OS specific default if no layout was specified
-if test "${with_directory_layout}" = "automatic"; then
-	AC_MSG_NOTICE([Directory layout will be set automatically...])
-	case "${ostype}" in
-	     bsd)
-		# use BSD profile in file layout.bsd
-		with_directory_layout="bsd"
-		;;
-	     linux)
-		# use LSB profile in file layout.lsb
-		with_directory_layout="lsb"
-		;;
-	     solaris)
-		# use built-in SINGLEDIR profile
-		with_directory_layout="singledir"
-		;;
-	     *)
-		# use built-in SINGLEDIR profile
-		with_directory_layout="singledir"
-		;;
-	esac
+if test -z "${opbxconfdir}"; then
+   case "${with_directory_layout}" in
+	singledir)
+	   opbxconfdir='${prefix}/etc'
+	   ;;
+	lsb)
+	   opbxconfdir='${sysconfdir}/openpbx.org'
+	   ;;
+        fhs)
+           opbxconfdir='/etc${prefix}'
+   esac
 fi
+AC_SUBST([opbxconfdir])
 
-# built-in SINGLEDIR profile ...
-if test "${with_directory_layout}" = "singledir"; then
-    AC_MSG_NOTICE([Selected directory layout is SINGLEDIR])
-    # override default prefix
-    if test "${ostype}" = "solaris"; then
-	ac_default_prefix='/opt/csw/callweaver'
-    else
-	ac_default_prefix='/opt/callweaver'
-    fi
-    # set directory variables
-    cwexecdir='${prefix}/sbin'
-    cwutilsdir='${prefix}/bin'
-    cwconfdir='${prefix}/etc'
-    cwlibdir='${prefix}/lib'
-    cwvardir='${prefix}/var'
-    cwlogdir='${prefix}/var/log'
-    cwrundir='${prefix}/var/run'
-    cwspooldir='${prefix}/var/spool'
-    cwdatadir='${prefix}/var/data'
-    cwmandir='${prefix}/share/man'
-    cwdocdir='${prefix}/doc'
-else
-
-# all other profiles ...
-# check availability of selected layout, abort if not found
-isavail_directory_layout ${with_directory_layout}
-    if test $? -ne 1; then
-	AC_MSG_ERROR([Unknown directory layout '${with_directory_layout}'])
-    fi
-
-# set install dir variables from selected profile
-    layout_upper=`echo ${with_directory_layout} | ${TR} '[a-z]' '[A-Z]'`
-    AC_MSG_NOTICE([Selected directory layout is ${layout_upper}])
-    load_directory_profile ${with_directory_layout}
-    if test -n "${cwprefix}"; then
-	ac_default_prefix=${cwprefix}
-    fi
+if test -z "${opbxconffile}"; then
+	opbxconffile='${opbxconfdir}/openpbx.conf'
 fi
+AC_SUBST([opbxconffile])
 
-# directory for the main executable
-AC_SUBST([cwexecdir])
-
-# directory for commandline utilities
-AC_SUBST([cwutilsdir])
-
-# directory for configuration files
-AC_SUBST([cwconfdir])
-
-# path to master configuration file
-if test -z "${cwconffile}"; then
-    cwconffile='${cwconfdir}/callweaver.conf'
+if test -z "${opbxlibdir}"; then
+   case "${with_directory_layout}" in
+	singledir)
+	   opbxlibdir='${libdir}'
+	   ;;
+	lsb)
+	   opbxlibdir='${libdir}/openpbx.org'
+	   ;;
+        fhs)
+           opbxlibdir='${libdir}'
+           ;;
+   esac
 fi
-AC_SUBST([cwconffile])
+AC_SUBST([opbxlibdir])
 
-# directory for libraries
-AC_SUBST([cwlibdir])
-
-# directory for modules
-if test -z "${cwmoddir}"; then
-	cwmoddir='${cwlibdir}/modules'
+if test -z "${opbxmoddir}"; then
+	opbxmoddir='${opbxlibdir}/modules'
 fi
-AC_SUBST([cwmoddir])
+AC_SUBST([opbxmoddir])
 
-# directory for ICD modules
-if test -z "${cwicdmoddir}"; then
-	cwicdmoddir='${cwmoddir}/icd'
+if test -z "${opbxicdmoddir}"; then
+	opbxicdmoddir='${opbxmoddir}/icd'
 fi
-AC_SUBST([cwicdmoddir])
+AC_SUBST([opbxicdmoddir])
 
-# directory for mutable data
-AC_SUBST([cwvardir])
-
-# directory for database file of internal db
-if test -z "${cwdbdir}"; then
-	cwdbdir='${cwvardir}'
+if test -z "${opbxvardir}"; then
+   case "${with_directory_layout}" in
+	singledir)
+	   opbxvardir='${prefix}/var'
+	   ;;
+	lsb)
+	   opbxvardir='${localstatedir}/lib/openpbx.org'
+	   ;;
+        fhs)
+           opbxvardir='/var${prefix}'
+           ;;
+   esac
 fi
-AC_SUBST([cwdbdir])
+AC_SUBST([opbxvardir])
 
-# path to database file of internal db
-if test -z "${cwdbfile}"; then
-	cwdbfile='callweaverdb'
+if test -z "${opbxdbdir}"; then
+	opbxdbdir='${opbxvardir}'
 fi
-AC_SUBST([cwdbfile])
+AC_SUBST([opbxdbdir])
 
-# directory for temporary files
-if test -z "${cwtmpdir}"; then
-	cwtmpdir='${cwvardir}/tmp'
+if test -z "${opbxdbfile}"; then
+	opbxdbfile='opbxdb'
 fi
-AC_SUBST([cwtmpdir])
+AC_SUBST([opbxdbfile])
 
-# directory for pid file and console socket
-AC_SUBST([cwrundir])
-
-# path to pid file
-if test -z "${cwpidfile}"; then
-	cwpidfile='${cwrundir}/callweaver.pid'
+if test -z "${opbxtmpdir}"; then
+	opbxtmpdir='${opbxvardir}/tmp'
 fi
-AC_SUBST([cwpidfile])
+AC_SUBST([opbxtmpdir])
 
-# path to console socket
-if test -z "${cwsocketfile}"; then
-	cwsocketfile='${cwrundir}/callweaver.ctl'
+if test -z "${opbxrundir}"; then
+   case "${with_directory_layout}" in
+	singledir)
+	   opbxrundir='${prefix}/run'
+	   ;;
+	lsb)
+	   opbxrundir='${localstatedir}/run/openpbx.org'
+	   ;;
+        fhs)
+           opbxrundir='${opbxvardir}/run'
+           ;;
+   esac
 fi
-AC_SUBST([cwsocketfile])
+AC_SUBST([opbxrundir])
 
-# directory for log files
-AC_SUBST([cwlogdir])
-
-# directory for spool files
-AC_SUBST([cwspooldir])
-
-# directory for immutable data
-AC_SUBST([cwdatadir])
-
-# directory for man pages
-AC_SUBST([cwmandir])
-
-# directory for license, credits and read-me files
-AC_SUBST([cwdocdir])
-
-# directory for crypto keys
-if test -z "${cwkeydir}"; then
-	cwkeydir='${cwdatadir}/keys'
+if test -z "${opbxpidfile}"; then
+	opbxpidfile='${opbxrundir}/openpbx.pid'
 fi
-AC_SUBST([cwkeydir])
+AC_SUBST([opbxpidfile])
 
-# directory for sqlite database file
-if test -z "${cwsqlitedir}"; then
-	cwsqlitedir='${cwdbdir}'
+if test -z "${opbxsocketfile}"; then
+	opbxsocketfile='${opbxrundir}/openpbx.ctl'
 fi
-AC_SUBST([cwsqlitedir])
+AC_SUBST([opbxsocketfile])
 
-# directory for OGI scripts
-if test -z "${cwogidir}"; then
-	cwogidir='${cwdatadir}/ogi'
+if test -z "${opbxlogdir}"; then
+   case "${with_directory_layout}" in
+	singledir)
+	   opbxlogdir='${prefix}/log'
+	   ;;
+	lsb)
+	   opbxlogdir='${localstatedir}/log/openpbx.org'
+	   ;;
+        fhs)
+           opbxlogdir='${opbxvardir}/log'
+           ;;
+   esac
 fi
-AC_SUBST([cwogidir])
+AC_SUBST([opbxlogdir])
 
-# directory for sound files
-if test -z "${cwsoundsdir}"; then
-	cwsoundsdir='${cwdatadir}/sounds'
+if test -z "${opbxspooldir}"; then
+   case "${with_directory_layout}" in
+	singledir)
+	   opbxspooldir='${opbxvardir}/spool'
+	   ;;
+	lsb)
+	   opbxspooldir='${localstatedir}/spool/openpbx.org'
+	   ;;
+        fhs)
+           opbxspooldir='${opbxvardir}/spool'
+           ;;
+   esac
 fi
-AC_SUBST([cwsoundsdir])
+AC_SUBST([opbxspooldir])
 
-# directory for images
-if test -z "${cwimagesdir}"; then
-	cwimagesdir='${cwdatadir}/images'
+if test -z "${opbxdatadir}"; then
+   case "${with_directory_layout}" in
+	singledir)
+	   opbxdatadir='${opbxvardir}/data'
+	   ;;
+	lsb)
+	   opbxdatadir='${datadir}/openpbx.org'
+	   ;;
+        fhs)
+           opbxdatadir='${prefix}/share'
+           ;;
+   esac
 fi
-AC_SUBST([cwimagesdir])
+AC_SUBST([opbxdatadir])
 
-# directory for on-hold music files
-if test -z "${cwmohdir}"; then
-	cwmohdir='${cwdatadir}/moh'
+if test -z "${opbxdocdir}"; then
+	opbxdocdir='${opbxdatadir}/doc'
 fi
-AC_SUBST([cwmohdir])
+AC_SUBST([opbxdocdir])
 
-# include directory
-if test -z "${cwincludedir}"; then
-	cwincludedir='${includedir}/callweaver'
+if test -z "${opbxkeydir}"; then
+	opbxkeydir='${opbxdatadir}/keys'
 fi
-AC_SUBST([cwincludedir])
+AC_SUBST([opbxkeydir])
+
+if test -z "${opbxsqlitedir}"; then
+	opbxsqlitedir='${opbxdbdir}'
+fi
+AC_SUBST([opbxsqlitedir])
+
+if test -z "${opbxogidir}"; then
+	opbxogidir='${opbxdatadir}/ogi'
+fi
+AC_SUBST([opbxogidir])
+
+if test -z "${opbxsoundsdir}"; then
+	opbxsoundsdir='${opbxdatadir}/sounds'
+fi
+AC_SUBST([opbxsoundsdir])
+
+if test -z "${opbximagesdir}"; then
+	opbximagesdir='${opbxdatadir}/images'
+fi
+AC_SUBST([opbximagesdir])
+
+if test -z "${opbxmohdir}"; then
+	opbxmohdir='${opbxdatadir}/moh'
+fi
+AC_SUBST([opbxmohdir])
+
+if test -z "${opbxincludedir}"; then
+	opbxincludedir='${includedir}/openpbx'
+fi
+AC_SUBST([opbxincludedir])
 
 ######
 #
-# Check for headers, structures, typedefs, libs etc which are not related to specific add-on packages
+# Check for headers, structures, typedefs, libs etc that are not realted to specific add on packages
 #
 ######
 AC_ARG_ENABLE([builtin-sqlite3],
         [AC_HELP_STRING([--enable-builtin-sqlite3],[Enables the builtin thread-safe copy of SQLite library (default=yes)])],[builtin_sqlite3="$enableval"],[builtin_sqlite3="yes"])
 
 
-dnl check for required libraries (also for add-ons)
+dnl check for required libraries (also for addons)
 dnl needed to move check for sqlite threadsafe here since it needs to check if we have a threadsafe sqlite3 BEFORE we check for libpthread)
 if test "${builtin_sqlite3}" = "no"; then
 	AC_CHECK_SQLITE3_THREADSAFE
@@ -579,7 +396,6 @@ dnl # AC_CHECK_LIB([expat], [main]) # why would we need this one ?
 AC_CHECK_LIB([ib], [main])
 AC_CHECK_LIB([m], [main])
 AC_CHECK_LIB([ncurses], [main],,[AC_CHECK_LIB([curses],[main])])
-AC_CHECK_LIB([readline],[main],,[AC_MSG_ERROR(readline is required to compile CallWeaver.)])
 AC_CHECK_LIB([newt], [main],[AC_DEFINE([HAVE_LIBNEWT],["yes"],[yes there is newt])])
 AM_CONDITIONAL([USE_NEWT],[test -n "${HAVE_LIBNEWT}"])
 AC_CHECK_LIB([nsl], [main])
@@ -613,26 +429,7 @@ AC_FUNC_STRNLEN
 AC_FUNC_STRTOD
 AC_FUNC_UTIME_NULL
 AC_FUNC_VPRINTF
-AC_CHECK_FUNCS([atexit bzero dup2 endpwent floor ftruncate getcwd gethostbyname gethostname gettimeofday clock_getres inet_ntoa isascii localtime_r memchr memmove memset mkdir munmap pow putenv re_comp regcomp rint select setenv socket sqrt strsep strcasecmp strchr strcspn strdup strerror strncasecmp strndup strrchr strspn strstr strtol strtoq unsetenv utime vasprintf]) 
-
-# Check if asctime_r() takes three arguments.
-AC_MSG_CHECKING([if asctime_r() takes three arguments])
-AC_TRY_COMPILE([
-#include <stdio.h>
-#include <time.h>
-], [
-	struct tm tm;
-	char buf [r256];
-	
-	asctime_r (&tm, buf, sizeof (buf));
-], [
-	AC_DEFINE(ASCTIME_R_WITH_THREE_ARGS)
-        AC_DEFINE([ASCTIME_R_WITH_THREE_ARGS],[],[asctime_r needs 3 arguments])
-	AC_MSG_RESULT(yes)
-], [
-	AC_MSG_RESULT(no)
-])
-
+AC_CHECK_FUNCS([atexit bzero dup2 endpwent floor ftruncate getcwd gethostbyname gethostname gettimeofday clock_getres inet_ntoa isascii localtime_r memchr memmove memset mkdir munmap pow putenv re_comp regcomp rint select setenv socket sqrt strsep strcasecmp strchr strcspn strdup strerror strerror_r strncasecmp strndup strrchr strspn strstr strtol strtoq unsetenv utime vasprintf])  
 dnl Checks for header files.
 AC_HEADER_DIRENT
 AC_HEADER_STDC
@@ -652,20 +449,19 @@ dnl # include <w32api/windows.h>
 dnl # include <w32api/winsock2.h>
 dnl # endif
 dnl ])
-AC_CHECK_HEADER([dlfcn.h],[AM_CONDITIONAL([NEED_DLFCN_H],[true = yes])])
-AC_CHECK_HEADERS([readline/readline.h readline/history.h],,[AC_MSG_ERROR(readline is required to compile CallWeaver.)])
+AC_CHECK_HEADER([dlfcn.h],[AM_CONDITIONAL([NEED_DLFCN_H],[true = yes])])       
 
-dnl check structures
+dnl Checks for structures
 AC_STRUCT_TM
 AC_STRUCT_TIMEZONE
 AC_CHECK_MEMBERS([struct stat.st_blksize])  
 
-dnl check compiler specifics
+dnl compiler specifics
 AC_C_INLINE
 AC_C_CONST
 AC_C_VOLATILE
 
-dnl check types
+dnl Check for types
 AC_TYPE_UID_T
 AC_TYPE_MODE_T
 AC_TYPE_OFF_T
@@ -673,7 +469,7 @@ AC_TYPE_PID_T
 AC_TYPE_SIZE_T  
 AC_CHECK_TYPES([ptrdiff_t])  
 
-dnl check declarations
+dnl Checks for declarations
 AC_CHECK_DECLS(INET_ADDRSTRLEN,[],[],[#if HAVE_NETINET_IN_H
 # include <netinet/in.h>
 # endif
@@ -694,7 +490,7 @@ AC_CHECK_DECLS(INET6_ADDRSTRLEN,[],[],[#if HAVE_NETINET_IN_H
 ])   
 AC_CHECK_DECLS(__BEGIN_DECLS,[],AC_DEFINE(__BEGIN_DECLS,,[for stupid ast-db1]))
 AC_CHECK_DECLS(__END_DECLS,[],AC_DEFINE(__END_DECLS,,[for stupid ast-db1])) 
-# more type checks, horrible shit
+# Now comes the types check, horrible shit
 if test "$tru64_types" = "yes"; then
         AC_CHECK_TYPE(u_int8_t, unsigned char)
         AC_CHECK_TYPE(u_int16_t, unsigned short)
@@ -718,7 +514,7 @@ AC_DEFINE([__BIG_ENDIAN],4321,[for the places where it is not defined])
 dnl ###########################################################################
 
 if test "${builtin_sqlite3}" = "yes"; then
-	SQLITE3_THREADSAFE_LIBS='${top_builddir}/sqlite3-embedded/libcwsqlite3.la -lpthread'
+	SQLITE3_THREADSAFE_LIBS='${top_builddir}/sqlite3-embedded/libopbxsqlite3.la -lpthread'
 	SQLITE3_THREADSAFE_CFLAGS='-DTEMP_STORE=2 -DTHREADSAFE=1 -DSQLITE_OMIT_CURSOR -DNO_TCL -I${top_srcdir}/sqlite3-embedded -I${top_builddir}/sqlite3-embedded'
 	case "${host}" in
 	  *cygwin*)
@@ -745,34 +541,18 @@ AC_ARG_WITH([tiff-libs],
 	[AC_HELP_STRING([--with-tiff-libs],[Location of libtiff library files.])],
 	[LDFLAGS="$LDFLAGS -L${withval}"])
 
-AC_CHECK_HEADERS([tiffio.h],[HAVE_TIFFIO_H=1],[AC_MSG_ERROR(libtiff is required to compile CallWeaver.)])
-AC_CHECK_LIB([tiff],[TIFFGetVersion],[HAVE_LIBTIFF=1],[AC_MSG_ERROR(libtiff is required to compile CallWeaver.)])
+AC_CHECK_HEADERS([tiffio.h],[HAVE_TIFFIO_H=1],[AC_MSG_ERROR(libtiff is required to compile OpenPBX.org.)])
+AC_CHECK_LIB([tiff],[TIFFGetVersion],[HAVE_LIBTIFF=1],[AC_MSG_ERROR(libtiff is required to compile OpenPBX.org.)])
 
 dnl ###########################################################################
 
-if test "${force_generic_timers}" != "yes"; then
 AC_CHECK_LIB([rt], [timer_create],[AC_DEFINE([HAVE_POSIX_TIMERS],[1],[yes there are real time libraries])],[AC_DEFINE([USE_GENERIC_TIMERS],[1],[forcing generic timers.])])
-else
-AC_DEFINE([USE_GENERIC_TIMERS],[1],[forcing generic timers according to the architecture.])
-fi
+
 dnl ###########################################################################
 
 if test "${no_libcap}" != "yes"; then
-AC_CHECK_HEADERS([sys/capability.h],[HAVE_PCAP_H=1],[AC_MSG_ERROR(libcap-dev is required to compile CallWeaver.)])
+AC_CHECK_HEADERS([sys/capability.h],[HAVE_PCAP_H=1],[AC_MSG_ERROR(libcap-dev is required to compile OpenPBX.org.)])
 fi
-dnl ###########################################################################
-
-AC_CHECK_HEADERS([memcache.h],[memchached_headers="yes"])
-
-if test "${memchached_headers}" = "yes"; then
-	AC_CHECK_LIB([memcache], [mcMemSetup],[memchached_library="yes"])
-fi
-
-if test "${memchached_library}" = "yes"; then
-	AC_DEFINE([HAVE_MEMCACHE],[1],[yes there are memchache headers and libraries])
-fi
-AM_CONDITIONAL([WANT_MEMCACHE],[test "${memchached_library}" = "yes"])
-
 dnl ###########################################################################
 
 AC_ARG_WITH([spandsp-includes],
@@ -783,19 +563,15 @@ AC_ARG_WITH([spandsp-libs],
 	[AC_HELP_STRING([--with-spandsp-libs],[Location of SpanDSP library files.])],
 	[LDFLAGS="$LDFLAGS -L${withval}"])
 
-AC_CHECK_HEADERS([spandsp.h],[HAVE_SPANDSP_H=1],[AC_MSG_ERROR(SpanDSP version 0.0.5pre3 or newer is required to compile CallWeaver.)])
+AC_CHECK_HEADERS([spandsp.h],[HAVE_SPANDSP_H=1],[AC_MSG_ERROR(SpanDSP version 0.0.3pre27 or newer is required to compile OpenPBX.org.)])
 
-AC_CHECK_HEADERS([spandsp/version.h],[HAVE_SPANDSP_VERSION_H=1],[AC_MSG_ERROR(SpanDSP does not appear to be new enough. You must have version 0.0.5pre3 or newer to compile CallWeaver.)],
+AC_CHECK_HEADERS([spandsp/t38_core.h],[HAVE_SPANDSP_T38_H=1],[AC_MSG_ERROR(SpanDSP does not appear to be new enough. You must have version 0.0.3pre27 or newer to compile OpenPBX.org.)],
 [#ifdef HAVE_SPANDSP_H
 #include <spandsp.h>
 #endif
-#include <spandsp/version.h>
-
-#if SPANDSP_RELEASE_DATE < 20080508
-
-#error
-#endif
 ])
+
+AC_CHECK_LIB([spandsp],[fax_set_transmit_on_idle],[HAVE_LIBSPANDSP=1],[AC_MSG_ERROR(SpanDSP does not appear to be new enough. You must have version 0.0.3pre27 or newer to comple OpenPBX.org.)],[-ltiff])
 
 dnl ###########################################################################
 dnl ###########################################################################
@@ -805,28 +581,36 @@ dnl ###
 dnl ###########################################################################
 dnl ###########################################################################
 
+dnl Select which Busydetect routine to use
+AC_ARG_ENABLE(busydetect,
+	[AC_HELP_STRING([--enable-busydetect=TYPE],[select which busydetect version to use: none (default) toneonly martin compare_tone_and_silence])],,[enable_busydetect="none"])
+
+AC_MSG_CHECKING([for busydetect type])
+if test "x$enable_busydetect" != "xnone" ; then
+   	case $enable_busydetect in
+		toneonly)
+			BUSYDETECT=BUSYDETECT_TONEONLY
+			;;
+		martin)
+			BUSYDETECT=BUSYDETECT_MARTIN
+			;;
+		tone_and_silence)
+			BUSYDETECT=BUSYDETECT_TONE_AND_SILENCE
+			;;
+		*)	
+			AC_MSG_ERROR([Unknown busydetect type "$enable_busydetect"])
+			;;
+	esac
+fi
+AC_MSG_RESULT([$enable_busydetect])
+
+AC_SUBST([BUSYDETECT])
+AC_DEFINE_UNQUOTED([BUSYDETECT],"${BUSYDETECT}",[Select method for detecting busy signals.])
+
 dnl Optimize for host cpu version
 AC_ARG_ENABLE(optimization,     
 	[AC_HELP_STRING([--disable-optimization],[no detection or tuning flags for cpu version])],
 	[OPTIMIZECPU="$enableval"],[OPTIMIZECPU="yes"])
-
-dnl Enable SIP call limit. This is broken and should be fixed before release.
-AC_ARG_ENABLE(sip-call-limit,
-	[AC_HELP_STRING([--enable-sip-call-limit],[Enable broken SIP call limit (default=no)])],,[enable_sip_call_limit="no"])
-
-if test "${enable_sip_call_limit}" = "yes"; then
-   AC_DEFINE([ENABLE_SIP_CALL_LIMIT],[],[Enable broken SIP call limit])
-fi
-AM_CONDITIONAL([ENABLE_SIP_CALL_LIMIT],[test "${enable_sip_call_limit}" = "yes"])
-
-dnl Enable Cisco-style RTP payload type 2 handling for G.726 . This is a RFC violation for broken peers. Silence Bug should be fixed.
-AC_ARG_ENABLE(rtp-payload-2,
-	[AC_HELP_STRING([--enable-rtp-payload-2],[Enable Cisco-style RTP payload type 2 (default=no)])],,[enable_rtp_payload_2="no"])
-
-if test "${enable_rtp_payload_2}" = "yes"; then
-   AC_DEFINE([USE_DEPRECATED_G726],[],[Enable Cisco-style RTP payload type 2])
-fi
-AM_CONDITIONAL([USE_DEPRECATED_G726],[test "${enable_rtp_payload_2}" = "yes"])
 
 dnl Enable debugging
 AC_ARG_ENABLE(debug,
@@ -893,25 +677,25 @@ if test "${enable_low_memory}" = "yes"; then
    AC_DEFINE([LOW_MEMORY],[],[Low memory support.])
 fi
 
-dnl set user and group
-cwrunuser="callweaver"
-cwrungroup="callweaver"
+dnl Select user and group
+opbxrunuser="openpbx"
+opbxrungroup="openpbx"
 
-AC_ARG_WITH(callweaver-user,
-	[AC_HELP_STRING([--with-callweaver-user=USER],[Run as USER (default=callweaver)])],,[with_callweaver_user="callweaver"])
+AC_ARG_WITH(openpbx-user,
+	[AC_HELP_STRING([--with-openpbx-user=USER],[Run as USER (default=openpbx)])],,[with_openpbx_user="openpbx"])
 
-if test "${with_callweaver_user}" != "no" -a "${with_callweaver_user}" != "yes"; then
-	cwrunuser="$with_callweaver_user"
+if test "${with_openpbx_user}" != "no" -a "${with_openpbx_user}" != "yes"; then
+	opbxrunuser="$with_openpbx_user"
 fi
 
-AC_ARG_WITH(callweaver-group,
-	[AC_HELP_STRING([--with-callweaver-group=GROUP],[Run as GROUP (default=callweaver)])],,[with_callweaver_group="callweaver"])
+AC_ARG_WITH(openpbx-group,
+	[AC_HELP_STRING([--with-openpbx-group=GROUP],[Run as GROUP (default=openpbx)])],,[with_openpbx_group="openpbx"])
 
-if test "${with_callweaver_group}" != "no" -a "${with_callweaver_group}" != "yes"; then
-	cwrungroup="$with_callweaver_group"
+if test "${with_openpbx_group}" != "no" -a "${with_openpbx_group}" != "yes"; then
+	opbxrungroup="$with_openpbx_group"
 fi
-AC_SUBST(cwrunuser)
-AC_SUBST(cwrungroup)  
+AC_SUBST(opbxrunuser)
+AC_SUBST(opbxrungroup)  
 
 dnl ###########################################################################
 
@@ -970,20 +754,20 @@ fi
 
 dnl ###########################################################################
 
-#AC_ARG_ENABLE([odbc],
-#	[AC_HELP_STRING([--enable-odbc],[Enable support for ODBC (default=no)])],,[enable_odbc="no"])
+AC_ARG_ENABLE([odbc],
+	[AC_HELP_STRING([--enable-odbc],[Enable support for ODBC (default=yes)])],,[enable_odbc="yes"])
 
-#if test "${enable_odbc}" = "yes"; then
-#   AC_CHECK_LIB([odbc], [main], [HAVE_LIBODBC=1])
+if test "${enable_odbc}" = "yes"; then
+   AC_CHECK_LIB([odbc], [main], [HAVE_LIBODBC=1])
 
-#   if test -n "${HAVE_LIBODBC}"; then
-#      ODBC_CFLAGS=""
-#      ODBC_LIBS="-lodbc"
-#   fi
-#fi
+   if test -n "${HAVE_LIBODBC}"; then
+      ODBC_CFLAGS=""
+      ODBC_LIBS="-lodbc"
+   fi
+fi
 
-#AC_SUBST([ODBC_CFLAGS])
-#AC_SUBST([ODBC_LIBS])
+AC_SUBST([ODBC_CFLAGS])
+AC_SUBST([ODBC_LIBS])
 
 dnl ###########################################################################
 
@@ -1010,7 +794,7 @@ AC_ARG_ENABLE([mysql],
 if test "${enable_mysql}" = "yes"; then
    AC_PATH_PROG(MYSQL_CONFIG, mysql_config, no, $PATH)
    if test "$MYSQL_CONFIG" = "no"; then
-      AC_MSG_ERROR([You have specified --enable-mysql, but MySQL is not installed.])
+      enable_mysql="no"
    else
       MYSQL_LIBS=`$MYSQL_CONFIG --libs`
       MYSQL_CFLAGS=`$MYSQL_CONFIG --include`
@@ -1037,11 +821,12 @@ AM_CONDITIONAL([WANT_SRTP],[test "${enable_srtp}" = "yes"])
 
 dnl ##########################################################################
 
-AC_ARG_WITH([ssl],
-       [AC_HELP_STRING([--with-ssl=PATH],[Location of OpenSSL installation])],,[withval=""])
+AC_ARG_ENABLE([ssl],
+	[AC_HELP_STRING([--enable-ssl],[Enable support for SSL (default=yes)])],,[enable_ssl="yes"])
 
-CHECK_SSL
-
+if test "${enable_ssl}" = "yes"; then
+   CHECK_SSL
+fi
 
 dnl ##########################################################################
 
@@ -1090,7 +875,7 @@ AC_ARG_ENABLE([visdn],
 	[AC_HELP_STRING([--enable-visdn],[Enable support for vISDN (default=no)])],,[enable_visdn="no"])
 
 if test "${enable_visdn}" = "yes"; then
-    AC_CHECK_HEADERS([linux/visdn/router.h], [HAVE_LINUX_VISDN_ROUTER_H=1])
+    AC_CHECK_HEADERS([visdn/visdn.h], [HAVE_VISDN_VISDN_H=1])
     AC_CHECK_LIB([q931], [main], [HAVE_LIBQ931=1])
 fi
 
@@ -1116,21 +901,8 @@ if test "${enable_zaptel}" = "yes"; then
    AC_DEFINE_UNQUOTED([ZAPTEL_H], [${ZAPTEL_H}], [Location of zaptel.h header file])
    AC_DEFINE_UNQUOTED([TONEZONE_H], [${TONEZONE_H}], [Location of tonezone.h header file])
 
-   if test -n "${ZAPTEL_H}"; then
-     AC_CHECK_TYPES(struct zt_radio_stat,[ZAPTEL_V12_OR_HIGHER=1],,[#include ${ZAPTEL_H}])
-
-     if test "${ZAPTEL_V12_OR_HIGHER}" = "1"; then
-       AC_MSG_NOTICE([Zaptel appears to be version 1.2 or higher -- ok.])
-       AC_CHECK_LIB([tonezone], [main], [HAVE_LIBTONEZONE=1])
-       AC_CHECK_LIB([pri], [main], [HAVE_LIBPRI=1])
-     else
-       AC_MSG_WARN([Zaptel appears to be older than version 1.2 -- Zaptel support will be disabled.])
-       enable_zaptel="no"
-     fi
-   else
-     AC_MSG_WARN([Zaptel could not be found  -- Zaptel support will be disabled.])
-     enable_zaptel="no"
-   fi
+   AC_CHECK_LIB([tonezone], [main], [HAVE_LIBTONEZONE=1])
+   AC_CHECK_LIB([pri], [main], [HAVE_LIBPRI=1])
 fi
 
 AM_CONDITIONAL([HAVE_LIBPRI], [test -n "${HAVE_LIBPRI}"])
@@ -1154,27 +926,41 @@ AM_CONDITIONAL([WANT_APP_ADSIPROG],[test "${with_app_adsiprog}" = "yes"])
 
 dnl ###########################################################################
 
+AC_ARG_WITH([app_sms],
+	[AC_HELP_STRING([--with-app_sms],[Build and install app_sms (default=yes)])],,
+	[with_app_sms="yes"])
+
+if test "${with_app_sms}"; then
+   AC_CHECK_HEADERS([popt.h], [HAVE_POPT_H=1])
+   AC_CHECK_LIB([popt], [poptStrerror], [HAVE_LIBPOPT=1])
+fi
+
+AM_CONDITIONAL([WANT_SMSQ],[test -n "${HAVE_POPT_H}" -a -n "${HAVE_LIBPOPT}"])
+AM_CONDITIONAL([WANT_APP_SMS],[test "${with_app_sms}" = "yes"])
+
+dnl ###########################################################################
+
+AC_ARG_WITH([app_pipe],
+   [AC_HELP_STRING([--with-app_pipe],[Build and install app_pipe (default=yes)])],,
+   [with_app_pipe="yes"])
+
+AM_CONDITIONAL([WANT_APP_PIPE],[test "${with_app_pipe}" = "yes"])
+
+dnl ###########################################################################
+
+AC_ARG_WITH([app_v110],
+   [AC_HELP_STRING([--with-app_v110],[Build and install app_v110 [Requires chan_misdn] (default=no)])],,
+   [with_app_v110="no"])
+
+AM_CONDITIONAL([WANT_APP_V110],[test "${with_app_v110}" = "yes" -a test "${with_chan_misdn}" = "yes"])
+
+dnl ###########################################################################
+
 AC_ARG_WITH([app_authenticate],
 	[AC_HELP_STRING([--with-app_authenticate],[Build and install app_authenticate (default=yes)])],,
 	[with_app_authenticate="yes"])
 
 AM_CONDITIONAL([WANT_APP_AUTHENTICATE],[test "${with_app_authenticate}" = "yes"])
-
-dnl ###########################################################################
-
-AC_ARG_WITH([app_backgrounddetect],
-	[AC_HELP_STRING([--with-app_backgrounddetect],[Build and install app_backgrounddetect (default=yes)])],,
-	[with_app_backgrounddetect="yes"])
-
-AM_CONDITIONAL([WANT_APP_BACKGROUNDDETECT],[test "${with_app_backgrounddetect}" = "yes"])
-
-dnl ###########################################################################
-
-AC_ARG_WITH([app_backticks],
-	[AC_HELP_STRING([--with-app_backticks],[Build and install app_backticks (default=no)])],,
-	[with_app_backticks="no"])
-
-AM_CONDITIONAL([WANT_APP_BACKTICKS],[test "${with_app_backticks}" = "yes"])
 
 dnl ###########################################################################
 
@@ -1226,14 +1012,6 @@ AM_CONDITIONAL([WANT_APP_DB],[test "${with_app_db}" = "yes"])
 
 dnl ###########################################################################
 
-AC_ARG_WITH([app_devstate],
-	[AC_HELP_STRING([--with-app_devstate],[Build and install app_devstate (default=yes)])],,
-	[with_app_devstate="yes"])
-
-AM_CONDITIONAL([WANT_APP_DEVSTATE],[test "${with_app_devstate}" = "yes"])
-
-dnl ###########################################################################
-
 AC_ARG_WITH([app_setcallerpres],
 	[AC_HELP_STRING([--with-app_setcallerpres],[Build and install app_setcallerpres (default=yes)])],,
 	[with_app_setcallerpres="yes"])
@@ -1279,14 +1057,6 @@ AC_ARG_WITH([app_disa],
 	[with_app_disa="yes"])
 
 AM_CONDITIONAL([WANT_APP_DISA],[test "${with_app_disa}" = "yes"])
-
-dnl ###########################################################################
-
-AC_ARG_WITH([app_dtmftotext],
-	[AC_HELP_STRING([--with-app_dtmftotext],[Build and install app_dtmftotext (default=no)])],,
-	[with_app_dtmftotext="no"])
- 
-AM_CONDITIONAL([WANT_APP_DTMFTOTEXT],[test "${with_app_dtmftotext}" = "yes"])
 
 dnl ###########################################################################
 
@@ -1362,22 +1132,6 @@ AM_CONDITIONAL([WANT_APP_GETCPEID],[test "${with_app_getcpeid}" = "yes"])
 
 dnl ###########################################################################
 
-AC_ARG_WITH([app_getdevstate],
-	[AC_HELP_STRING([--with-app_getdevstate],[Build and install app_getdevstate (default=yes)])],,
-	[with_app_getdevstate="yes"])
-
-AM_CONDITIONAL([WANT_APP_GETDEVSTATE],[test "${with_app_getdevstate}" = "yes"])
-
-dnl ###########################################################################
-
-AC_ARG_WITH([app_getextstate],
-	[AC_HELP_STRING([--with-app_getextstate],[Build and install app_getextstate (default=yes)])],,
-	[with_app_getextstate="yes"])
-
-AM_CONDITIONAL([WANT_APP_GETEXTSTATE],[test "${with_app_getextstate}" = "yes"])
-
-dnl ###########################################################################
-
 AC_ARG_WITH([app_groupcount],
 	[AC_HELP_STRING([--with-app_groupcount],[Build and install app_groupcount (default=yes)])],,
 	[with_app_groupcount="yes"])
@@ -1394,36 +1148,6 @@ AM_CONDITIONAL([WANT_APP_HASNEWVOICEMAIL],[test "${with_app_hasnewvoicemail}" = 
 
 dnl ###########################################################################
 
-#AC_ARG_WITH([app_lcr],
-#        [AC_HELP_STRING([--with-app_lcr],[Build and install app_lcr, requires OpenDBX (default=no)])],,
-#        [with_app_lcr="no"])
-
-#AC_CHECK_HEADERS([opendbx.h],[HAVE_OPENDBX_H=1])
-#AC_CHECK_LIB([opendbx],[odbx_init],[HAVE_LIBOPENDBX=1])
-
-#AM_CONDITIONAL([WANT_APP_LCR],[test "${with_app_lcr}" = "yes" -a -n "${HAVE_OPENDBX_H}" -a -n "${HAVE_LIBOPENDBX}"])
-
-dnl ###########################################################################
-
-AC_ARG_WITH([app_ldap],
-	[AC_HELP_STRING([--with-app_ldap],[Build and install app_ldap (default=no)])],,
-	[with_app_ldap="no"])
-
-AM_CONDITIONAL([WANT_APP_LDAP],[test "${with_app_ldap}" = "yes"])
-
-if test "${with_app_ldap}" = "yes"; then
-   AC_CHECK_LIB(ldap, ldap_open, [], [
-		      echo "LDAP libraries not found. Install openldap-dev"
-		      exit -1
-		      ])
-   AC_CHECK_LIB(lber, ber_alloc, [], [
-		      echo "BER libraries not found. Install openldap-dev"
-		      exit -1
-		      ])
-fi
-
-dnl ###########################################################################
-
 AC_ARG_WITH([app_lookupblacklist],
 	[AC_HELP_STRING([--with-app_lookupblacklist],[Build and install app_lookupblacklist (default=yes)])],,
 	[with_app_lookupblacklist="yes"])
@@ -1437,6 +1161,22 @@ AC_ARG_WITH([app_lookupcidname],
 	[with_app_lookupcidname="yes"])
 
 AM_CONDITIONAL([WANT_APP_LOOKUPCIDNAME],[test "${with_app_lookupcidname}" = "yes"])
+
+dnl ###########################################################################
+
+AC_ARG_WITH([app_macro],
+	[AC_HELP_STRING([--with-app_macro],[Build and install app_macro (default=yes)])],,
+	[with_app_macro="yes"])
+
+AM_CONDITIONAL([WANT_APP_MACRO],[test "${with_app_macro}" = "yes"])
+
+dnl ###########################################################################
+
+AC_ARG_WITH([app_proc],
+	[AC_HELP_STRING([--with-app_proc],[Build and install app_proc (default=yes)])],,
+	[with_app_proc="yes"])
+
+AM_CONDITIONAL([WANT_APP_PROC],[test "${with_app_proc}" = "yes"])
 
 dnl ###########################################################################
 
@@ -1472,22 +1212,6 @@ AM_CONDITIONAL([WANT_APP_OSPLOOKUP],[test "${with_app_osplookup}" = "yes"])
 
 dnl ###########################################################################
 
-AC_ARG_WITH([app_page],
-        [AC_HELP_STRING([--with-app_page],[Build and install app_page (default=no)])],,
-        [with_app_age="no"])
-
-AM_CONDITIONAL([WANT_APP_PAGE],[test "${with_app_page}" = "yes"])
-
-dnl ###########################################################################
-
-AC_ARG_WITH([app_pipe],
-   [AC_HELP_STRING([--with-app_pipe],[Build and install app_pipe (default=yes)])],,
-   [with_app_pipe="yes"])
-
-AM_CONDITIONAL([WANT_APP_PIPE],[test "${with_app_pipe}" = "yes"])
-
-dnl ###########################################################################
-
 AC_ARG_WITH([app_playback],
 	[AC_HELP_STRING([--with-app_playback],[Build and install app_playback (default=yes)])],,
 	[with_app_playback="yes"])
@@ -1501,14 +1225,6 @@ AC_ARG_WITH([app_privacy],
 	[with_app_privacy="yes"])
 
 AM_CONDITIONAL([WANT_APP_PRIVACY],[test "${with_app_privacy}" = "yes"])
-
-dnl ###########################################################################
-
-AC_ARG_WITH([app_proc],
-	[AC_HELP_STRING([--with-app_proc],[Build and install app_proc (default=yes)])],,
-	[with_app_proc="yes"])
-
-AM_CONDITIONAL([WANT_APP_PROC],[test "${with_app_proc}" = "yes"])
 
 dnl ###########################################################################
 
@@ -1601,20 +1317,6 @@ AM_CONDITIONAL([WANT_APP_SETTRANSFERCAPABILITY],[test "${with_app_settransfercap
 
 dnl ###########################################################################
 
-AC_ARG_WITH([app_sms],
-	[AC_HELP_STRING([--with-app_sms],[Build and install app_sms (default=yes)])],,
-	[with_app_sms="yes"])
-
-if test "${with_app_sms}"; then
-   AC_CHECK_HEADERS([popt.h], [HAVE_POPT_H=1])
-   AC_CHECK_LIB([popt], [poptStrerror], [HAVE_LIBPOPT=1])
-fi
-
-AM_CONDITIONAL([WANT_SMSQ],[test -n "${HAVE_POPT_H}" -a -n "${HAVE_LIBPOPT}"])
-AM_CONDITIONAL([WANT_APP_SMS],[test "${with_app_sms}" = "yes"])
-
-dnl ###########################################################################
-
 AC_ARG_WITH([app_softhangup],
 	[AC_HELP_STRING([--with-app_softhangup],[Build and install app_softhangup (default=yes)])],,
 	[with_app_softhangup="yes"])
@@ -1638,14 +1340,6 @@ AC_ARG_WITH([app_sql_postgres],
 AM_CONDITIONAL([WANT_APP_SQL_POSTGRES],[test "${enable_postgresql}" = "yes" -a "$with_app_sql_postgres" = "yes"])
 		
 dnl ###########################################################################
-
-AC_ARG_WITH([app_stack],
-	[AC_HELP_STRING([--with-app_stack],[Build and install app_stack (default=yes)])],,
-	[with_app_stack="yes"])
-
-AM_CONDITIONAL([WANT_APP_STACK],[test "${with_app_stack}" = "yes"])
-
-dnl ###########################################################################
 		
 AC_ARG_WITH([app_system],
 	[AC_HELP_STRING([--with-app_system],[Build and install app_system (default=yes)])],,
@@ -1655,12 +1349,11 @@ AM_CONDITIONAL([WANT_APP_SYSTEM],[test "${with_app_system}" = "yes"])
 
 dnl ###########################################################################
 
-AC_ARG_WITH([app_t38gateway],
-	[AC_HELP_STRING([--with-app_t38gateway],[Build and install app_t38gateway (default=yes)])],,
-	[with_app_t38gateway="yes"])
+AC_ARG_WITH([app_backgrounddetect],
+	[AC_HELP_STRING([--with-app_backgrounddetect],[Build and install app_backgrounddetect (default=yes)])],,
+	[with_app_backgrounddetect="yes"])
 
-AM_CONDITIONAL([WANT_APP_T38GATEWAY],
-	[test "${with_app_t38gateway}" = "yes"])
+AM_CONDITIONAL([WANT_APP_BACKGROUNDDETECT],[test "${with_app_backgrounddetect}" = "yes"])
 
 dnl ###########################################################################
 
@@ -1686,14 +1379,6 @@ AC_ARG_WITH([app_userevent],
 	[with_app_userevent="yes"])
 
 AM_CONDITIONAL([WANT_APP_USEREVENT],[test "${with_app_userevent}" = "yes"])
-
-dnl ###########################################################################
-
-AC_ARG_WITH([app_v110],
-   [AC_HELP_STRING([--with-app_v110],[Build and install app_v110 [Requires chan_misdn] (default=no)])],,
-   [with_app_v110="no"])
-
-AM_CONDITIONAL([WANT_APP_V110],[test "${with_app_v110}" = "yes" -a "${with_chan_misdn}" = "yes"])
 
 dnl ###########################################################################
 
@@ -1737,14 +1422,6 @@ AM_CONDITIONAL([WANT_APP_WAITFORRING],[test "${with_app_waitforring}" = "yes"])
 
 dnl ###########################################################################
 
-AC_ARG_WITH([app_waitfordigits],
-	[AC_HELP_STRING([--with-app_waitfordigits],[Build and install app_waitfordigits (default=yes)])],,
-	[with_app_waitfordigits="yes"])
-
-AM_CONDITIONAL([WANT_APP_WAITFORDIGITS],[test "${with_app_waitfordigits}" = "yes"])
-
-dnl ###########################################################################
-
 AC_ARG_WITH([app_waitforsilence],
 	[AC_HELP_STRING([--with-app_waitforsilence],[Build and install app_waitforsilence (default=yes)])],,
 	[with_app_waitforsilence="yes"])
@@ -1767,6 +1444,58 @@ AC_ARG_WITH([app_zapateller],
 
 AM_CONDITIONAL([WANT_APP_ZAPATELLER],[test "${with_app_zapateller}" = "yes"])
 
+dnl ###########################################################################
+
+AC_ARG_WITH([app_ldap],
+	[AC_HELP_STRING([--with-app_ldap],[Build and install app_ldap (default=no)])],,
+	[with_app_ldap="no"])
+
+AM_CONDITIONAL([WANT_APP_LDAP],[test "${with_app_ldap}" = "yes"])
+
+if test "${with_app_ldap}" = "yes"; then
+   AC_CHECK_LIB(ldap, ldap_open, [], [
+		      echo "LDAP libraries not found. Install openldap-dev"
+		      exit -1
+		      ])
+
+   AC_CHECK_LIB(lber, ber_alloc, [], [
+		      echo "BER libraries not found. Install openldap-dev"
+		      exit -1
+		      ])
+
+fi
+
+dnl ###########################################################################
+
+AC_ARG_WITH([app_devstate],
+	[AC_HELP_STRING([--with-app_devstate],[Build and install app_devstate (default=yes)])],,
+	[with_app_devstate="yes"])
+
+AM_CONDITIONAL([WANT_APP_DEVSTATE],[test "${with_app_devstate}" = "yes"])
+
+dnl ###########################################################################
+
+AC_ARG_WITH([app_stack],
+	[AC_HELP_STRING([--with-app_stack],[Build and install app_stack (default=yes)])],,
+	[with_app_stack="yes"])
+
+AM_CONDITIONAL([WANT_APP_STACK],[test "${with_app_stack}" = "yes"])
+
+dnl ###########################################################################
+
+AC_ARG_WITH([app_getdevstate],
+	[AC_HELP_STRING([--with-app_getdevstate],[Build and install app_getdevstate (default=yes)])],,
+	[with_app_getdevstate="yes"])
+
+AM_CONDITIONAL([WANT_APP_GETDEVSTATE],[test "${with_app_getdevstate}" = "yes"])
+
+dnl ###########################################################################
+
+AC_ARG_WITH([app_getextstate],
+	[AC_HELP_STRING([--with-app_getextstate],[Build and install app_getextstate (default=yes)])],,
+	[with_app_getextstate="yes"])
+
+AM_CONDITIONAL([WANT_APP_GETEXTSTATE],[test "${with_app_getextstate}" = "yes"])
 
 dnl ###########################################################################
 dnl ###########################################################################
@@ -1797,7 +1526,7 @@ AM_CONDITIONAL([WANT_CHAN_AGENT],[test "${with_chan_agent}" = "yes"])
 
 dnl ###########################################################################
 
-MISDN_CFLAGS="-I/usr/include/ -I/usr/include/i4lnet -I/usr/include/mISDNuser"
+MISDN_CFLAGS=-I/usr/include/mISDNuser
 MISDN_LDFLAGS=
 
 AC_ARG_WITH([misdn-includes],
@@ -1897,17 +1626,10 @@ AC_ARG_WITH([chan_sip],
 
 AM_CONDITIONAL([WANT_CHAN_SIP],[test "${with_chan_sip}" = "yes"])
 
-#AC_ARG_ENABLE([t38],
-#	[AC_HELP_STRING([--enable-t38],[Enable T.38 support (default=yes)])],,[enable_t38="yes"])
-
-#if test "x${enable_t38}" != "xno"; then
-#	AC_DEFINE([T38_SUPPORT],[1],[chan_sip T.38 support])
-#fi
-
 dnl ###########################################################################
 
 AC_ARG_WITH([chan_sccp],
-	[AC_HELP_STRING([--with-chan_sccp],[Build and install chan_sccp (default=no)])],,[with_chan_sccp="no"])
+	[AC_HELP_STRING([--with-chan_sccp],[Build and install chan_sccp (default=yes)])],,[with_chan_sccp="no"])
 
 AM_CONDITIONAL([WANT_CHAN_SCCP],[test "${with_chan_sccp}" = "yes"])
 
@@ -1954,7 +1676,7 @@ AM_CONDITIONAL([WANT_CHAN_WOOMERA], [test "${with_chan_woomera}" = "yes"])
 dnl ###########################################################################
 
 AC_ARG_WITH([chan_bluetooth],
-	[AC_HELP_STRING([--with-chan_bluetooth],[Build and install chan_bluetooth (default=no)])],,
+	[AC_HELP_STRING([--with-chan_bluetooth],[Build and install chan_bluetoot (default=no)])],,
 	[with_chan_bluetooth="no"])
 
 if test "${with_chan_bluetooth}" = "yes" ; then
@@ -1973,14 +1695,7 @@ AC_ARG_WITH([chan_zap],
 
 AM_CONDITIONAL([WANT_CHAN_ZAP], [test "${enable_zaptel}" = "yes" -a "${with_chan_zap}" = "yes" -a -n "${HAVE_LIBTONEZONE}"])
 
-dnl ###########################################################################
-
-AC_ARG_WITH([app_icd],
-	[AC_HELP_STRING([--with-app_icd],[Build and install app_icd (default=no)])],,
-	[with_app_icd="no"])
-
-AM_CONDITIONAL([WANT_APP_ICD],[test "${with_app_icd}" = "yes"])
-
+dnl app_icd
 #app_icd = "no"
 #AC_ARG_WITH(app_icd,
 #	[ --with-app_icd=no			use app_icd, a full blown inteligent call distribution system (default=no) *** HIGHLY EXPERIMENTAL FOR THE MOMENT ****],,[with_app_icd="no"])
@@ -1995,17 +1710,10 @@ dnl ###
 dnl ###########################################################################
 dnl ###########################################################################
 
-#AC_ARG_WITH(cdr_odbc,
-#	[AC_HELP_STRING([--with-cdr_odbc],[Build and install cdr_odbc (default=no) (requires --enable-odbc])],,[with_cdr_odbc="no"])
+AC_ARG_WITH(cdr_odbc,
+	[AC_HELP_STRING([--with-cdr_odbc],[Build and install cdr_odbc (default=no) (requires --enable-odbc])],,[with_cdr_odbc="no"])
 
-#AM_CONDITIONAL([WANT_CDR_ODBC],[test "${enable_odbc}" = "yes" -a "${with_cdr_odbc}" = "yes" -a -n "${HAVE_LIBODBC}"])
-
-dnl ###########################################################################
-
-AC_ARG_WITH(cdr_manager,
-        [AC_HELP_STRING([--with-cdr_manager],[Build and install cdr_manager (default=yes)])],,[with_cdr_manager="yes"])
-
-AM_CONDITIONAL([WANT_CDR_MANAGER],[test "${with_cdr_manager}" = "yes"])
+AM_CONDITIONAL([WANT_CDR_ODBC],[test "${enable_odbc}" = "yes" -a "${with_cdr_odbc}" = "yes" -a -n "${HAVE_LIBODBC}"])
 
 dnl ###########################################################################
 
@@ -2022,20 +1730,6 @@ AC_ARG_WITH(cdr_pgsql,
 AM_CONDITIONAL([WANT_CDR_PGSQL],[test "${enable_postgresql}" = "yes" -a "$with_cdr_pgsql" = "yes"])
 
 dnl ###########################################################################
-
-AC_ARG_WITH(cdr_pgsql_custom,
-        [AC_HELP_STRING([--with-cdr_pgsql_custom],[Build and install cdr_pgsql_custom (default=no) (requires --enable-postgresql)])],,[with_cdr_pgsql_custom="no"])
-
-AM_CONDITIONAL([WANT_CDR_PGSQL_CUSTOM],[test "${enable_postgresql}" = "yes" -a "$with_cdr_pgsql_custom" = "yes"])
-
-dnl ###########################################################################
-
-AC_ARG_WITH(cdr_sqlite3_custom,
-        [AC_HELP_STRING([--with-cdr_sqlite3_custom],[Build and install cdr_sqlite3_custom (default=no)])],,[with_cdr_sqlite3_custom="no"])
-
-AM_CONDITIONAL([WANT_CDR_SQLITE3_CUSTOM],[test "${with_cdr_sqlite3_custom}" = "yes"])
-
-dnl ###########################################################################
 dnl ###########################################################################
 dnl ###
 dnl ### Codecs
@@ -2046,10 +1740,11 @@ dnl ###########################################################################
 AC_ARG_WITH([codec_speex],
 	[AC_HELP_STRING([--with-codec_speex],[Build and install codec_speex (default=yes)])],,[with_codec_speex="yes"])
 
-if test "${with_codec_speex}" = "yes"; then
-   AC_CHECK_LIB([speex], [main], [HAVE_LIBSPEEX=1],[AC_MSG_ERROR(Cannot find Speex library.)])
+if test "${with_codec_speex}"; then
+   AC_CHECK_LIB([speex], [main], [HAVE_LIBSPEEX=1])
    
-   AC_CHECK_HEADER([speex/speex.h],[HAVE_SPEEX_H=1 AC_SUBST([SPEEX_CFLAGS],[-I/usr/include/speex])],[AC_MSG_ERROR(Cannot find header files for Speex.)])
+   AC_CHECK_HEADER([speex/speex.h],[HAVE_SPEEX_H=1 AC_SUBST([SPEEX_CFLAGS],[-I/usr/include/speex])])
+   AC_CHECK_HEADER([speex.h],[HAVE_SPEEX_H=1])
 fi
 
 AM_CONDITIONAL([WANT_CODEC_SPEEX],[test "${with_codec_speex}" = "yes" -a -n "${HAVE_LIBSPEEX}" -a -n "${HAVE_SPEEX_H}"])
@@ -2104,14 +1799,6 @@ AC_ARG_WITH([func_callerid],
         [with_func_callerid="yes"])
 
 AM_CONDITIONAL([WANT_FUNC_CALLERID],[test "${with_func_callerid}" = "yes"])
-
-dnl ###########################################################################
-
-AC_ARG_WITH([func_config],
-        [AC_HELP_STRING([--with-func_config],[Build and install func_config (default=yes)])],,
-        [with_func_config="yes"])
-
-AM_CONDITIONAL([WANT_FUNC_CONFIG],[test "${with_func_config}" = "yes"])
 
 dnl ###########################################################################
 
@@ -2267,10 +1954,10 @@ dnl ###
 dnl ###########################################################################
 dnl ###########################################################################
 
-#AC_ARG_WITH([res_config_odbc],
-#        [AC_HELP_STRING([--with-res_config_odbc],[Build and install res_config_odbc (default=no) (requires --enable-odbc and --with-res_odbc)])],,[with_res_config_odbc="no"])
+AC_ARG_WITH([res_config_odbc],
+        [AC_HELP_STRING([--with-res_config_odbc],[Build and install res_config_odbc (default=no) (requires --enable-odbc and --with-res_odbc)])],,[with_res_config_odbc="no"])
 
-#AM_CONDITIONAL([WANT_RES_CONFIG_ODBC],[test "${enable_odbc}" = "yes" -a "${with_res_config_odbc}" = "yes" -a "${with_res_odbc}" = "yes" -a -n "${HAVE_LIBODBC}"])
+AM_CONDITIONAL([WANT_RES_CONFIG_ODBC],[test "${enable_odbc}" = "yes" -a "${with_res_config_odbc}" = "yes" -a "${with_res_odbc}" = "yes" -a -n "${HAVE_LIBODBC}"])
 
 dnl ###########################################################################
 
@@ -2278,17 +1965,6 @@ AC_ARG_WITH([res_config_curl],
         [AC_HELP_STRING([--with-res_config_curl],[Build and install res_config_curl (default=no)])],,[with_res_config_curl="no"])
 
 AM_CONDITIONAL([WANT_RES_CONFIG_CURL],[test "${with_res_config_curl}" = "yes"])
-
-dnl ###########################################################################
-
-AC_ARG_WITH([res_snmp],
-        [AC_HELP_STRING([--with-res_snmp],[Build and install res_snmp (default=no)])],,[with_res_snmp="no"])
-
-AM_CONDITIONAL([WANT_RES_SNMP],[test "${with_res_snmp}" = "yes"])
-
-if test "${with_res_snmp}" = "yes"; then
-   CHECK_SNMP
-fi
 
 dnl ###########################################################################
 
@@ -2320,20 +1996,11 @@ AM_CONDITIONAL([WANT_RES_JS],[test "${enable_javascript}" = "yes" -a "${with_res
 
 dnl ###########################################################################
 
-#AC_ARG_WITH([res_odbc],
-#	[AC_HELP_STRING([--with-res_odbc],[Build and install res_odbc (default=no) (requires --enable-odbc)])],,
-#	[with_res_odbc="no"])
+AC_ARG_WITH([res_odbc],
+	[AC_HELP_STRING([--with-res_odbc],[Build and install res_odbc (default=no) (requires --enable-odbc)])],,
+	[with_res_odbc="no"])
 
-#AM_CONDITIONAL([WANT_RES_ODBC],[test "${enable_odbc}" = "yes" -a "${with_res_odbc}" = "yes" -a -n "${HAVE_LIBODBC}"])
-
-dnl ###########################################################################
-
-AC_ARG_WITH([debug_malloc],
-	[AC_HELP_STRING([--with-debug_malloc],[Enable debug malloc (default=no)])],,[with_debug_malloc="no"])
-
-if test "$with_debug_malloc" = "yes" ; then
-    AC_DEFINE([__CW_DEBUG_MALLOC], [1], [We want malloc debug ...])
-fi
+AM_CONDITIONAL([WANT_RES_ODBC],[test "${enable_odbc}" = "yes" -a "${with_res_odbc}" = "yes" -a -n "${HAVE_LIBODBC}"])
 
 dnl ###########################################################################
 
@@ -2396,93 +2063,15 @@ AM_CONDITIONAL([WANT_RES_SQLITE],[test "${with_res_sqlite}" = "yes"])
 
 dnl ###########################################################################
 
-AC_ARG_WITH(efence,
-        [AC_HELP_STRING([--with-efence],[Build with electric fence (default=no)])],,[with_efence="no"])
-
-if test "x${with_efence}" = "xyes" ; then
-  AC_MSG_CHECKING([for efence])
-  AC_CHECK_LIB(efence,EF_Print,
-    AC_MSG_RESULT([ok])
-    LIBS="$LIBS -lefence",
-    AC_MSG_RESULT([library missing])
-  )
-fi
-
-dnl ###########################################################################
-
-AC_PATH_PROG( PKGCONFIG, pkg-config, no, $PATH:/usr/bin:/usr/local/bin)
-
-if test "$PKGCONFIG" != "no" ; then
-    AC_MSG_CHECKING([sndfile with pkg-config])
-
-    $PKGCONFIG --exists sndfile
-    SNDFILE_EXISTS=$?
-
-    if test "$SNDFILE_EXISTS" -eq "0"; then
-	SNDFILE_LIBS=`$PKGCONFIG --libs-only-l sndfile 2>/dev/null`
-	SNDFILE_LDFLAGS=`$PKGCONFIG --libs-only-L sndfile 2>/dev/null`
-	SNDFILE_CFLAGS=`$PKGCONFIG --cflags-only-I sndfile 2>/dev/null`
-
-	AC_DEFINE([HAVE_SNDFILE],[1],[sndfile library avalaible])
-
-        AC_MSG_RESULT([found])
-        AC_SUBST(SNDFILE_LIBS)
-        AC_SUBST(SNDFILE_LDFLAGS)
-        AC_SUBST(SNDFILE_CFLAGS)
-    else
-        AC_MSG_RESULT([no])
-    fi
-fi
-
-AM_CONDITIONAL([WANT_FILESTREAM_SNDFILE],[test "$SNDFILE_EXISTS" -eq "0"])
-
-dnl ###########################################################################
-dnl ###########################################################################
-dnl ###
-dnl ### Documentation
-dnl ###
-dnl ###########################################################################
-dnl ###########################################################################
-
-# yes yes yes, we know that the GNU coding standards say that we should only
-# be using the --with parameter prefix for external packages but we are using it
-# nevertheless because it makes more sense from a plain good English point of view.
-
-AC_ARG_WITH([man_pages],
-        [AC_HELP_STRING([--with-man-pages],[Install man pages (default=yes)])],,[with_man_pages="yes"])
-
-AM_CONDITIONAL([WANT_MAN_PAGES],[test "${with_man_pages}" = "yes"])
-
-AC_ARG_WITH([readme],
-        [AC_HELP_STRING([--with-readme],[Install README file (default=yes)])],,[with_readme="yes"])
-
-AM_CONDITIONAL([WANT_README],[test "${with_readme}" = "yes"])
-
-AC_ARG_WITH([license],
-        [AC_HELP_STRING([--with-license],[Install LICENSE file (default=yes)])],,[with_license="yes"])
-
-AM_CONDITIONAL([WANT_LICENSE],[test "${with_license}" = "yes"])
-
-AC_ARG_WITH([credits],
-        [AC_HELP_STRING([--with-credits],[Install CREDITS (default=yes)])],,[with_credits="yes"])
-
-AM_CONDITIONAL([WANT_CREDITS],[test "${with_credits}" = "yes"])
-
-AC_ARG_WITH([sgml_docs],
-        [AC_HELP_STRING([--with-sgml-docs],[Install SGML documentation (default=no)])],,[with_sgml_docs="no"])
-
-AM_CONDITIONAL([WANT_SGML_DOCS],[test "${with_sgml_docs}" = "yes"])
-
-
 AC_SUBST(SVN)
 AC_SUBST(GREP)
 AC_SUBST(GROUPADD)
 AC_SUBST(SOLINK)
-AC_SUBST(CWLINK)
+AC_SUBST(ASTLINK)
 AC_SUBST(CPU_OPTIONS)
 AC_SUBST(all_debug)
 AC_SUBST(DEBUG_THREADS)
-AC_SUBST(DEBUG_MALLOC)
+AC_SUBST(MALLOC_DEBUG)
 AC_SUBST(LOW_MEMORY)
 AC_SUBST(prefix)
 
@@ -2500,7 +2089,7 @@ AC_CONFIG_SUBDIRS(libltdl)
 
 AC_OUTPUT([Makefile
 		 include/Makefile
-		 include/callweaver/Makefile
+		 include/openpbx/Makefile
 		 libs/Makefile
                  ogi/Makefile
                  apps/Makefile
@@ -2521,6 +2110,7 @@ AC_OUTPUT([Makefile
                  res/Makefile
                  stdtime/Makefile
                  utils/Makefile
+		 configs/musiconhold.conf.sample
 		 configs/Makefile
  		 ogi/ogi-test.ogi
 		 ogi/fastogi-test
@@ -2553,12 +2143,13 @@ echo ""
 echo "CFLAGS: 		$CFLAGS"
 echo "LIBS: 		$LIBS"
 echo "LDFLAGS: 		$LDFLAGS"
+echo "BUSYDETECT: 	${BUSYDETECT}"
 echo "CPU_OPTIONS: 	${CPU_OPTIONS}"
 echo "BUILD_OS: 	${BUILD_OS}"
 echo "BUILD_MACHINE: 	${BUILD_MACHINE}"
 echo "BUILD_HOST: 	${BUILD_HOST}"
 echo "SVN:		${SVN}"
-echo "SVN_VERSION:	${svnver# } ($svndesc)"
+echo "SVN_VERSION:	${SVN_VERSION}"
 echo ""
 echo "prefix:           ${prefix}"
 echo "exec_prefix:      ${exec_prefix}"
@@ -2571,32 +2162,25 @@ echo "localstatedir:    ${localstatedir}"
 echo "datadir:          ${datadir}"
 echo "includedir:       ${includedir}"
 echo ""
-echo "directory-layout: ${with_directory_layout}"
-echo ""
-echo "cwexecdir:      ${cwexecdir}"
-echo "cwutilsdir:     ${cwutilsdir}"
-echo "cwconfdir:      ${cwconfdir}"
-echo "cwconffile:     ${cwconffile}"
-echo "cwlibdir:       ${cwlibdir}"
-echo "cwmoddir:       ${cwmoddir}"
-echo "cwvardir:       ${cwvardir}"
-echo "cwdbdir:        ${cwdbdir}"
-echo "cwdbfile:       ${cwdbfile}"
-echo "cwtmpdir:       ${cwtmpdir}"
-echo "cwrundir:       ${cwrundir}"
-echo "cwpidfile:      ${cwpidfile}"
-echo "cwsocketfile:   ${cwsocketfile}"
-echo "cwlogdir:       ${cwlogdir}"
-echo "cwspooldir:     ${cwspooldir}"
-echo "cwdatadir:      ${cwdatadir}"
-echo "cwmandir:       ${cwmandir}"
-echo "cwdocdir:       ${cwdocdir}"
-echo "cwkeydir:       ${cwkeydir}"
-echo "cwsqlitedir:    ${cwsqlitedir}"
-echo "cwogidir:       ${cwogidir}"
-echo "cwsoundsdir:    ${cwsoundsdir}"
-echo "cwimagesdir:    ${cwimagesdir}"
-echo "cwmohdir:       ${cwmohdir}"
-echo "cwincludedir:   ${cwincludedir}"
-#
-# END configure
+echo "opbxconfdir:      ${opbxconfdir}"
+echo "opbxconffile:     ${opbxconffile}"
+echo "opbxlibdir:       ${opbxlibdir}"
+echo "opbxmoddir:       ${opbxmoddir}"
+echo "opbxvardir:       ${opbxvardir}"
+echo "opbxdbdir:        ${opbxdbdir}"
+echo "opbxdbfile:       ${opbxdbfile}"
+echo "opbxtmpdir:       ${opbxtmpdir}"
+echo "opbxrundir:       ${opbxrundir}"
+echo "opbxpidfile:      ${opbxpidfile}"
+echo "opbxsocketfile:   ${opbxsocketfile}"
+echo "opbxlogdir:       ${opbxlogdir}"
+echo "opbxspooldir:     ${opbxspooldir}"
+echo "opbxdatadir:      ${opbxdatadir}"
+echo "opbxdocdir:       ${opbxdocdir}"
+echo "opbxkeydir:       ${opbxkeydir}"
+echo "opbxsqlitedir:    ${opbxsqlitedir}"
+echo "opbxogidir:       ${opbxogidir}"
+echo "opbxsoundsdir:    ${opbxsoundsdir}"
+echo "opbximagesdir:    ${opbximagesdir}"
+echo "opbxmohdir:       ${opbxmohdir}"
+echo "opbxincludedir:   ${opbxincludedir}"

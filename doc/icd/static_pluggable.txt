@@ -58,13 +58,13 @@ static icd_status init_icd_distributor_psuedo(icd_distributor *that, char *name,
 int icd_module_load(icd_config_registry *registry) {
 
     assert(registry != NULL);
-    cw_verbose("Mod  Psuedocode Loaded!\n");
+    opbx_verbose("Mod  Psuedocode Loaded!\n");
     return 0;
 }
 
 int icd_module_unload(void) {
 
-    cw_verbose("Mod Psuedocode  Unloaded!\n");
+    opbx_verbose("Mod Psuedocode  Unloaded!\n");
     return 0;
 
 }

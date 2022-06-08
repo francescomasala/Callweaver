@@ -1,5 +1,5 @@
 (CAPI*) chan_capi a Common ISDN API 2.0 implementation
-for CallWeaver
+for Asterisk/OpenPBX
 
  Copyright (C) 2005-2006 Cytronics & Melware
  Armin Schindler <armin@melware.de>
@@ -8,7 +8,7 @@ for CallWeaver
  Copyright (C) 2002-2005 Junghanns.NET GmbH
  Klaus-Peter Junghanns <kpj@junghanns.net>
 
- Ported to CallWeaver.org 22nd October 2004,
+ Ported to OpenPBX.org 22nd October 2004,
  Rob Thomas, <xrobau@gmail.com>
 
 This program is free software and may be modified and distributed under
@@ -27,6 +27,9 @@ Hans Petter Selasky
 
 (...and all the others that have been forgotten...) :-)
 
+No support for Asterisk 1.0.x any more, you need at least
+Asterisk 1.2.x
+
 To support all fax features (e.g. fax polling), you
 need version 3 of libcapi20.
 
@@ -42,7 +45,7 @@ This chan_capi version includes:
 - Incoming/outgoing calls
 - Overlap sending (dialtone and additional digits)
 - E(xplicit) C(all) T(ransfer) (...although it's done implicit-but don't tell!)
-- Use CallWeavers internal DSP functions for DTMF
+- Use asterisks internal DSP functions for DTMF
 - Alaw support 
 - Ulaw support! 
 - Eicon CAPI echo cancelation (echocancel=1)
@@ -58,7 +61,7 @@ This chan_capi version includes:
 - Callgroup support
 - report correct DIALSTATUS and HANGUPCAUSE.
 - Updated to support the new frame->delivery field
-- Compiles with different CallWeaver versions (automatic build configuration)
+- Compiles with different Asterisk versions (automatic build configuration)
 - receive/send faxes over CAPI (see below)
 - Fixes and compatibility for BSD (Jan Stocker and Hans Petter Selasky)
 - Support 'type of number'.
@@ -70,10 +73,10 @@ This chan_capi version includes:
 Permissions
 ===========
 
-CallWeaver.org, by default, runs as the non-root user/group
-callweaver/callweaver.  You must make sure that the /dev/capi* device files
-are readable by CallWeaver.org either by changing the ownership or the
-permissions of the the device files or by running CallWeaver.org as root.
+OpenPBX.org, by default, runs as the non-root user/group
+openpbx/openpbx.  You must make sure that the /dev/capi* device files
+are readable by OpenPBX.org either by changing the ownership or the
+permissions of the the device files or by running OpenPBX.org as root.
 
 The Dial string
 ===============
@@ -110,43 +113,43 @@ The Dial string
 
 CAPI command application
 ========================
-chan_capi provides an additional CallWeaver application
+chan_capi provides an additional Asterisk application
    capicommand()
 With this application, special capi commands and features can be used.
 
 Call Deflection:
     Forwards an unanswered call to another number.
         Example:
-        exten => s,1,capicommand(deflect,12345678)
+        exten => s,1,capicommand(deflect|12345678)
   
 Fax receive:
     Receive a fax using CAPI.
         Example:
-        exten => s,1,capicommand(receivefax,/tmp/${UNIQUEID},+49 6137 555123,CallWeaver)
+        exten => s,1,capicommand(receivefax|/tmp/${UNIQUEID}|+49 6137 555123|Asterisk)
 	(more see below)
 
 Fax send:
     Send a fax using CAPI.
         Example:
-        exten => s,1,capicommand(sendfax,/path/to/faxfile.sff,+49 6137 555123,CallWeaver)
+        exten => s,1,capicommand(sendfax|/path/to/faxfile.sff|+49 6137 555123|Asterisk)
 	(more see below)
 
 Enable/Disable echosquelch:
     Enable or disable a very primitive echo suppressor.
     Disable this before you start recording voicemail or your files may get choppy.
         Example:
-        exten => s,1,capicommand(echosquelch,yes)
+        exten => s,1,capicommand(echosquelch|yes)
           or
-        exten => s,1,capicommand(echosquelch,no)
+        exten => s,1,capicommand(echosquelch|no)
 
 Enable/Disable echocancel:
     Enable or disable echo-cancel provided by CAPI driver/hardware.
     You may need to disable echo-cancel when e.g. data/fax transmission handled
     by non-CAPI application.
         Example:
-        exten => s,1,capicommand(echocancel,yes)
+        exten => s,1,capicommand(echocancel|yes)
           or
-        exten => s,1,capicommand(echocancel,no)
+        exten => s,1,capicommand(echocancel|no)
 
 Malicious Call Identification:
     Report a call of malicious nature.
@@ -154,25 +157,25 @@ Malicious Call Identification:
         exten => s,1,capicommand(malicious)
 
 Hold:
-    Puts an answered call on hold, this has nothing to do with CallWeaver's onhold
+    Puts an answered call on hold, this has nothing to do with asterisk's onhold
     thingie (music et al).
     An optional parameter is the name of the variable which shall be set with
     the reference ID of the call on hold.
         Example:
         exten => s,1,capicommand(hold)
          or
-        exten => s,1,capicommand(hold,MYHOLDVAR)
+        exten => s,1,capicommand(hold|MYHOLDVAR)
 
 Holdtype:
-    Set the type of 'hold'. When CallWeaver wants to put the call on hold, the specified method
+    Set the type of 'hold'. When Asterisk wants to put the call on hold, the specified method
     will be used.
         Example:
-        exten => s,1,capicommand(holdtype,local)  ;no hold, CallWeaver can play MOH
+        exten => s,1,capicommand(holdtype|local)  ;no hold, Asterisk can play MOH
          or
-        exten => s,1,capicommand(holdtype,hold)   ;ISDN-HOLD 
+        exten => s,1,capicommand(holdtype|hold)   ;ISDN-HOLD 
          or
         ; not yet implemented
-        exten => s,1,capicommand(holdtype,notify) ;notify the peer only, CallWeaver can play MOH
+        exten => s,1,capicommand(holdtype|notify) ;notify the peer only, Asterisk can play MOH
 
        
 Retrieve:
@@ -181,12 +184,12 @@ Retrieve:
         Example:
         exten => s,1,capicommand(retrieve)
          or
-        exten => s,1,capicommand(retrieve,${MYHOLDVAR})
+        exten => s,1,capicommand(retrieve|${MYHOLDVAR})
 
 ECT:
     Explicit call transfer of the call on hold (must put call on hold first!)
         Example:
-        exten => s,1,capicommand(ect,${MYHOLDVAR})
+        exten => s,1,capicommand(ect|${MYHOLDVAR})
          or
         [macro-capiect]
         exten => s,1,capicommand(ect)
@@ -254,12 +257,12 @@ Short HOWTO of capicommand(receivefax...) and capicommand(sendfax...):
 For those of you who have a CAPI card with an on-board DSP (like some Eicon and
 DIVA Server), this allows you to receive/send faxes.
 
-capicommand(receivefax,<filename>[,<stationid>,<headline>]):
+capicommand(receivefax|<filename>[|<stationid>|<headline>]):
 ------------------------------------------------------------
-If you want to answer a channel in fax mode, use capicommand(receivefax,...)
+If you want to answer a channel in fax mode, use capicommand(receivefax|...)
 instead of Answer()
 If you use Answer(), you will be in voice mode. If the hardware DSP detects 
-fax tone, you can switch from voice to fax mode by calling capicommand(receivefax,...).
+fax tone, you can switch from voice to fax mode by calling capicommand(receivefax|...).
 The parameter <filename> is mandatory and the parameters <stationid> and
 <headline> are optional.
 To enable fax tone detection and redirect to extension 'fax', use config variable
@@ -276,11 +279,11 @@ exten => 124,1,Goto(handle_fax,s,1)
 exten => fax,1,Goto(handle_fax,s,1)
 
 [handle_fax]
-exten => s,1,capicommand(receivefax,/tmp/${UNIQUEID}[,<stationid>,<headline>])
+exten => s,1,capicommand(receivefax|/tmp/${UNIQUEID}[|<stationid>|<headline>])
 exten => s,2,Hangup()
 exten => h,1,deadogi,fax.php // Run sfftobmp and mail it.
 
-The output of capicommand(receivefax,...) is a SFF file.
+The output of capicommand(receivefax|...) is a SFF file.
 Use sfftobmp to convert it.
 With a DIVA Server, following features are provided:
  - fax up to 33600
@@ -288,7 +291,7 @@ With a DIVA Server, following features are provided:
  - Color Fax 
  - JPEG Compression is disabled (not tested yet)
 
-capicommand(sendfax,<filename>[,<stationid>,<headline>]):
+capicommand(sendfax|<filename>[|<stationid>|<headline>]):
 ------------------------------------------------------------
 To send a fax, you can use the same mechanism like with receivefax.
 Just replace the <filename> with the path to the .SFF file to send.
@@ -326,7 +329,7 @@ Column description:
   ton       : type of number value
   number    : the caller-number and destination-number
 
-CallWeaver variables used/set by chan_capi
+Asterisk variables used/set by chan_capi
 ========================================
 
 BCHANNELINFO
@@ -336,7 +339,7 @@ BCHANNELINFO
      '2' : neither B nor D channel is used (e.g. call waiting)
     Call-Waiting: an incoming call with BCHANNELINFO not '0' cannot be accepted.
     Another connection must be dropped before accepting or use
-    capicommand(deflect,<number>) to initiate call deflection to another destination.
+    capicommand(deflect|<number>) to initiate call deflection to another destination.
 
 CALLEDTON
     The 'type of number' value of the called number is saved in this variable on

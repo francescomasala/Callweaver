@@ -6,17 +6,17 @@
  * Written by Anthony Minessale II <anthmct at yahoo dot com>
  * Written by Bruce Atherton <bruce at callenish dot com>
  * Additions, Changes and Support by Tim R. Clark <tclark at shaw dot ca>
- * Changed to adopt to jabber interaction and adjusted for CallWeaver.org by
+ * Changed to adopt to jabber interaction and adjusted for OpenPBX.org by
  * Halo Kwadrat Sp. z o.o., Piotr Figurny and Michal Bielicki
  * 
  * This application is a part of:
  * 
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  * Copyright (C) 1999 - 2005, Digium, Inc.
  * Mark Spencer <markster@digium.com>
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -52,11 +52,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "callweaver/logger.h"
-#include "callweaver/icd/icd_types.h"
-#include "callweaver/icd/icd_fieldset.h"
-#include "callweaver/icd/icd_common.h"
-#include "callweaver/icd/voidhash.h"
+#include "openpbx/logger.h"
+#include "openpbx/icd/icd_types.h"
+#include "openpbx/icd/icd_fieldset.h"
+#include "openpbx/icd/icd_common.h"
+#include "openpbx/icd/voidhash.h"
 
 /*===== Private Types, Variables, and APIs =====*/
 
@@ -65,12 +65,12 @@
 typedef enum {
     ICD_FIELDSET_STATE_CREATED, ICD_FIELDSET_STATE_INITIALIZED,
     ICD_FIELDSET_STATE_CLEARED, ICD_FIELDSET_STATE_DESTROYED,
-    ICD_FIELDSET_STATE_L, CW_STANDARD
+    ICD_FIELDSET_STATE_L, OPBX_STANDARD
 } icd_fieldset_state;
 
 typedef enum {
     ICD_FIELDSET_REGNODE_EXACT, ICD_FIELDSET_REGNODE_PARENT,
-    ICD_FIELDSET_REGNODE_XLATE, ICD_FIELDSET_REGNODE_L, CW_STANDARD_FIXME
+    ICD_FIELDSET_REGNODE_XLATE, ICD_FIELDSET_REGNODE_L, OPBX_STANDARD_FIXME
 } icd_fieldset_regnode_type;
 
 struct icd_fieldset {
@@ -101,7 +101,7 @@ icd_fieldset *create_icd_fieldset(char *name)
     /* make a new fieldset from scratch */
     ICD_MALLOC(fieldset, sizeof(icd_fieldset));
     if (fieldset == NULL) {
-        cw_log(LOG_ERROR, "No memory available to create a new ICD fieldset\n");
+        opbx_log(LOG_ERROR, "No memory available to create a new ICD fieldset\n");
         return NULL;
     }
     fieldset->allocated = 1;
@@ -388,7 +388,7 @@ icd_fieldset_iterator *icd_fieldset__get_key_iterator(icd_fieldset * that)
 
     ICD_MALLOC(iter, sizeof(icd_fieldset_iterator));
     if (iter == NULL) {
-        cw_log(LOG_ERROR, "No memory available to create an iterator on ICD Fieldset\n");
+        opbx_log(LOG_ERROR, "No memory available to create an iterator on ICD Fieldset\n");
         return NULL;
     }
 

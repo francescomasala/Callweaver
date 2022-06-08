@@ -1,5 +1,5 @@
 /*
- * Chan_Misdn -- Channel Driver for CallWeaver
+ * Chan_Misdn -- Channel Driver for OpenPBX
  *
  * Interface to mISDN
  *

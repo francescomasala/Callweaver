@@ -19,7 +19,7 @@
 extern "C" {
 #endif
 
-#include <callweaver/generic_jb.h>
+#include <openpbx/generic_jb.h>
 
 /* configuration constants */
 	/* Number of historical timestamps to use in calculating jitter and drift */
@@ -61,7 +61,7 @@ typedef struct jb_conf {
 
 typedef struct jitterbuf {
 	jb_conf conf;
-	cw_jb_info info;
+	opbx_jb_info info;
 
 	/* history */
 	long history[JB_HISTORY_SZ];   		/* history */
@@ -113,7 +113,7 @@ int jb_getall(jitterbuf *jb, jb_frame *frameout);
 long			jb_next(jitterbuf *jb);
 
 /* get jitterbuf info: only "statistics" may be valid */
-int			jb_getinfo(jitterbuf *jb, cw_jb_info *stats);
+int			jb_getinfo(jitterbuf *jb, opbx_jb_info *stats);
 
 /* set jitterbuf conf */
 int			jb_setconf(jitterbuf *jb, jb_conf *conf);

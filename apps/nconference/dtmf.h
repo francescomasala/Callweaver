@@ -2,7 +2,7 @@
  * app_nconference
  *
  * NConference
- * A channel independent conference application for CallWeaver
+ * A channel independent conference application for Openpbx
  *
  * Copyright (C) 2002, 2003 Navynet SRL
  * http://www.navynet.it
@@ -14,4 +14,4 @@
  *
  */
 
-int parse_dtmf_option( struct cw_conf_member *member, int subclass );
+int parse_dtmf_option( struct opbx_conf_member *member, int subclass );

@@ -1,12 +1,12 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  *
  * Copyright (C) 1999 - 2005, Digium, Inc.
  *
  * Mark Spencer <markster@digium.com>
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -32,26 +32,25 @@
 #include <stdlib.h>
 #include <errno.h>
 
-#include "callweaver.h"
+#include "openpbx.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/apps/app_milliwatt.c $", "$Revision: 4723 $")
+OPENPBX_FILE_VERSION("$HeadURL$", "$Revision$")
 
-#include "callweaver/lock.h"
-#include "callweaver/file.h"
-#include "callweaver/logger.h"
-#include "callweaver/channel.h"
-#include "callweaver/pbx.h"
-#include "callweaver/module.h"
+#include "openpbx/lock.h"
+#include "openpbx/file.h"
+#include "openpbx/logger.h"
+#include "openpbx/channel.h"
+#include "openpbx/pbx.h"
+#include "openpbx/module.h"
 
 static char *tdesc = "Digital Milliwatt (mu-law) Test Application";
 
-static void *milliwatt_app;
-static char *milliwatt_name = "Milliwatt";
-static char *milliwatt_synopsis = "Generate a Constant 1000Hz tone at 0dbm (mu-law)";
-static char *milliwatt_syntax = "Milliwatt()";
-static char *milliwatt_descrip = 
-"Generate a Constant 1000Hz tone at 0dbm (mu-law)\n";
+static char *app = "Milliwatt";
 
+static char *synopsis = "Generate a Constant 1000Hz tone at 0dbm (mu-law)";
+
+static char *descrip = 
+"Milliwatt(): Generate a Constant 1000Hz tone at 0dbm (mu-law)\n";
 
 STANDARD_LOCAL_USER;
 
@@ -59,7 +58,7 @@ LOCAL_USER_DECL;
 
 static char digital_milliwatt[] = {0x1e,0x0b,0x0b,0x1e,0x9e,0x8b,0x8b,0x9e} ;
 
-static void *milliwatt_alloc(struct cw_channel *chan, void *params)
+static void *milliwatt_alloc(struct opbx_channel *chan, void *params)
 {
 	int *indexp;
 	indexp = malloc(sizeof(int));
@@ -68,83 +67,83 @@ static void *milliwatt_alloc(struct cw_channel *chan, void *params)
 	return(indexp);
 }
 
-static void milliwatt_release(struct cw_channel *chan, void *data)
+static void milliwatt_release(struct opbx_channel *chan, void *data)
 {
 	free(data);
 	return;
 }
 
-static int milliwatt_generate(struct cw_channel *chan, void *data, int samples)
+static int milliwatt_generate(struct opbx_channel *chan, void *data, int samples)
 {
-	struct cw_frame wf;
-	unsigned char waste[CW_FRIENDLY_OFFSET];
+	struct opbx_frame wf;
+	unsigned char waste[OPBX_FRIENDLY_OFFSET];
 	unsigned char buf[640];
 	int i, *indexp = (int *) data;
 
 	if (samples > sizeof(buf))
 	{
-		cw_log(LOG_WARNING,"Only doing %d samples (%d requested)\n",(int)sizeof(buf),samples);
+		opbx_log(LOG_WARNING,"Only doing %d samples (%d requested)\n",(int)sizeof(buf),samples);
 		samples = sizeof(buf);
 	}
 	waste[0] = 0; /* make compiler happy */
-	cw_fr_init_ex(&wf, CW_FRAME_VOICE, CW_FORMAT_ULAW, "app_milliwatt");
-	wf.offset = CW_FRIENDLY_OFFSET;
+	wf.frametype = OPBX_FRAME_VOICE;
+	wf.subclass = OPBX_FORMAT_ULAW;
+	wf.offset = OPBX_FRIENDLY_OFFSET;
+	wf.mallocd = 0;
 	wf.data = buf;
 	wf.datalen = samples;
 	wf.samples = samples;
+	wf.src = "app_milliwatt";
+	wf.delivery.tv_sec = 0;
+	wf.delivery.tv_usec = 0;
 	/* create a buffer containing the digital milliwatt pattern */
-	for (i = 0;  i < samples;  i++)
+	for(i = 0; i < samples; i++)
 	{
 		buf[i] = digital_milliwatt[(*indexp)++];
 		*indexp &= 7;
 	}
-	return cw_write(chan,&wf);
+	return opbx_write(chan,&wf);
 }
 
-static struct cw_generator milliwattgen = 
+static struct opbx_generator milliwattgen = 
 {
 	alloc: milliwatt_alloc,
 	release: milliwatt_release,
 	generate: milliwatt_generate,
 } ;
 
-static int milliwatt_exec(struct cw_channel *chan, int argc, char **argv)
+static int milliwatt_exec(struct opbx_channel *chan, void *data)
 {
+
 	struct localuser *u;
-
 	LOCAL_USER_ADD(u);
-
-	cw_set_write_format(chan, CW_FORMAT_ULAW);
-	cw_set_read_format(chan, CW_FORMAT_ULAW);
-	if (chan->_state != CW_STATE_UP)
+	opbx_set_write_format(chan, OPBX_FORMAT_ULAW);
+	opbx_set_read_format(chan, OPBX_FORMAT_ULAW);
+	if (chan->_state != OPBX_STATE_UP)
 	{
-		cw_answer(chan);
+		opbx_answer(chan);
 	}
-	if (cw_generator_activate(chan,&milliwattgen,"milliwatt") < 0)
+	if (opbx_generator_activate(chan,&milliwattgen,"milliwatt") < 0)
 	{
-		cw_log(LOG_WARNING,"Failed to activate generator on '%s'\n",chan->name);
+		opbx_log(LOG_WARNING,"Failed to activate generator on '%s'\n",chan->name);
 		LOCAL_USER_REMOVE(u);
 		return -1;
 	}
-	while(!cw_safe_sleep(chan, 10000));
-
-	cw_generator_deactivate(chan);
+	while(!opbx_safe_sleep(chan, 10000));
+	opbx_generator_deactivate(chan);
 	LOCAL_USER_REMOVE(u);
 	return -1;
 }
 
 int unload_module(void)
 {
-	int res = 0;
 	STANDARD_HANGUP_LOCALUSERS;
-	res |= cw_unregister_application(milliwatt_app);
-	return res;
+	return opbx_unregister_application(app);
 }
 
 int load_module(void)
 {
-	milliwatt_app = cw_register_application(milliwatt_name, milliwatt_exec, milliwatt_synopsis, milliwatt_syntax, milliwatt_descrip);
-	return 0;
+	return opbx_register_application(app, milliwatt_exec, synopsis, descrip);
 }
 
 char *description(void)

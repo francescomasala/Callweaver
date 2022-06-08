@@ -1,17 +1,17 @@
-The CallWeaver.org Manager TCP/IP API - AMI
+The OpenPBX.org Manager TCP/IP API - AMI
 =====================================
 
 The manager is a client/server model over TCP. With the manager interface,
 you'll be able to control the PBX, originate calls, check mailbox status,
-monitor channels and queues as well as execute CallWeaver.org commands.
+monitor channels and queues as well as execute OpenPBX.org commands.
 
-AMI is the standard management interface into your CallWeaver.org server.
+AMI is the standard management interface into your OpenPBX.org server.
 You configure AMI in manager.conf. By default, AMI is available on
 TCP port 5038 if you enable it in manager.conf.
 
 AMI receive commands, called "actions". These generate a "response"
-from CallWeaver.org. CallWeaver.org will also send "Events" containing various
-information messages about changes within CallWeaver.org. Some actions
+from OpenPBX.org. OpenPBX.org will also send "Events" containing various
+information messages about changes within OpenPBX.org. Some actions
 generate an initial response and data in the form list of events.
 This format is created to make sure that extensive reports do not
 block the manager interface fully.
@@ -21,15 +21,15 @@ given permissions for read and write, where write represents their ability
 to perform this class of "action", and read represents their ability to 
 receive this class of "event".
 
-The CallWeaver.org manager interface in version 1.0.x of CallWeaver.org is
+The OpenPBX.org manager interface in version 1.0.x of OpenPBX.org is
 not very well standardized. Work is under way to change this 
-to CallWeaver.org 0.4. If you develop AMI applications, treat the headers
+to OpenPBX.org 0.4. If you develop AMI applications, treat the headers
 in Actions, Events and Responses as local to that particular
 message. There is no cross-message standardization of headers.
 
 If you develop applications, please try to reuse existing manager
 headers and their interpretation. If you are unsure, discuss on
-the callweaver-dev mailing list.
+the openpbx-dev mailing list.
 
 
 Command Syntax
@@ -41,9 +41,9 @@ other headers.
 
 The first tag MUST be one of the following:
 
-    * Action: An action requested by the CLIENT to the CallWeaver.org SERVER. Only one "Action" may be outstanding at any time.
-    * Response: A response to an action from the CallWeaver.org SERVER to the CLIENT.
-    * Event: An event reported by the CallWeaver.org SERVER to the CLIENT 
+    * Action: An action requested by the CLIENT to the OpenPBX.org SERVER. Only one "Action" may be outstanding at any time.
+    * Response: A response to an action from the OpenPBX.org SERVER to the CLIENT.
+    * Event: An event reported by the OpenPBX.org SERVER to the CLIENT 
 
 
 Manager commands
@@ -70,7 +70,7 @@ Output from the CLI command 'show manager' command:
     * Queues: Queues
     * QueueStatus: Queue Status 
 
-This list depends on the version of CallWeaver.org you are using, as
+This list depends on the version of OpenPBX.org you are using, as
 well as which modules that are loaded.
 
 Command Summary
@@ -108,7 +108,7 @@ Command: Timeout
 Parameters: Channel, Timeout
 
 You can always get more information about a manager command
-with the "show manager command <command>" CLI command in CallWeaver.org.
+with the "show manager command <command>" CLI command in OpenPBX.org.
 
 Examples
 --------
@@ -150,7 +150,7 @@ Where 680 is an extension that sends you to a MeetMe room.
 
 There are a number of GUI tools that use the manager interface, please search
 the mailing list archives and the documentation page on the 
-http://www.callweaver.org web site for more information.
+http://www.openpbx.org web site for more information.
 
 
 Some standard AMI headers:
@@ -215,14 +215,14 @@ Some standard AMI headers:
  Events: <eventmask>		-- Eventmask filter ("on", "off", "system", "call", "log")
  Exten:				-- Extension (Redirect command)
  Extension:			-- Extension (Status)
- Family: <string>		-- cwdb key family
+ Family: <string>		-- opbxdb key family
  File: <filename>		-- Filename (monitor)
  Format: <format>		-- Format of sound file (monitor)
  From: <time>			--  Parking time (ParkedCall event)
  Hint:				-- Extension hint
  Incominglimit:			-- SIP Peer incoming limit
  Key:
- Key:				-- cwdb Database key
+ Key:				-- opbxdb Database key
  LastApplication:		-- Last application executed (cdr_manager)
  LastCall: <num>		-- Last call in queue
  LastData:			-- Data for last application (cdr_manager)
@@ -287,7 +287,7 @@ Some standard AMI headers:
  Uniqueid2:			-- Channel 2 Unique ID (Link event)
  User:				-- Username (SIP registry)
  UserField:			-- CDR userfield (cdr_manager)
- Val:				-- Value to set/read in cwdb
+ Val:				-- Value to set/read in opbxdb
  Variable:			-- Variable AND value to set (multiple separated with | in Originate)
  Variable: <name>		-- For channel variables
  Value: <value>			-- Value to set

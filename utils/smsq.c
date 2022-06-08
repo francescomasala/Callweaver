@@ -1,13 +1,13 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  *
  * Copyright (C) 2004 - 2005
  *
- * SMS queuing application for use with CallWeaver app_sms
+ * SMS queuing application for use with OpenPBX app_sms
  * by Adrian Kennard
  *
- * See http://www.callweaver.org/ for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org/ for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -434,7 +434,7 @@ main (int argc, const char *argv[])
       *queue = "",
       *udfile = 0,
       *process = 0,
-      *spooldir = "/var/spool/callweaver.org",
+      *spooldir = "/var/spool/openpbx.org",
       *motxchannel = "Local/1709400X",
       *motxcallerid = 0,
       *mttxchannel = 0,
@@ -484,7 +484,7 @@ main (int argc, const char *argv[])
       {"v", 0, POPT_ARG_INT, &vp, 0, "Validity Period", "seconds"},
       {"scts", 0, POPT_ARG_STRING, &scts, 0, "Timestamp", "YYYY-MM-SSTHH:MM:SS"},
       {"default-sub-address", 0, POPT_ARG_STRING | POPT_ARGFLAG_SHOW_DEFAULT, &defaultsubaddress, 0, "Default sub address", "X"},
-      {"spool-dir", 0, POPT_ARG_STRING | POPT_ARGFLAG_SHOW_DEFAULT, &spooldir, 0, "CallWeaver spool dir", "dirname"},
+      {"spool-dir", 0, POPT_ARG_STRING | POPT_ARGFLAG_SHOW_DEFAULT, &spooldir, 0, "Openpbx spool dir", "dirname"},
       POPT_AUTOHELP {NULL, 0, 0, NULL, 0}
    };
 
@@ -666,7 +666,7 @@ main (int argc, const char *argv[])
       return 1;
    }
 
-   /* Spooldir is setgid callweaver; allow created files to be group-writable */
+   /* Spooldir is setgid openpbx; allow created files to be group-writable */
    umask(0002);
 
    if (oa || da)

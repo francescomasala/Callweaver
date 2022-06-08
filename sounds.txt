@@ -4,14 +4,15 @@
 
 ;IAX is usually pronounced "eeks"
 ;IAX2 is also pronounced as "eeks" - no mention of the two.
+;OpenPBX.org should be pronounced as "open PBX dot org"
 ;when referring to the '* key' on the phonepad it is the 'star key'
-;this may be obvious, and this one - 'GPL': 'Gee Pee El'
+;this may be obvious, but 'PBX' should be pronounced by individual letter: 'Pee Bee Ecks'
+;and this one - 'GPL': 'Gee Pee El'
 ;GNU is for Gnu's not Unix, and is typically pronounced 'Gah-nu' probably with more emphasis on the second syllable
 
 
-;Note: All .gsm files are in the following format: GSM 06.10, packed as per libgsm
-
-;CallWeaver 11/15/2005 
+;Note: All .gsm files are in the following format: 16.000 kHz, Mono 1 kb/sec
+;OpenPBX.org 11/15/2005 
 
 ;sounds directory - File Name Sound File Script
 
@@ -57,9 +58,9 @@
 
 %conf-enteringno.gsm%You are entering conference number
 
-%demo-abouttotry.gsm%an IAX connection will be joined to a demonstration server located on the Internet.  In order for this to work you must already be connected to the Internet.  Please wait a moment while the connection is attempted.
+%demo-abouttotry.gsm%an Inter-Asterisk Exchange connection will be joined to a demonstration server located on the Internet.  In order for this to work you must already be connected to the Internet.  Please wait a moment while the connection is attempted.
 
-%demo-congrats.gsm%Congratulations.  You have successfully installed and executed CallWeaver.  You have also installed a set of sample sounds and configuration files to help you to get started.  Like a normal PBX you will navigate this demonstration by dialing digits.
+%demo-congrats.gsm%Congratulations.  You have successfully installed and executed OpenPBX.org.  You have also installed a set of sample sounds and configuration files to help you to get started.  Like a normal PBX you will navigate this demonstration by dialing digits.
 
 %demo-echodone.gsm%The echo test has been completed.
 
@@ -69,20 +70,20 @@
 
 %demo-nomatch.gsm%Sorry, there are no matches for those keywords
 
-%demo-instruct.gsm%If you would like to learn more technical information about CallWeaver dial 2 now.  If you would like to test the voice over IP capabilities of CallWeaver you can dial 500 to attempt an IAX connection to a demonstration server on the Internet.  In order for this test to work you will need to be connected to the Internet and have at least a 28.8 kilobit modem.  To execute an echo test dial 600.  This test is most useful when you have connected to this CallWeaver server from a remote location.
+%demo-instruct.gsm%If you would like to learn more technical information about OpenPBX.org dial 2 now.  If you would like to test the voice over IP capabilities of OpenPBX.org you can dial 500 to attempt an Inter-Asterisk Exchange or IAX connection to a demonstration server on the Internet.  In order for this test to work you will need to be connected to the Internet and have at least a 28.8 kilobit modem.  To execute an echo test dial 600.  This test is most useful when you have connected to this OpenPBX server from a remote location.  
 The sample configuration also has a single user with extension 1234 and password 4242.  That user is configured to ring the console when their extension is dialed.  If you dial 1234 you can try to ring the console.  If the console is busy or unavailable you will be given the option to leave voicemail.  To check voicemail for the user dial extension 8500 to enter the voicemail system.  Finally,  you can press the pound key to disconnect.
 
 %demo-moreinfo.gsm%This message has not yet been written.
 
-%demo-nogo.gsm%It was not possible to create a connection to a demonstration CallWeaver server on the Internet.  You may find some helpful debugging information on the CallWeaver console.
+%demo-nogo.gsm%It was not possible to create a connection to a demonstration OpenPBX.org server on the Internet.  You may find some helpful debugging information on the OpenPBX.org console.
 
-%demo-thanks.gsm%Goodbye.  Thank you for trying out the CallWeaver. Open Source software PBX.
+%demo-thanks.gsm%Goodbye.  Thank you for trying out the OpenPBX.org Open Source software PBX.
  
 %dir-instr.gsm%If this is the person you are looking for press 1 now, otherwise please press star now.
 
-%dir-intro.gsm%Welcome to the CallWeaver directory.  Please enter the first three letters of your parties last name using your touch tone keypad.  Use the 7 key for Q and the 9 key for Z.
+%dir-intro.gsm%Welcome to the OpenPBX directory.  Please enter the first three letters of your parties last name using your touch tone keypad.  Use the 7 key for Q and the 9 key for Z.
 
-%dir-intro-fn.gsm%Welcome to the CallWeaver directory.  Please enter the first three letters of your parties first name using your touch tone keypad.  Use the 7 key for Q and the 9 key for Z.
+%dir-intro-fn.gsm%Welcome to the OpenPBX directory.  Please enter the first three letters of your parties first name using your touch tone keypad.  Use the 7 key for Q and the 9 key for Z.
 
 %dir-nomatch.gsm%No directory entries match your search.
 
@@ -773,14 +774,14 @@ The sample configuration also has a single user with extension 1234 and password
 
 %opus-language-italian.gsm%italian
 
-%cw-Demo-Server.gsm%You have reached an callweaver demonstration server located on the Internet.  Demonstration servers are provided to help you test the callweaver software pbx.  To connect to a conference which may contain other callweaver users, press 1, to hear more about this server, press 2, to quit, simply hang up, or press 3.  The callweaver project participants wish to thank you for taking time to install this software.  You can find more resources are at www.callweaver.org.
+%opbx-Demo-Server.gsm%You have reached an openpbx demonstration server located on the Internet.  Demonstration servers are provided to help you test the openpbx.org software pbx.  To connect to a conference which may contain other openpbx.org users, press 1, to hear more about this server, press 2, to quit, simply hang up, or press 3.  The openpbx.org project participants wish to thank you for taking time to install this software.  You can find more resources are at www.opepbx.org.
 
-%cw-telephony-innovation.gsm%callweaver.org, the telephony innovation toolkit
+%opbx-telephony-innovation.gsm%Openpbx.org, the telephony innovation toolkit
 
-%cw-open-source-telephony.gsm%callweaver.org open source telephony project
+%opbx-open-source-telephony.gsm%Openpbx.org open source telephony project
 
-%cw-GPL.gsm%callweaver.org, released under the GPL
+%opbx-GPL.gsm%openpbx.org, released under the GPL
 
-%cw-copyright.gsm%callweaver.org, copyright 2005
+%opbx-copyright.gsm%Openpbx.org, copyright 2005
 
-%cw-future.gsm%callweaver.org, the future of telephony is calling
+%opbx-future.gsm%openpbx.org, the future of telephony is calling

@@ -1,10 +1,8 @@
 AUTOMAKE_OPTS		= gnu foreign
 
-DEFS += -include $(top_builddir)/include/confdefs.h
+opbxlib_LTLIBRARIES	= libopbxsqlite3.la
 
-cwlib_LTLIBRARIES	= libcwsqlite3.la
-
-libcwsqlite3_la_SOURCES = \
+libopbxsqlite3_la_SOURCES = \
   src/alter.c \
   src/analyze.c \
   src/attach.c \
@@ -56,11 +54,11 @@ libcwsqlite3_la_SOURCES = \
   src/vtab.c \
   src/where.c
 
-nodist_libcwsqlite3_la_SOURCES =  sqlite3.h opcodes.c opcodes.h parse.c parse.h 
+nodist_libopbxsqlite3_la_SOURCES =  sqlite3.h opcodes.c opcodes.h parse.c parse.h 
 
-libcwsqlite3_la_CFLAGS  = $(AM_CFLAGS) @SQLITE3_THREADSAFE_CFLAGS@ -I$(srcdir)/src
-libcwsqlite3_la_LIBADD  = -lpthread
-libcwsqlite3_la_LDFLAGS = -no-undefined -version-info "8:6:8"
+libopbxsqlite3_la_CFLAGS  = $(AM_CFLAGS) @SQLITE3_THREADSAFE_CFLAGS@ -I$(srcdir)/src
+libopbxsqlite3_la_LIBADD  = -lpthread
+libopbxsqlite3_la_LDFLAGS = -no-undefined -version-info "8:6:8"
 
 EXTRA_DIST = src/parse.y tool/lempar.c
 BUILT_SOURCES = opcodes.c opcodes.h parse.c parse.h keywordhash.h sqlite3.h
@@ -73,15 +71,12 @@ opcodes.c: opcodes.h mkopcodec.awk
 opcodes.h: parse.h src/vdbe.c mkopcodeh.awk
 	cat parse.h $(srcdir)/src/vdbe.c | ${AWK} -f mkopcodeh.awk > opcodes.h
 
-parse.c: sqlite3.h parse.y lempar.c lemon
+lempar.c parse.c parse.h: sqlite3.h parse.y tool/lempar.c lemon
+	cp $(srcdir)/tool/lempar.c .
+	cp $(srcdir)/src/parse.y .
 	./lemon parse.y
 	mv parse.h parse.h.temp
-
-parse.h: parse.c
 	awk -f addopcodes.awk parse.h.temp >parse.h
-
-lempar.c: tool/lempar.c
-	cp $(srcdir)/tool/lempar.c .
 
 parse.y: src/parse.y
 	cp $(srcdir)/src/parse.y .

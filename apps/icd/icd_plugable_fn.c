@@ -6,17 +6,17 @@
  * Written by Anthony Minessale II <anthmct at yahoo dot com>
  * Written by Bruce Atherton <bruce at callenish dot com>
  * Additions, Changes and Support by Tim R. Clark <tclark at shaw dot ca>
- * Changed to adopt to jabber interaction and adjusted for CallWeaver.org by
+ * Changed to adopt to jabber interaction and adjusted for OpenPBX.org by
  * Halo Kwadrat Sp. z o.o., Piotr Figurny and Michal Bielicki
  * 
  * This application is a part of:
  * 
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  * Copyright (C) 1999 - 2005, Digium, Inc.
  * Mark Spencer <markster@digium.com>
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -35,14 +35,14 @@
 #endif  
 
 #include <assert.h>
-#include "callweaver/icd/icd_types.h"
-#include "callweaver/icd/icd_plugable_fn.h"
-#include "callweaver/icd/icd_plugable_fn_list.h"
-#include "callweaver/icd/icd_fieldset.h"
-#include "callweaver/icd/icd_common.h"
-#include "callweaver/icd/icd_caller.h"
-#include "callweaver/icd/icd_queue.h"
-#include "callweaver/icd/icd_distributor.h"
+#include "openpbx/icd/icd_types.h"
+#include "openpbx/icd/icd_plugable_fn.h"
+#include "openpbx/icd/icd_plugable_fn_list.h"
+#include "openpbx/icd/icd_fieldset.h"
+#include "openpbx/icd/icd_common.h"
+#include "openpbx/icd/icd_caller.h"
+#include "openpbx/icd/icd_queue.h"
+#include "openpbx/icd/icd_distributor.h"
 
 static int PLUGABLE_FN_ID_POOL = 1;
 
@@ -173,26 +173,27 @@ void icd_plugable__create_standard_fns(icd_plugable_fn_list * that, icd_config *
     queuelist = icd_config__get_value(data, "queues");
     if (queuelist == NULL)
         queuelist = icd_config__get_value(data, "queue");
-    cw_log(LOG_NOTICE, "QueueLIST[%s]\n", queuelist);
+    opbx_log(LOG_NOTICE, "QueueLIST[%s]\n", queuelist);
     while (queuelist != NULL) {
-        /* This has been normalized to use only a '|' or ',' to separate queue names */
-        currqueue = strsep(&queuelist, "|,");
+        /* This has been normalized to use only a "|" to separate queue names */
+        currqueue = strsep(&queuelist, "|");
+        //currqueue = strsep(&queuelist, ",");
         if (currqueue != NULL && strlen(currqueue) > 0) {
             queue = icd_fieldset__get_value(queues, currqueue);
             if (queue != NULL) {
                 dist_name = vh_read(icd_distributor__get_params(icd_queue__get_distributor(queue)), "dist");
-                cw_log(LOG_NOTICE, "CurrQueue-distname[%s]\n", dist_name);
+                opbx_log(LOG_NOTICE, "CurrQueue-distname[%s]\n", dist_name);
                 plugable_fns = icd_plugable_fn_list__fetch_fns(that, dist_name);
                 if (plugable_fns == NULL) {
                     plugable_fns = create_icd_plugable_fns(data, dist_name);
                     if (plugable_fns != NULL) {
                         icd_plugable_fn_list__add_fns(that, plugable_fns);
-                        cw_log(LOG_NOTICE, "Add Plugable funcs for Callers dist[%s]\n", dist_name);
+                        opbx_log(LOG_NOTICE, "Add Plugable funcs for Callers dist[%s]\n", dist_name);
                     } else {
-                        cw_log(LOG_NOTICE, "Create_icd_plugable_fns returned null [%s]\n", dist_name);
+                        opbx_log(LOG_NOTICE, "Create_icd_plugable_fns returned null [%s]\n", dist_name);
                     }
                 } else {
-                    cw_log(LOG_NOTICE, "icd_plugable_fn_list__fetch_fns think it found [%s]\n", dist_name);
+                    opbx_log(LOG_NOTICE, "icd_plugable_fn_list__fetch_fns think it found [%s]\n", dist_name);
                 }
             }
         }
@@ -202,7 +203,7 @@ void icd_plugable__create_standard_fns(icd_plugable_fn_list * that, icd_config *
         plugable_fns = create_icd_plugable_fns(data, "default");
         if (plugable_fns != NULL) {
             icd_plugable_fn_list__add_fns(that, plugable_fns);
-            cw_log(LOG_NOTICE, "No Dists found Adding Plugable funcs for Callers dist[Default]\n");
+            opbx_log(LOG_NOTICE, "No Dists found Adding Plugable funcs for Callers dist[Default]\n");
         }
     }
 
@@ -215,7 +216,7 @@ icd_plugable_fn *create_icd_plugable_fns(icd_config * data, char *name)
     /* make a new plugable_fns from scratch */
     ICD_MALLOC(plugable_fns, sizeof(icd_plugable_fn));
     if (plugable_fns == NULL) {
-        cw_log(LOG_ERROR, "No memory available to create a new ICD plugable fns\n");
+        opbx_log(LOG_ERROR, "No memory available to create a new ICD plugable fns\n");
         return NULL;
     }
     result = init_icd_plugable_fns(plugable_fns, name, data);

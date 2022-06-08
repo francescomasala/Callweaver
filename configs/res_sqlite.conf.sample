@@ -2,18 +2,18 @@
 reload => no
 
 [config]
-table => cw_config
+table => opbx_config
 dbfile => config
 
 
 [cdr]
-table => cw_cdr
-dbfile => cw_cdr
+table => opbx_cdr
+dbfile => opbx_cdr
 
 
 [switch]
 table => dialplan
-dbfile => callweaver
+dbfile => openpbx
 
 [cli]
-dbfile => callweaver
+dbfile => openpbx

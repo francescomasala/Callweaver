@@ -1,12 +1,12 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  *
  * Copyright (C) 1999 - 2005, Digium, Inc.
  *
  * Mark Spencer <markster@digium.com>
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -28,14 +28,14 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "callweaver.h"
+#include "openpbx.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/corelib/chanvars.c $", "$Revision: 4723 $")
+OPENPBX_FILE_VERSION("$HeadURL$", "$Revision$")
 
-#include "callweaver/chanvars.h"
-#include "callweaver/logger.h"
-#include "callweaver/strings.h"
-#include "callweaver/callweaver_hash.h"
+#include "openpbx/chanvars.h"
+#include "openpbx/logger.h"
+#include "openpbx/strings.h"
+#include "openpbx/opbx_hash.h"
 
 /*!
  * \note I M P O R T A N T :
@@ -47,47 +47,47 @@ CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branche
  * are no longer case insensitive. If the old behaviour is desired, this file
  * should be compiled with the following macro defined:
  *
- *		o  CW_USE_CASE_INSENSITIVE_VAR_NAMES
+ *		o  OPBX_USE_CASE_INSENSITIVE_VAR_NAMES
  *
  */
 
 
-#ifdef CW_USE_CASE_INSENSITIVE_VAR_NAMES
-#define cw_hash_var_name(x)	cw_hash_string_toupper(x)
+#ifdef OPBX_USE_CASE_INSENSITIVE_VAR_NAMES
+#define opbx_hash_var_name(x)	opbx_hash_string_toupper(x)
 #else
-#define cw_hash_var_name(x)	cw_hash_string(x)
+#define opbx_hash_var_name(x)	opbx_hash_string(x)
 #endif
 
 
-struct cw_var_t *cw_var_assign(const char *name, const char *value)
+struct opbx_var_t *opbx_var_assign(const char *name, const char *value)
 {
 	int i;
-	struct cw_var_t *var;
-	unsigned int hash = cw_hash_var_name(name);
+	struct opbx_var_t *var;
+	unsigned int hash = opbx_hash_var_name(name);
 	
-	var = calloc(sizeof(struct cw_var_t) + strlen(name) + 1 + strlen(value) + 1, sizeof(char));
+	var = calloc(sizeof(struct opbx_var_t) + strlen(name) + 1 + strlen(value) + 1, sizeof(char));
 
 	if (var == NULL) {
-		cw_log(LOG_WARNING, "Out of memory\n");
+		opbx_log(LOG_WARNING, "Out of memory\n");
 		return NULL;
 	}
 
 	var->hash = hash;
 	i = strlen(name) + 1;
-	cw_copy_string(var->name, name, i);
+	opbx_copy_string(var->name, name, i);
 	var->value = var->name + i;
-	cw_copy_string(var->value, value, strlen(value) + 1);
+	opbx_copy_string(var->value, value, strlen(value) + 1);
 	
 	return var;
 }	
 	
-void cw_var_delete(struct cw_var_t *var)
+void opbx_var_delete(struct opbx_var_t *var)
 {
 	if (var)
 		free(var);
 }
 
-char *cw_var_name(struct cw_var_t *var)
+char *opbx_var_name(struct opbx_var_t *var)
 {
 	char *name;
 
@@ -106,12 +106,12 @@ char *cw_var_name(struct cw_var_t *var)
 	return name;
 }
 
-char *cw_var_full_name(struct cw_var_t *var)
+char *opbx_var_full_name(struct opbx_var_t *var)
 {
 	return (var ? var->name : NULL);
 }
 
-char *cw_var_value(struct cw_var_t *var)
+char *opbx_var_value(struct opbx_var_t *var)
 {
 	return (var ? var->value : NULL);
 }

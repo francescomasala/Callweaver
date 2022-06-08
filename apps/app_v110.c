@@ -1,5 +1,5 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- A telephony toolkit for Linux.
  *
  * V.110 application -- accept incoming v.110 call and spawn a login pty
  * 
@@ -11,17 +11,14 @@
  * the GNU General Public License
  */
 
-#ifdef HAVE_CONFIG_H
 #include "confdefs.h"
-#endif
-
-#include "callweaver/lock.h"
-#include "callweaver/file.h"
-#include "callweaver/logger.h"
-#include "callweaver/channel.h"
-#include "callweaver/pbx.h"
-#include "callweaver/module.h"
-#include "callweaver/transcap.h"
+#include "openpbx/lock.h"
+#include "openpbx/file.h"
+#include "openpbx/logger.h"
+#include "openpbx/channel.h"
+#include "openpbx/pbx.h"
+#include "openpbx/module.h"
+#include "openpbx/transcap.h"
 
 #include <stdlib.h>
 #include <unistd.h>
@@ -35,12 +32,12 @@
 
 static char *tdesc = "v.110 dialin Application";
 
-static void *v110_app;
-static const char *v110_name = "V110";
-static const char *v110_synopsis = "Accept v.110 dialin connection.";
-static const char *v110_syntax = "V110()";
-static const char *v110_descrip = 
-	"Check the incoming call type. For v.110 data calls on an mISDN\n"
+static char *app = "V110";
+
+static char *synopsis = "Accept v.110 dialin connection.";
+
+static char *descrip = 
+	"  V110(): Check the incoming call type. For v.110 data calls on an mISDN\n"
 	"channel, answer the call, assign a pseudotty and start a login process.\n"
 	"For non-v.110 calls, the V110() application does nothing, and immediately\n"
 	"passes on to the next item in the dialplan.\n";
@@ -108,53 +105,53 @@ struct v110_state {
 	int ptyfd;
 	unsigned char cts, rts, sbit;
 	int synccount;
-	struct cw_frame f;
-	unsigned char friendly[CW_FRIENDLY_OFFSET];
+	struct opbx_frame f;
+	unsigned char friendly[OPBX_FRIENDLY_OFFSET];
 	unsigned char fdata[4096];
 	
-	void (*input_frame)(struct v110_state *, struct cw_frame *);
+	void (*input_frame)(struct v110_state *, struct opbx_frame *);
 	void (*fill_outframe)(struct v110_state *, int);	
 };
 
-void v110_input_frame_x4(struct v110_state *vs, struct cw_frame *);
-void v110_input_frame_x2(struct v110_state *vs, struct cw_frame *);
-void v110_input_frame_x1(struct v110_state *vs, struct cw_frame *);
+void v110_input_frame_x4(struct v110_state *vs, struct opbx_frame *);
+void v110_input_frame_x2(struct v110_state *vs, struct opbx_frame *);
+void v110_input_frame_x1(struct v110_state *vs, struct opbx_frame *);
 void v110_fill_outframe_x4(struct v110_state *vs, int);
 void v110_fill_outframe_x2(struct v110_state *vs, int);
 void v110_fill_outframe_x1(struct v110_state *vs, int);
 
 int loginpty(char *);
 
-static void *v110_gen_alloc (struct cw_channel *chan, void *params)
+static void *v110_gen_alloc (struct opbx_channel *chan, void *params)
 {
 	return params;
 }
 
-static void v110_gen_release (struct cw_channel *chan, void *data)
+static void v110_gen_release (struct opbx_channel *chan, void *data)
 {
 	return;
 }
 
-static int v110_generate(struct cw_channel *chan, void *data, int want)
+static int v110_generate(struct opbx_channel *chan, void *data, int want)
 {
 	struct v110_state *vs = data;
 
 	vs->fill_outframe(vs, want);
-	return cw_write(chan, &vs->f);
+	return opbx_write(chan, &vs->f);
 }
 
-static struct cw_generator v110_gen = {
+static struct opbx_generator v110_gen = {
 	.alloc = v110_gen_alloc,
 	.release = v110_gen_release,
 	.generate = v110_generate,
 };
 
 
-static int login_v110(struct cw_channel *chan, int argc, char **argv)
+static int login_v110(struct opbx_channel *chan, void *data)
 {
 	int res=-1;
 	struct localuser *u;
-	struct cw_frame *f;
+	struct opbx_frame *f;
 	struct v110_state *vs;
 	int urate=-1;
 	int primelen;
@@ -165,13 +162,13 @@ static int login_v110(struct cw_channel *chan, int argc, char **argv)
 	/* FIXME: We can probably do this on all ISDN channels, if we
 	   just fix the MISDN_URATE thing somehow. */
 	if (strcasecmp(chan->tech->type, "mISDN")) {
-		cw_log(LOG_DEBUG, "V.110: Not mISDN channel\n");
+		opbx_log(LOG_DEBUG, "V.110: Not mISDN channel\n");
 		LOCAL_USER_REMOVE(u);
 		return 0;
 	}
 
-	if (chan->transfercapability != CW_TRANS_CAP_DIGITAL) {
-		cw_log(LOG_NOTICE, "V.110: Not an async V.110 call cap[%d]\n",
+	if (chan->transfercapability != OPBX_TRANS_CAP_DIGITAL) {
+		opbx_log(LOG_NOTICE, "V.110: Not an async V.110 call cap[%d]\n",
 			chan->transfercapability );
 		LOCAL_USER_REMOVE(u);
 		return 0;
@@ -187,7 +184,7 @@ static int login_v110(struct cw_channel *chan, int argc, char **argv)
 	
 	vs = malloc(sizeof(*vs));
 	if (!vs) {
-		cw_log(LOG_NOTICE, "Allocation of v.110 data structure failed\n");
+		opbx_log(LOG_NOTICE, "Allocation of v.110 data structure failed\n");
 		LOCAL_USER_REMOVE(u);
 		return -ENOMEM;
 	}
@@ -221,7 +218,7 @@ static int login_v110(struct cw_channel *chan, int argc, char **argv)
 		break;
 
 	default:
-		cw_log(LOG_NOTICE, "V.110 call at rate %d not supported\n",
+		opbx_log(LOG_NOTICE, "V.110 call at rate %d not supported\n",
 			urate);
 		free(vs);
 		LOCAL_USER_REMOVE(u);
@@ -246,33 +243,35 @@ static int login_v110(struct cw_channel *chan, int argc, char **argv)
 	}
 	
 	/* Set transparent mode before we answer */
-	cw_log(LOG_NOTICE, "Accepting V.110 call at rate %d\n", urate);
+	opbx_log(LOG_NOTICE, "Accepting V.110 call at rate %d\n", urate);
 	
 	pbx_builtin_setvar_helper(chan,"MISDN_DIGITAL_TRANS","1");
 
-	cw_answer(chan);
-	cw_set_write_format(chan, cw_best_codec(chan->nativeformats));
-	cw_set_read_format(chan, cw_best_codec(chan->nativeformats));
+	opbx_answer(chan);
+	opbx_set_write_format(chan, opbx_best_codec(chan->nativeformats));
+	opbx_set_read_format(chan, opbx_best_codec(chan->nativeformats));
 
-    cw_fr_init_ex(&vs->f, CW_FRAME_VOICE, chan->readformat, NULL);
+	memset(&vs->f, 0, sizeof(vs->f));
 	vs->f.data = vs->fdata;
-	vs->f.offset = CW_FRIENDLY_OFFSET;
+	vs->f.offset = OPBX_FRIENDLY_OFFSET;
+	vs->f.subclass = chan->readformat;
+	vs->f.frametype = OPBX_FRAME_VOICE;
 
 	v110_generate(chan, vs, primelen);
 
-	if (cw_generator_activate(chan, &v110_gen, vs) < 0) {
-		cw_log (LOG_ERROR, "Failed to activate generator on '%s'\n", chan->name);
+	if (opbx_generator_activate(chan, &v110_gen, vs) < 0) {
+		opbx_log (LOG_ERROR, "Failed to activate generator on '%s'\n", chan->name);
 		LOCAL_USER_REMOVE(u);
 		return -1;
 	}
 
-	while(cw_waitfor(chan, -1) > -1) {
-		f = cw_read(chan);
+	while(opbx_waitfor(chan, -1) > -1) {
+		f = opbx_read(chan);
 		if (!f)
 			break;
 		f->delivery.tv_sec = 0;
 		f->delivery.tv_usec = 0;
-		if (f->frametype == CW_FRAME_VOICE) {
+		if (f->frametype == OPBX_FRAME_VOICE) {
 			int r, want;
 
 			vs->input_frame(vs, f);
@@ -289,9 +288,9 @@ static int login_v110(struct cw_channel *chan, int argc, char **argv)
 				if (r < 0 && errno == EAGAIN)
 					r = 0;
 				if (r < 0) {
-					cw_log(LOG_NOTICE, "Error writing to pty: %s\n", strerror(errno));
+					opbx_log(LOG_NOTICE, "Error writing to pty: %s\n", strerror(errno));
 					vs->sbit = 0x80;
-					cw_softhangup(chan, CW_SOFTHANGUP_SHUTDOWN);
+					opbx_softhangup(chan, OPBX_SOFTHANGUP_SHUTDOWN);
 					goto out;
 				}
 				vs->ibufstart += r;
@@ -322,9 +321,9 @@ static int login_v110(struct cw_channel *chan, int argc, char **argv)
 					r = 0;
 				if (r < 0) {
 					/* It's expected that we get -EIO when the user logs out */
-					cw_log(LOG_DEBUG, "Error reading from pty: %s\n", strerror(errno));
+					opbx_log(LOG_DEBUG, "Error reading from pty: %s\n", strerror(errno));
 					vs->sbit = 0x80;
-					cw_softhangup(chan, CW_SOFTHANGUP_SHUTDOWN);
+					opbx_softhangup(chan, OPBX_SOFTHANGUP_SHUTDOWN);
 					goto out;
 				}
 				vs->obufend += r;
@@ -333,28 +332,34 @@ static int login_v110(struct cw_channel *chan, int argc, char **argv)
 				
 				if (0 && r) {
 					vs->obuf[vs->obufend] = 0;
-					cw_log(LOG_NOTICE, "pty: \"%s\"\n", vs->obuf+vs->obufend-r);
+					opbx_log(LOG_NOTICE, "pty: \"%s\"\n", vs->obuf+vs->obufend-r);
 				}
 			}
 
 		}
-		cw_fr_free(f);
+		opbx_frfree(f);
 	}
  out:
 	/* In the error case we can get here with a frame to free */
 	if (f)
-		cw_fr_free(f);
+		opbx_frfree(f);
 	close(vs->ptyfd);
 	LOCAL_USER_REMOVE(u);
 	return res;
 }
 
-static void v110_process_frame(struct v110_state *vs) 
+int unload_module(void)
+{
+	STANDARD_HANGUP_LOCALUSERS;
+	return opbx_unregister_application(app);
+}
+
+void v110_process_frame(struct v110_state *vs) 
 {
 	int octet;
 
 
-	if (0) cw_log(LOG_NOTICE, "frame %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n",
+	if (0) opbx_log(LOG_NOTICE, "frame %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n",
 		vs->vframe_in[0], vs->vframe_in[1], vs->vframe_in[2],
 		vs->vframe_in[3], vs->vframe_in[4], vs->vframe_in[5],
 		vs->vframe_in[6], vs->vframe_in[7], vs->vframe_in[8], 
@@ -373,7 +378,7 @@ static void v110_process_frame(struct v110_state *vs)
 	/* Extract flow control signal from last octet */
 	if (vs->synccount) {
 		if (!--vs->synccount) {
-			cw_log(LOG_NOTICE, "V.110 synchronisation achieved\n");
+			opbx_log(LOG_NOTICE, "V.110 synchronisation achieved\n");
 			vs->sbit = 0;
 			vs->rts = 0;
 		}
@@ -441,13 +446,13 @@ static void v110_process_frame(struct v110_state *vs)
 				   have asserted flow control long ago */
 				if (vs->bufwarning) {
 					vs->bufwarning--;
-					cw_log(LOG_NOTICE, "incoming buffer full\n");
+					opbx_log(LOG_NOTICE, "incoming buffer full\n");
 				}
 				continue;
 			} else
 				vs->ibufend = newend;
 		} else {
-			cw_log(LOG_NOTICE, "No stop bit\n");
+			opbx_log(LOG_NOTICE, "No stop bit\n");
 		}
 		
 		/* Now, scan for next start bit */
@@ -465,7 +470,7 @@ static void v110_process_frame(struct v110_state *vs)
 }
 
 /* We don't handle multiple multiplexed channels. Nobody really does */
-void v110_input_frame_x4(struct v110_state *vs, struct cw_frame *f)
+void v110_input_frame_x4(struct v110_state *vs, struct opbx_frame *f)
 {
 	int datalen = f->datalen;
 	unsigned char *frame_data = f->data;
@@ -501,7 +506,7 @@ void v110_input_frame_x4(struct v110_state *vs, struct cw_frame *f)
 	}
 }
 
-void v110_input_frame_x2(struct v110_state *vs, struct cw_frame *f)
+void v110_input_frame_x2(struct v110_state *vs, struct opbx_frame *f)
 {
 	int datalen = f->datalen;
 	unsigned char *frame_data = f->data;
@@ -537,7 +542,7 @@ void v110_input_frame_x2(struct v110_state *vs, struct cw_frame *f)
 	}
 }
 
-void v110_input_frame_x1(struct v110_state *vs, struct cw_frame *f)
+void v110_input_frame_x1(struct v110_state *vs, struct opbx_frame *f)
 {
 	int datalen = f->datalen;
 	unsigned char *frame_data = f->data;
@@ -576,7 +581,7 @@ void v110_input_frame_x1(struct v110_state *vs, struct cw_frame *f)
 static unsigned char helper1[] = { 0x81, 0x81, 0x81, 0xc1, 0xe1, 0xf1, 0xf9, 0xfd, 0xff };
 static unsigned char helper2[] = { 0x81, 0x83, 0x87, 0x8f, 0x9f, 0xbf };
 
-static unsigned char v110_getline(struct v110_state *vs)
+unsigned char v110_getline(struct v110_state *vs)
 {
 	unsigned char octet;
 	int line = vs->nextoline++;
@@ -701,7 +706,7 @@ void v110_fill_outframe_x1(struct v110_state *vs, int datalen)
 }
 
 /* This really ought to be a single syscall. It's slow */
-static void closeall(int base)
+void closeall(int base)
 {
 	int i = sysconf(_SC_OPEN_MAX);
 
@@ -721,18 +726,18 @@ int loginpty(char *source)
 	char **logincmd = logincmdtext;
 
 	if (master < 0) {
-		cw_log(LOG_NOTICE, "Failed to allocate pty: %s\n", strerror(errno));
+		opbx_log(LOG_NOTICE, "Failed to allocate pty: %s\n", strerror(errno));
 		return -1;
 	}
 
 	if (grantpt(master)) {
-		cw_log(LOG_NOTICE, "grantpt() failed: %s\n", strerror(errno));
+		opbx_log(LOG_NOTICE, "grantpt() failed: %s\n", strerror(errno));
 		close(master);
 		return -1;
 	}
 
 	if (unlockpt(master)) {
-		cw_log(LOG_NOTICE, "unlockpt() failed: %s\n", strerror(errno));
+		opbx_log(LOG_NOTICE, "unlockpt() failed: %s\n", strerror(errno));
 		close(master);
 		return -1;
 	}
@@ -742,13 +747,13 @@ int loginpty(char *source)
 
 	name = ptsname(master);
 	if (!name) {
-		cw_log(LOG_NOTICE, "ptsname() failed\n");
+		opbx_log(LOG_NOTICE, "ptsname() failed\n");
 		close(master);
 		return -1;
 	}
 	pid = fork();
 	if (pid == -1) {
-		cw_log(LOG_NOTICE, "fork() failed: %s\n", strerror(errno));
+		opbx_log(LOG_NOTICE, "fork() failed: %s\n", strerror(errno));
 		close(master);
 		return -1;
 	}
@@ -797,18 +802,9 @@ int loginpty(char *source)
 	exit(1);
 }
 
-int unload_module(void)
-{
-	int res = 0;
-	STANDARD_HANGUP_LOCALUSERS;
-	res |= cw_unregister_application(v110_app);
-	return res;
-}
-
 int load_module(void)
 {
-	v110_app = cw_register_application(v110_name, login_v110, v110_synopsis, v110_syntax, v110_descrip);
-	return 0;
+	return opbx_register_application(app, login_v110, synopsis, descrip);
 }
 
 char *description(void)

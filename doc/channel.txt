@@ -3,13 +3,13 @@ Implementing a Channel
 
 * What is a channel?
 
-A channel is a unit which brings in a call to the CallWeaver.  A channel
+A channel is a unit which brings in a call to the OpenPBX.  A channel
 could be connected to a real telephone (like the Internet Phone Jack) or
-to a logical call (like an Internet phone call).  CallWeaver makes no
+to a logical call (like an Internet phone call).  OpenPBX makes no
 distinction between "FXO" and "FXS" style channels (that is, it doesn't
 distinguish between telephone lines and telephones).
 
-Every call is placed or received on a distinct channel.  CallWeaver uses a
+Every call is placed or received on a distinct channel.  OpenPBX uses a
 channel driver (typically named chan_xxx.so) to support each type of
 hardware.
 

@@ -1,12 +1,12 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  *
  * Copyright (C) 1999 - 2005, Digium, Inc.
  *
  * Matthew Fredrickson <creslin@digium.com>
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -29,28 +29,29 @@
 #include <string.h>
 #include <stdlib.h>
 
-#include "callweaver.h"
+#include "openpbx.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/apps/app_record.c $", "$Revision: 4723 $")
+OPENPBX_FILE_VERSION("$HeadURL$", "$Revision$")
 
-#include "callweaver/lock.h"
-#include "callweaver/file.h"
-#include "callweaver/logger.h"
-#include "callweaver/channel.h"
-#include "callweaver/pbx.h"
-#include "callweaver/module.h"
-#include "callweaver/translate.h"
-#include "callweaver/dsp.h"
-#include "callweaver/utils.h"
-#include "callweaver/app.h"
+#include "openpbx/lock.h"
+#include "openpbx/file.h"
+#include "openpbx/logger.h"
+#include "openpbx/channel.h"
+#include "openpbx/pbx.h"
+#include "openpbx/module.h"
+#include "openpbx/translate.h"
+#include "openpbx/dsp.h"
+#include "openpbx/utils.h"
+#include "openpbx/app.h"
 
 static char *tdesc = "Trivial Record Application";
 
-static void *record_app;
-static const char *record_name = "Record";
-static const char *record_synopsis = "Record to a file";
-static const char *record_syntax = "Record(filename.format[, silence[, maxduration[, options]]])";
-static const char *record_descrip = 
+static char *app = "Record";
+
+static char *synopsis = "Record to a file";
+
+static char *descrip = 
+"  Record(filename.format|silence[|maxduration][|options])\n\n"
 "Records from the channel into a given filename. If the file exists it will\n"
 "be overwritten.\n"
 "- 'format' is the format of the file type to be recorded (wav, gsm, etc).\n"
@@ -74,20 +75,21 @@ STANDARD_LOCAL_USER;
 
 LOCAL_USER_DECL;
 
-static int record_exec(struct cw_channel *chan, int argc, char **argv)
+static int record_exec(struct opbx_channel *chan, void *data)
 {
 	int res = 0;
 	int count = 0;
 	int percentflag = 0;
-	char *ext = NULL;
+	char *filename, *ext = NULL, *silstr, *maxstr, *options;
+	char *vdata, *p;
 	int i = 0;
 	char tmp[256];
 
-	struct cw_filestream *s = '\0';
+	struct opbx_filestream *s = '\0';
 	struct localuser *u;
-	struct cw_frame *f = NULL;
+	struct opbx_frame *f = NULL;
 	
-	struct cw_dsp *sildet = NULL;   	/* silence detector dsp */
+	struct opbx_dsp *sildet = NULL;   	/* silence detector dsp */
 	int totalsilence = 0;
 	int dspsilence = 0;
 	int silence = 0;		/* amount of silence to allow */
@@ -102,61 +104,75 @@ static int record_exec(struct cw_channel *chan, int argc, char **argv)
 	int rfmt = 0;
 	int flags;
 	
-	if (argc < 1 || argc > 4 || !argv[0][0]) {
-		cw_log(LOG_ERROR, "Syntax: %s\n", record_syntax);
+	/* The next few lines of code parse out the filename and header from the input string */
+	if (opbx_strlen_zero(data)) { /* no data implies no filename or anything is present */
+		opbx_log(LOG_WARNING, "Record requires an argument (filename)\n");
 		return -1;
 	}
 
 	LOCAL_USER_ADD(u);
 
-	if (strstr(argv[0], "%d"))
-		percentflag = 1;
-	ext = strrchr(argv[0], '.'); /* to support filename with a . in the filename, not format */
-	if (!ext)
-		ext = strchr(argv[0], ':');
-	if (ext) {
-		*ext = '\0';
-		ext++;
-	}
-
-	if (!ext) {
-		cw_log(LOG_WARNING, "No extension specified to filename!\n");
+	/* Yay for strsep being easy */
+	vdata = opbx_strdupa(data);
+	if (!vdata) {
+		opbx_log(LOG_ERROR, "Out of memory\n");
 		LOCAL_USER_REMOVE(u);
 		return -1;
 	}
 
-	if (argc > 1) {
-		silence = atoi(argv[1]);
-		if (silence > 0)
-			silence *= 1000;
-		else if (silence < 0)
-			silence = 0;
+	p = vdata;
+	filename = strsep(&p, "|");
+	silstr = strsep(&p, "|");
+	maxstr = strsep(&p, "|");	
+	options = strsep(&p, "|");
+	
+	if (filename) {
+		if (strstr(filename, "%d"))
+			percentflag = 1;
+		ext = strrchr(filename, '.'); /* to support filename with a . in the filename, not format */
+		if (!ext)
+			ext = strchr(filename, ':');
+		if (ext) {
+			*ext = '\0';
+			ext++;
+		}
+	}
+	if (!ext) {
+		opbx_log(LOG_WARNING, "No extension specified to filename!\n");
+		LOCAL_USER_REMOVE(u);
+		return -1;
+	}
+	if (silstr) {
+		if ((sscanf(silstr, "%d", &i) == 1) && (i > -1)) {
+			silence = i * 1000;
+		} else if (!opbx_strlen_zero(silstr)) {
+			opbx_log(LOG_WARNING, "'%s' is not a valid silence duration\n", silstr);
+		}
 	}
 	
-	if (argc > 2) {
-		maxduration = atoi(argv[2]);
-		if (maxduration > 0)
-			maxduration *= 1000;
-		else if (maxduration < 0)
-			maxduration = 0;
+	if (maxstr) {
+		if ((sscanf(maxstr, "%d", &i) == 1) && (i > -1))
+			/* Convert duration to milliseconds */
+			maxduration = i * 1000;
+		else if (!opbx_strlen_zero(maxstr))
+			opbx_log(LOG_WARNING, "'%s' is not a valid maximum duration\n", maxstr);
 	}
-
-	if (argc > 3) {
+	if (options) {
 		/* Retain backwards compatibility with old style options */
-		if (!strcasecmp(argv[3], "skip"))
+		if (!strcasecmp(options, "skip"))
 			option_skip = 1;
-		else if (!strcasecmp(argv[3], "noanswer"))
+		else if (!strcasecmp(options, "noanswer"))
 			option_noanswer = 1;
 		else {
-			if (strchr(argv[3], 's'))
+			if (strchr(options, 's'))
 				option_skip = 1;
-			if (strchr(argv[3], 'n'))
+			if (strchr(options, 'n'))
 				option_noanswer = 1;
-			if (strchr(argv[3], 'a'))
+			if (strchr(options, 'a'))
 				option_append = 1;
-			if (strchr(argv[3], 't'))
+			if (strchr(options, 't'))
 				terminator = '*';
-			if (strchr(argv[3], 'q'))
+			if (strchr(options, 'q'))
 				option_quiet = 1;
 		}
 	}
@@ -166,47 +182,59 @@ static int record_exec(struct cw_channel *chan, int argc, char **argv)
 	/* these are to allow the use of the %d in the config file for a wild card of sort to
 	  create a new file with the inputed name scheme */
 	if (percentflag) {
-		char *piece[100];
-		int pieces;
+
+		OPBX_DECLARE_APP_ARGS(fname, 
+		    OPBX_APP_ARG(piece)[100];
+		);
+		char *tmp2 = opbx_strdupa(filename);
+		char countstring[15];
+		int i;
 
 		/* Separate each piece out by the format specifier */
-		pieces = cw_separate_app_args(argv[0], '%', arraysize(piece), piece);
+		/* OPBX_NONSTANDARD_APP_ARGS(fname, tmp2, '%'); */
+		fname.argc = opbx_separate_app_args(tmp2, '%', fname.argv, 
+				    (sizeof(fname) - sizeof(fname.argc)) / sizeof(fname.argv[0]));
 
 		do {
+//			snprintf(tmp, sizeof(tmp), filename, count);
+
 			int tmplen;
 			/* First piece has no leading percent, so it's copied verbatim */
-			cw_copy_string(tmp, piece[0], sizeof(tmp));
+			opbx_copy_string(tmp, fname.piece[0], sizeof(tmp));
 			tmplen = strlen(tmp);
-			for (i = 1; i < pieces; i++) {
-				if (piece[i][0] == 'd') {
+			for (i = 1; i < fname.argc; i++) {
+				if (fname.piece[i][0] == 'd') {
 					/* Substitute the count */
-					snprintf(tmp + tmplen, sizeof(tmp) - tmplen, "%d", count);
-					tmplen += strlen(tmp + tmplen);
+					snprintf(countstring, sizeof(countstring), "%d", count);
+					opbx_copy_string(tmp + tmplen, countstring, sizeof(tmp) - tmplen);
+					tmplen += strlen(countstring);
 				} else if (tmplen + 2 < sizeof(tmp)) {
 					/* Unknown format specifier - just copy it verbatim */
 					tmp[tmplen++] = '%';
-					tmp[tmplen++] = piece[i][0];
+					tmp[tmplen++] = fname.piece[i][0];
 				}
 				/* Copy the remaining portion of the piece */
-				cw_copy_string(tmp + tmplen, &(piece[i][1]), sizeof(tmp) - tmplen);
+				opbx_copy_string(tmp + tmplen, &(fname.piece[i][1]), sizeof(tmp) - tmplen);
 			}
+
+
 			count++;
-		} while ( cw_fileexists(tmp, ext, chan->language) != -1 );
+		} while ( opbx_fileexists(tmp, ext, chan->language) != -1 );
 		pbx_builtin_setvar_helper(chan, "RECORDED_FILE", tmp);
 	} else
-		strncpy(tmp, argv[0], sizeof(tmp)-1);
+		strncpy(tmp, filename, sizeof(tmp)-1);
 	/* end of routine mentioned */
 	
 	
 	
-	if (chan->_state != CW_STATE_UP) {
+	if (chan->_state != OPBX_STATE_UP) {
 		if (option_skip) {
 			/* At the user's option, skip if the line is not up */
 			LOCAL_USER_REMOVE(u);
 			return 0;
 		} else if (!option_noanswer) {
 			/* Otherwise answer unless we're supposed to record while on-hook */
-			res = cw_answer(chan);
+			res = opbx_answer(chan);
 		}
 	}
 	
@@ -214,48 +242,48 @@ static int record_exec(struct cw_channel *chan, int argc, char **argv)
 	
 		if (!option_quiet) {
 			/* Some code to play a nice little beep to signify the start of the record operation */
-			res = cw_streamfile(chan, "beep", chan->language);
+			res = opbx_streamfile(chan, "beep", chan->language);
 			if (!res) {
-				res = cw_waitstream(chan, "");
+				res = opbx_waitstream(chan, "");
 			} else {
-				cw_log(LOG_WARNING, "cw_streamfile failed on %s\n", chan->name);
+				opbx_log(LOG_WARNING, "opbx_streamfile failed on %s\n", chan->name);
 			}
-			cw_stopstream(chan);
+			opbx_stopstream(chan);
 		}
 		
 		/* The end of beep code.  Now the recording starts */
 		
 		if (silence > 0) {
 			rfmt = chan->readformat;
-			res = cw_set_read_format(chan, CW_FORMAT_SLINEAR);
+			res = opbx_set_read_format(chan, OPBX_FORMAT_SLINEAR);
 			if (res < 0) {
-				cw_log(LOG_WARNING, "Unable to set to linear mode, giving up\n");
+				opbx_log(LOG_WARNING, "Unable to set to linear mode, giving up\n");
 				LOCAL_USER_REMOVE(u);
 				return -1;
 			}
-			sildet = cw_dsp_new();
+			sildet = opbx_dsp_new();
 			if (!sildet) {
-				cw_log(LOG_WARNING, "Unable to create silence detector :(\n");
+				opbx_log(LOG_WARNING, "Unable to create silence detector :(\n");
 				LOCAL_USER_REMOVE(u);
 				return -1;
 			}
-			cw_dsp_set_threshold(sildet, 256);
+			opbx_dsp_set_threshold(sildet, 256);
 		} 
 		
 		
 		flags = option_append ? O_CREAT|O_APPEND|O_WRONLY : O_CREAT|O_TRUNC|O_WRONLY;
-		s = cw_writefile( tmp, ext, NULL, flags , 0, 0644);
+		s = opbx_writefile( tmp, ext, NULL, flags , 0, 0644);
 		
 		if (s) {
 			int waitres;
 
 			/* Request a video update */
-			cw_indicate(chan, CW_CONTROL_VIDUPDATE);
+			opbx_indicate(chan, OPBX_CONTROL_VIDUPDATE);
 
 			if (maxduration <= 0)
 				maxduration = -1;
 			
-			while ((waitres = cw_waitfor(chan, maxduration)) > -1) {
+			while ((waitres = opbx_waitfor(chan, maxduration)) > -1) {
 				if (maxduration > 0) {
 					if (waitres == 0) {
 						gottimeout = 1;
@@ -264,22 +292,22 @@ static int record_exec(struct cw_channel *chan, int argc, char **argv)
 					maxduration = waitres;
   				}
 				
-				f = cw_read(chan);
+				f = opbx_read(chan);
 				if (!f) {
 					res = -1;
 					break;
 				}
-				if (f->frametype == CW_FRAME_VOICE) {
-					res = cw_writestream(s, f);
+				if (f->frametype == OPBX_FRAME_VOICE) {
+					res = opbx_writestream(s, f);
+					
 					if (res) {
-						cw_log(LOG_WARNING, "Problem writing frame\n");
-						cw_fr_free(f);
+						opbx_log(LOG_WARNING, "Problem writing frame\n");
 						break;
 					}
 					
 					if (silence > 0) {
 						dspsilence = 0;
-						cw_dsp_silence(sildet, f, &dspsilence);
+						opbx_dsp_silence(sildet, f, &dspsilence);
 						if (dspsilence) {
 							totalsilence = dspsilence;
 						} else {
@@ -287,52 +315,52 @@ static int record_exec(struct cw_channel *chan, int argc, char **argv)
 						}
 						if (totalsilence > silence) {
 							/* Ended happily with silence */
-							cw_fr_free(f);
+							opbx_frfree(f);
 							gotsilence = 1;
 							break;
 						}
 					}
 				}
-				if (f->frametype == CW_FRAME_VIDEO) {
-					res = cw_writestream(s, f);
+				if (f->frametype == OPBX_FRAME_VIDEO) {
+					res = opbx_writestream(s, f);
+					
 					if (res) {
-						cw_log(LOG_WARNING, "Problem writing frame\n");
-						cw_fr_free(f);
+						opbx_log(LOG_WARNING, "Problem writing frame\n");
 						break;
 					}
 				}
-				if ((f->frametype == CW_FRAME_DTMF) &&
+				if ((f->frametype == OPBX_FRAME_DTMF) &&
 					(f->subclass == terminator)) {
-					cw_fr_free(f);
+					opbx_frfree(f);
 					break;
 				}
-				cw_fr_free(f);
+				opbx_frfree(f);
 			}
 			if (!f) {
-				cw_log(LOG_DEBUG, "Got hangup\n");
+				opbx_log(LOG_DEBUG, "Got hangup\n");
 				res = -1;
 			}
 			
 			if (gotsilence) {
-				cw_stream_rewind(s, silence-1000);
-				cw_truncstream(s);
+				opbx_stream_rewind(s, silence-1000);
+				opbx_truncstream(s);
 			} else if (!gottimeout) {
 				/* Strip off the last 1/4 second of it */
-				cw_stream_rewind(s, 250);
-				cw_truncstream(s);
+				opbx_stream_rewind(s, 250);
+				opbx_truncstream(s);
 			}
-			cw_closestream(s);
-		} else
-			cw_log(LOG_WARNING, "Could not create file %s\n", tmp);
+			opbx_closestream(s);
+		} else			
+			opbx_log(LOG_WARNING, "Could not create file %s\n", filename);
 	} else
-		cw_log(LOG_WARNING, "Could not answer channel '%s'\n", chan->name);
+		opbx_log(LOG_WARNING, "Could not answer channel '%s'\n", chan->name);
 	
 	if ((silence > 0) && rfmt) {
-		res = cw_set_read_format(chan, rfmt);
+		res = opbx_set_read_format(chan, rfmt);
 		if (res)
-			cw_log(LOG_WARNING, "Unable to restore read format on '%s'\n", chan->name);
+			opbx_log(LOG_WARNING, "Unable to restore read format on '%s'\n", chan->name);
 		if (sildet)
-			cw_dsp_free(sildet);
+			opbx_dsp_free(sildet);
 	}
 
 	LOCAL_USER_REMOVE(u);
@@ -342,16 +370,13 @@ static int record_exec(struct cw_channel *chan, int argc, char **argv)
 
 int unload_module(void)
 {
-	int res = 0;
 	STANDARD_HANGUP_LOCALUSERS;
-	res |= cw_unregister_application(record_app);
-	return res;
+	return opbx_unregister_application(app);
 }
 
 int load_module(void)
 {
-	record_app = cw_register_application(record_name, record_exec, record_synopsis, record_syntax, record_descrip);
-	return 0;
+	return opbx_register_application(app, record_exec, synopsis, descrip);
 }
 
 char *description(void)

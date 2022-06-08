@@ -1,5 +1,5 @@
 ;
-; CallWeaver Call Management CDR
+; OpenPBX Call Management CDR
 ;
 [general]
 enabled = no

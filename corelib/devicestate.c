@@ -1,12 +1,12 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  *
  * Copyright (C) 1999 - 2005, Digium, Inc.
  *
  * Mark Spencer <markster@digium.com>
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -31,47 +31,47 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "callweaver.h"
+#include "openpbx.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/corelib/devicestate.c $", "$Revision: 4723 $")
+OPENPBX_FILE_VERSION("$HeadURL$", "$Revision$")
 
-#include "callweaver/channel.h"
-#include "callweaver/utils.h"
-#include "callweaver/lock.h"
-#include "callweaver/linkedlists.h"
-#include "callweaver/logger.h"
-#include "callweaver/devicestate.h"
-#include "callweaver/pbx.h"
-#include "callweaver/options.h"
+#include "openpbx/channel.h"
+#include "openpbx/utils.h"
+#include "openpbx/lock.h"
+#include "openpbx/linkedlists.h"
+#include "openpbx/logger.h"
+#include "openpbx/devicestate.h"
+#include "openpbx/pbx.h"
+#include "openpbx/options.h"
 
 static const char *devstatestring[] = {
-	/* 0 CW_DEVICE_UNKNOWN */	"Unknown",	/* Valid, but unknown state */
-	/* 1 CW_DEVICE_NOT_INUSE */	"Not in use",	/* Not used */
-	/* 2 CW_DEVICE IN USE */	"In use",	/* In use */
-	/* 3 CW_DEVICE_BUSY */	"Busy",		/* Busy */
-	/* 4 CW_DEVICE_INVALID */	"Invalid",	/* Invalid - not known to CallWeaver */
-	/* 5 CW_DEVICE_UNAVAILABLE */	"Unavailable",	/* Unavailable (not registred) */
-	/* 6 CW_DEVICE_RINGING */	"Ringing"	/* Ring, ring, ring */
+	/* 0 OPBX_DEVICE_UNKNOWN */	"Unknown",	/* Valid, but unknown state */
+	/* 1 OPBX_DEVICE_NOT_INUSE */	"Not in use",	/* Not used */
+	/* 2 OPBX_DEVICE IN USE */	"In use",	/* In use */
+	/* 3 OPBX_DEVICE_BUSY */	"Busy",		/* Busy */
+	/* 4 OPBX_DEVICE_INVALID */	"Invalid",	/* Invalid - not known to OpenPBX */
+	/* 5 OPBX_DEVICE_UNAVAILABLE */	"Unavailable",	/* Unavailable (not registred) */
+	/* 6 OPBX_DEVICE_RINGING */	"Ringing"	/* Ring, ring, ring */
 };
 
-/* cw_devstate_cb: A device state watcher (callback) */
+/* opbx_devstate_cb: A device state watcher (callback) */
 struct devstate_cb {
 	void *data;
-	cw_devstate_cb_type callback;
-	CW_LIST_ENTRY(devstate_cb) list;
+	opbx_devstate_cb_type callback;
+	OPBX_LIST_ENTRY(devstate_cb) list;
 };
 
-static CW_LIST_HEAD_STATIC(devstate_cbs, devstate_cb);
+static OPBX_LIST_HEAD_STATIC(devstate_cbs, devstate_cb);
 
 struct state_change {
-	CW_LIST_ENTRY(state_change) list;
+	OPBX_LIST_ENTRY(state_change) list;
 	char device[1];
 };
 
-static CW_LIST_HEAD_STATIC(state_changes, state_change);
+static OPBX_LIST_HEAD_STATIC(state_changes, state_change);
 
-static pthread_t change_thread = CW_PTHREADT_NULL;
-static cw_cond_t change_pending;
+static pthread_t change_thread = OPBX_PTHREADT_NULL;
+static opbx_cond_t change_pending;
 
 /*--- devstate2str: Find devicestate as text message for output */
 const char *devstate2str(int devstate) 
@@ -79,67 +79,69 @@ const char *devstate2str(int devstate)
 	return devstatestring[devstate];
 }
 
-/*--- cw_parse_device_state: Find out if device is active in a call or not */
-int cw_parse_device_state(const char *device)
+/*--- opbx_parse_device_state: Find out if device is active in a call or not */
+int opbx_parse_device_state(const char *device)
 {
-	struct cw_channel *chan;
-	char match[CW_CHANNEL_NAME] = "";
+	struct opbx_channel *chan;
+	char match[OPBX_CHANNEL_NAME] = "";
 	int res;
 
-	cw_copy_string(match, device, sizeof(match)-1);
+	opbx_copy_string(match, device, sizeof(match)-1);
 	strcat(match, "-");
-	chan = cw_get_channel_by_name_prefix_locked(match, strlen(match));
+	chan = opbx_get_channel_by_name_prefix_locked(match, strlen(match));
 
 	if (!chan)
-		return CW_DEVICE_UNKNOWN;
+		return OPBX_DEVICE_UNKNOWN;
 
-	if (chan->_state == CW_STATE_RINGING)
-		res = CW_DEVICE_RINGING;
+	if (chan->_state == OPBX_STATE_RINGING)
+		res = OPBX_DEVICE_RINGING;
 	else
-		res = CW_DEVICE_INUSE;
+		res = OPBX_DEVICE_INUSE;
 	
-	cw_mutex_unlock(&chan->lock);
+	opbx_mutex_unlock(&chan->lock);
 
 	return res;
 }
 
-/*--- cw_device_state: Check device state through channel specific function or generic function */
-int cw_device_state(const char *device)
+/*--- opbx_device_state: Check device state through channel specific function or generic function */
+int opbx_device_state(const char *device)
 {
 	char *buf;
 	char *tech;
 	char *number;
-	const struct cw_channel_tech *chan_tech;
+	const struct opbx_channel_tech *chan_tech;
 	int res = 0;
 	
-	buf = cw_strdupa(device);
+	buf = opbx_strdupa(device);
 	tech = strsep(&buf, "/");
 	number = buf;
-
-	chan_tech = cw_get_channel_tech(tech);
+	if (!number)
+		return OPBX_DEVICE_INVALID;
+		
+	chan_tech = opbx_get_channel_tech(tech);
 	if (!chan_tech)
-		return CW_DEVICE_INVALID;
+		return OPBX_DEVICE_INVALID;
 
 	if (!chan_tech->devicestate) 	/* Does the channel driver support device state notification? */
-		return cw_parse_device_state(device);	/* No, try the generic function */
+		return opbx_parse_device_state(device);	/* No, try the generic function */
 	else {
 		res = chan_tech->devicestate(number);	/* Ask the channel driver for device state */
-		if (res == CW_DEVICE_UNKNOWN) {
-			res = cw_parse_device_state(device);
+		if (res == OPBX_DEVICE_UNKNOWN) {
+			res = opbx_parse_device_state(device);
 			/* at this point we know the device exists, but the channel driver
 			   could not give us a state; if there is no channel state available,
 			   it must be 'not in use'
 			*/
-			if (res == CW_DEVICE_UNKNOWN)
-				res = CW_DEVICE_NOT_INUSE;
+			if (res == OPBX_DEVICE_UNKNOWN)
+				res = OPBX_DEVICE_NOT_INUSE;
 			return res;
 		} else
 			return res;
 	}
 }
 
-/*--- cw_devstate_add: Add device state watcher */
-int cw_devstate_add(cw_devstate_cb_type callback, void *data)
+/*--- opbx_devstate_add: Add device state watcher */
+int opbx_devstate_add(opbx_devstate_cb_type callback, void *data)
 {
 	struct devstate_cb *devcb;
 
@@ -153,28 +155,28 @@ int cw_devstate_add(cw_devstate_cb_type callback, void *data)
 	devcb->data = data;
 	devcb->callback = callback;
 
-	CW_LIST_LOCK(&devstate_cbs);
-	CW_LIST_INSERT_HEAD(&devstate_cbs, devcb, list);
-	CW_LIST_UNLOCK(&devstate_cbs);
+	OPBX_LIST_LOCK(&devstate_cbs);
+	OPBX_LIST_INSERT_HEAD(&devstate_cbs, devcb, list);
+	OPBX_LIST_UNLOCK(&devstate_cbs);
 
 	return 0;
 }
 
-/*--- cw_devstate_del: Remove device state watcher */
-void cw_devstate_del(cw_devstate_cb_type callback, void *data)
+/*--- opbx_devstate_del: Remove device state watcher */
+void opbx_devstate_del(opbx_devstate_cb_type callback, void *data)
 {
 	struct devstate_cb *devcb;
 
-	CW_LIST_LOCK(&devstate_cbs);
-	CW_LIST_TRAVERSE_SAFE_BEGIN(&devstate_cbs, devcb, list) {
+	OPBX_LIST_LOCK(&devstate_cbs);
+	OPBX_LIST_TRAVERSE_SAFE_BEGIN(&devstate_cbs, devcb, list) {
 		if ((devcb->callback == callback) && (devcb->data == data)) {
-			CW_LIST_REMOVE_CURRENT(&devstate_cbs, list);
+			OPBX_LIST_REMOVE_CURRENT(&devstate_cbs, list);
 			free(devcb);
 			break;
 		}
 	}
-	CW_LIST_TRAVERSE_SAFE_END;
-	CW_LIST_UNLOCK(&devstate_cbs);
+	OPBX_LIST_TRAVERSE_SAFE_END;
+	OPBX_LIST_UNLOCK(&devstate_cbs);
 }
 
 /*--- do_state_change: Notify callback watchers of change, and notify PBX core for hint updates */
@@ -183,19 +185,19 @@ static inline void do_state_change(const char *device)
 	int state;
 	struct devstate_cb *devcb;
 
-	state = cw_device_state(device);
+	state = opbx_device_state(device);
 	if (option_debug > 2)
-		cw_log(LOG_DEBUG, "Changing state for %s - state %d (%s)\n", device, state, devstate2str(state));
+		opbx_log(LOG_DEBUG, "Changing state for %s - state %d (%s)\n", device, state, devstate2str(state));
 
-	CW_LIST_LOCK(&devstate_cbs);
-	CW_LIST_TRAVERSE(&devstate_cbs, devcb, list)
+	OPBX_LIST_LOCK(&devstate_cbs);
+	OPBX_LIST_TRAVERSE(&devstate_cbs, devcb, list)
 		devcb->callback(device, state, devcb->data);
-	CW_LIST_UNLOCK(&devstate_cbs);
+	OPBX_LIST_UNLOCK(&devstate_cbs);
 
-	cw_hint_state_changed(device);
+	opbx_hint_state_changed(device);
 }
 
-static int __cw_device_state_changed_literal(char *buf)
+static int __opbx_device_state_changed_literal(char *buf)
 {
 	char *device, *tmp;
 	struct state_change *change = NULL;
@@ -204,7 +206,7 @@ static int __cw_device_state_changed_literal(char *buf)
 	tmp = strrchr(device, '-');
 	if (tmp)
 		*tmp = '\0';
-	if (change_thread != CW_PTHREADT_NULL)
+	if (change_thread != OPBX_PTHREADT_NULL)
 		change = calloc(1, sizeof(*change) + strlen(device));
 
 	if (!change) {
@@ -214,34 +216,34 @@ static int __cw_device_state_changed_literal(char *buf)
 	} else {
 		/* queue the change */
 		strcpy(change->device, device);
-		CW_LIST_LOCK(&state_changes);
-		CW_LIST_INSERT_TAIL(&state_changes, change, list);
-		if (CW_LIST_FIRST(&state_changes) == change)
+		OPBX_LIST_LOCK(&state_changes);
+		OPBX_LIST_INSERT_TAIL(&state_changes, change, list);
+		if (OPBX_LIST_FIRST(&state_changes) == change)
 			/* the list was empty, signal the thread */
-			cw_cond_signal(&change_pending);
-		CW_LIST_UNLOCK(&state_changes);
+			opbx_cond_signal(&change_pending);
+		OPBX_LIST_UNLOCK(&state_changes);
 	}
 
 	return 1;
 }
 
-int cw_device_state_changed_literal(const char *dev)
+int opbx_device_state_changed_literal(const char *dev)
 {
 	char *buf;
-	buf = cw_strdupa(dev);
-	return __cw_device_state_changed_literal(buf);
+	buf = opbx_strdupa(dev);
+	return __opbx_device_state_changed_literal(buf);
 }
 
-/*--- cw_device_state_changed: Accept change notification, add it to change queue */
-int cw_device_state_changed(const char *fmt, ...) 
+/*--- opbx_device_state_changed: Accept change notification, add it to change queue */
+int opbx_device_state_changed(const char *fmt, ...) 
 {
-	char buf[CW_MAX_EXTENSION];
+	char buf[OPBX_MAX_EXTENSION];
 	va_list ap;
 
 	va_start(ap, fmt);
 	vsnprintf(buf, sizeof(buf), fmt, ap);
 	va_end(ap);
-	return __cw_device_state_changed_literal(buf);
+	return __opbx_device_state_changed_literal(buf);
 }
 
 /*--- do_devstate_changes: Go through the dev state change queue and update changes in the dev state thread */
@@ -249,36 +251,36 @@ static void *do_devstate_changes(void *data)
 {
 	struct state_change *cur=NULL;
 
-	CW_LIST_LOCK(&state_changes);
+	OPBX_LIST_LOCK(&state_changes);
 	for(;;) {
 		/* the list lock will _always_ be held at this point in the loop */
-		cur = CW_LIST_REMOVE_HEAD(&state_changes, list);
+		cur = OPBX_LIST_REMOVE_HEAD(&state_changes, list);
 		if (cur) {
 			/* we got an entry, so unlock the list while we process it */
-			CW_LIST_UNLOCK(&state_changes);
+			OPBX_LIST_UNLOCK(&state_changes);
 			do_state_change(cur->device);
 			free(cur);
-			CW_LIST_LOCK(&state_changes);
+			OPBX_LIST_LOCK(&state_changes);
 		} else {
 			/* there was no entry, so atomically unlock the list and wait for
 			   the condition to be signalled (returns with the lock held) */
-			cw_cond_wait(&change_pending, &state_changes.lock);
+			opbx_cond_wait(&change_pending, &state_changes.lock);
 		}
 	}
 
 	return NULL;
 }
 
-/*--- cw_device_state_engine_init: Initialize the device state engine in separate thread */
-int cw_device_state_engine_init(void)
+/*--- opbx_device_state_engine_init: Initialize the device state engine in separate thread */
+int opbx_device_state_engine_init(void)
 {
 	pthread_attr_t attr;
 
-	cw_cond_init(&change_pending, NULL);
+	opbx_cond_init(&change_pending, NULL);
 	pthread_attr_init(&attr);
 	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
-	if (cw_pthread_create(&change_thread, &attr, do_devstate_changes, NULL) < 0) {
-		cw_log(LOG_ERROR, "Unable to start device state change thread.\n");
+	if (opbx_pthread_create(&change_thread, &attr, do_devstate_changes, NULL) < 0) {
+		opbx_log(LOG_ERROR, "Unable to start device state change thread.\n");
 		return -1;
 	}
 

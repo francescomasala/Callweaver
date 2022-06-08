@@ -6,17 +6,17 @@
  * Written by Anthony Minessale II <anthmct at yahoo dot com>
  * Written by Bruce Atherton <bruce at callenish dot com>
  * Additions, Changes and Support by Tim R. Clark <tclark at shaw dot ca>
- * Changed to adopt to jabber interaction and adjusted for CallWeaver.org by
+ * Changed to adopt to jabber interaction and adjusted for OpenPBX.org by
  * Halo Kwadrat Sp. z o.o., Piotr Figurny and Michal Bielicki
  * 
  * This application is a part of:
  * 
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  * Copyright (C) 1999 - 2005, Digium, Inc.
  * Mark Spencer <markster@digium.com>
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -55,10 +55,10 @@
 #endif 
 
 #include <assert.h>
-#include "callweaver/icd/icd_common.h"
-#include "callweaver/icd/icd_metalist.h"
-#include "callweaver/icd/icd_list.h"
-#include "callweaver/icd/icd_list_private.h"
+#include "openpbx/icd/icd_common.h"
+#include "openpbx/icd/icd_metalist.h"
+#include "openpbx/icd/icd_list.h"
+#include "openpbx/icd/icd_list_private.h"
 
 /*===== Private types and APIs =====*/
 
@@ -80,7 +80,7 @@ icd_metalist *create_icd_metalist(icd_config * data)
     ICD_MALLOC(list, sizeof(icd_metalist));
 
     if (list == NULL) {
-        cw_log(LOG_ERROR, "No memory available to create a new ICD Metalist\n");
+        opbx_log(LOG_ERROR, "No memory available to create a new ICD Metalist\n");
         return NULL;
     }
     result = init_icd_metalist(list, data);

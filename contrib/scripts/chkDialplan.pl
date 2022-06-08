@@ -17,7 +17,7 @@ my $validation_option = 1;
 ## ---------------------------------------------------------------------------
 ##
 sub do_usage {
-	print "Usage: $0 <modify|validate> [applications.txt [extensions.conf]]
+	print "Usage: $0 [modify|validate]
 Options:
 	modify: Modifies your $def_extensions and all the included files
 		Your original files are renamed to .bak
@@ -44,8 +44,6 @@ sub parse_args {
 		else {
 			do_usage();
 		}
-		$def_applications = $ARGV[1] if (defined $ARGV[1]);
-		$def_extensions   = $ARGV[2] if (defined $ARGV[2]);
 	}
 	else {
 		do_usage();

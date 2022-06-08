@@ -1,12 +1,12 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  *
  * Copyright (C) 1999 - 2005, Digium, Inc.
  *
  * Portions Copyright (C) 2005, Anthony Minessale II
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -30,37 +30,33 @@
 #include <string.h>
 #include <sys/types.h>
 
-#include "callweaver.h"
+#include "openpbx.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/funcs/func_cdr.c $", "$Revision: 4723 $")
+OPENPBX_FILE_VERSION("$HeadURL$", "$Revision$")
 
-#include "callweaver/channel.h"
-#include "callweaver/pbx.h"
-#include "callweaver/logger.h"
-#include "callweaver/utils.h"
-#include "callweaver/app.h"
-#include "callweaver/cdr.h"
-#include "callweaver/module.h"
+#include "openpbx/channel.h"
+#include "openpbx/pbx.h"
+#include "openpbx/logger.h"
+#include "openpbx/utils.h"
+#include "openpbx/app.h"
+#include "openpbx/cdr.h"
 
-static void *cdr_function;
-static const char *cdr_func_name = "CDR";
-static const char *cdr_func_synopsis = "Gets or sets a CDR variable";
-static const char *cdr_func_syntax = "CDR(name[, options])";
-static const char *cdr_func_desc= "Option 'r' searches the entire stack of CDRs on the channel\n";
-
-
-static char *builtin_function_cdr_read(struct cw_channel *chan, int argc, char **argv, char *buf, size_t len) 
+static char *builtin_function_cdr_read(struct opbx_channel *chan, char *cmd, char *data, char *buf, size_t len) 
 {
 	char *ret;
+	char *mydata;
+	int argc;
+	char *argv[2];
 	int recursive = 0;
 
-	if (argc < 1 || argc > 2 || !argv[0][0]) {
-		cw_log(LOG_ERROR, "Syntax: %s\n", cdr_func_syntax);
+	if (!data || opbx_strlen_zero(data))
 		return NULL;
-	}
-
+	
 	if (!chan->cdr)
 		return NULL;
+
+	mydata = opbx_strdupa(data);
+	argc = opbx_separate_app_args(mydata, '|', argv, sizeof(argv) / sizeof(argv[0]));
 
 	/* check for a trailing flags argument */
 	if (argc > 1) {
@@ -69,19 +65,23 @@ static char *builtin_function_cdr_read(struct cw_channel *chan, int argc, char *
 			recursive = 1;
 	}
 
-	cw_cdr_getvar(chan->cdr, argv[0], &ret, buf, len, recursive);
+	opbx_cdr_getvar(chan->cdr, argv[0], &ret, buf, len, recursive);
 
 	return ret;
 }
 
-static void builtin_function_cdr_write(struct cw_channel *chan, int argc, char **argv, const char *value) 
+static void builtin_function_cdr_write(struct opbx_channel *chan, char *cmd, char *data, const char *value) 
 {
+	char *mydata;
+	int argc;
+	char *argv[2];
 	int recursive = 0;
 
-	if (argc < 1 || argc > 2 || !argv[0][0]) {
-		cw_log(LOG_ERROR, "Syntax: %s\n", cdr_func_syntax);
+	if (!data || opbx_strlen_zero(data) || !value)
 		return;
-	}
+	
+	mydata = opbx_strdupa(data);
+	argc = opbx_separate_app_args(mydata, '|', argv, sizeof(argv) / sizeof(argv[0]));
 
 	/* check for a trailing flags argument */
 	if (argc > 1) {
@@ -91,25 +91,32 @@ static void builtin_function_cdr_write(struct cw_channel *chan, int argc, char *
 	}
 
 	if (!strcasecmp(argv[0], "accountcode"))
-		cw_cdr_setaccount(chan, value);
+		opbx_cdr_setaccount(chan, value);
 	else if (!strcasecmp(argv[0], "userfield"))
-		cw_cdr_setuserfield(chan, value);
+		opbx_cdr_setuserfield(chan, value);
 	else if (chan->cdr)
-		cw_cdr_setvar(chan->cdr, argv[0], value, recursive);
+		opbx_cdr_setvar(chan->cdr, argv[0], value, recursive);
 }
 
+static struct opbx_custom_function cdr_function = {
+	.name = "CDR",
+	.synopsis = "Gets or sets a CDR variable",
+	.desc= "Option 'r' searches the entire stack of CDRs on the channel\n",
+	.syntax = "CDR(<name>[|options])",
+	.read = builtin_function_cdr_read,
+	.write = builtin_function_cdr_write,
+};
 
 static char *tdesc = "CDR related dialplan function";
 
 int unload_module(void)
 {
-        return cw_unregister_function(cdr_function);
+        return opbx_custom_function_unregister(&cdr_function);
 }
 
 int load_module(void)
 {
-        cdr_function = cw_register_function(cdr_func_name, builtin_function_cdr_read, builtin_function_cdr_write, cdr_func_synopsis, cdr_func_syntax, cdr_func_desc);
-	return 0;
+        return opbx_custom_function_register(&cdr_function);
 }
 
 char *description(void)

@@ -1,13 +1,13 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  *
  * Copyright (C) 1999 - 2005, Digium, Inc.
  *
  * Kevin P. Fleming <kpfleming@digium.com>
  * Mark Spencer <markster@digium.com>
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -51,20 +51,20 @@
 #include <sys/sockio.h>
 #endif
 
-#include "callweaver.h"
+#include "openpbx.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/corelib/netsock.c $", "$Revision: 4739 $")
+OPENPBX_FILE_VERSION("$HeadURL$", "$Revision$")
 
-#include "callweaver/netsock.h"
-#include "callweaver/logger.h"
-#include "callweaver/channel.h"
-#include "callweaver/options.h"
-#include "callweaver/utils.h"
-#include "callweaver/lock.h"
-#include "callweaver/srv.h"
+#include "openpbx/netsock.h"
+#include "openpbx/logger.h"
+#include "openpbx/channel.h"
+#include "openpbx/options.h"
+#include "openpbx/utils.h"
+#include "openpbx/lock.h"
+#include "openpbx/srv.h"
 
-struct cw_netsock {
-	CWOBJ_COMPONENTS(struct cw_netsock);
+struct opbx_netsock {
+	ASTOBJ_COMPONENTS(struct opbx_netsock);
 	struct sockaddr_in bindaddr;
 	int sockfd;
 	int *ioref;
@@ -72,112 +72,112 @@ struct cw_netsock {
 	void *data;
 };
 
-struct cw_netsock_list {
-	CWOBJ_CONTAINER_COMPONENTS(struct cw_netsock);
+struct opbx_netsock_list {
+	ASTOBJ_CONTAINER_COMPONENTS(struct opbx_netsock);
 	struct io_context *ioc;
 };
 
-static void cw_netsock_destroy(struct cw_netsock *netsock)
+static void opbx_netsock_destroy(struct opbx_netsock *netsock)
 {
-	cw_io_remove(netsock->ioc, netsock->ioref);
+	opbx_io_remove(netsock->ioc, netsock->ioref);
 	close(netsock->sockfd);
 	free(netsock);
 }
 
-struct cw_netsock_list *cw_netsock_list_alloc(void)
+struct opbx_netsock_list *opbx_netsock_list_alloc(void)
 {
-	struct cw_netsock_list *res;
+	struct opbx_netsock_list *res;
 
 	res = calloc(1, sizeof(*res));
 
 	return res;
 }
 
-int cw_netsock_init(struct cw_netsock_list *list)
+int opbx_netsock_init(struct opbx_netsock_list *list)
 {
 	memset(list, 0, sizeof(*list));
-	CWOBJ_CONTAINER_INIT(list);
+	ASTOBJ_CONTAINER_INIT(list);
 
 	return 0;
 }
 
-int cw_netsock_release(struct cw_netsock_list *list)
+int opbx_netsock_release(struct opbx_netsock_list *list)
 {
-	CWOBJ_CONTAINER_DESTROYALL(list, cw_netsock_destroy);
-	CWOBJ_CONTAINER_DESTROY(list);
+	ASTOBJ_CONTAINER_DESTROYALL(list, opbx_netsock_destroy);
+	ASTOBJ_CONTAINER_DESTROY(list);
 
 	return 0;
 }
 
-struct cw_netsock *cw_netsock_find(struct cw_netsock_list *list,
+struct opbx_netsock *opbx_netsock_find(struct opbx_netsock_list *list,
 				     struct sockaddr_in *sa)
 {
-	struct cw_netsock *sock = NULL;
+	struct opbx_netsock *sock = NULL;
 
-	CWOBJ_CONTAINER_TRAVERSE(list, !sock, {
-		CWOBJ_RDLOCK(iterator);
+	ASTOBJ_CONTAINER_TRAVERSE(list, !sock, {
+		ASTOBJ_RDLOCK(iterator);
 		if (!inaddrcmp(&iterator->bindaddr, sa))
 			sock = iterator;
-		CWOBJ_UNLOCK(iterator);
+		ASTOBJ_UNLOCK(iterator);
 	});
 
 	return sock;
 }
 
-struct cw_netsock *cw_netsock_bindaddr(struct cw_netsock_list *list, struct io_context *ioc, struct sockaddr_in *bindaddr, int tos, cw_io_cb callback, void *data)
+struct opbx_netsock *opbx_netsock_bindaddr(struct opbx_netsock_list *list, struct io_context *ioc, struct sockaddr_in *bindaddr, int tos, opbx_io_cb callback, void *data)
 {
 	int netsocket = -1;
 	int *ioref;
 	char iabuf[INET_ADDRSTRLEN];
 	
-	struct cw_netsock *ns;
+	struct opbx_netsock *ns;
 	
 	/* Make a UDP socket */
 	netsocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
 	
 	if (netsocket < 0) {
-		cw_log(LOG_ERROR, "Unable to create network socket: %s\n", strerror(errno));
+		opbx_log(LOG_ERROR, "Unable to create network socket: %s\n", strerror(errno));
 		return NULL;
 	}
 	if (bind(netsocket,(struct sockaddr *)bindaddr, sizeof(struct sockaddr_in))) {
-		cw_log(LOG_ERROR, "Unable to bind to %s port %d: %s\n", cw_inet_ntoa(iabuf, sizeof(iabuf), bindaddr->sin_addr), ntohs(bindaddr->sin_port), strerror(errno));
+		opbx_log(LOG_ERROR, "Unable to bind to %s port %d: %s\n", opbx_inet_ntoa(iabuf, sizeof(iabuf), bindaddr->sin_addr), ntohs(bindaddr->sin_port), strerror(errno));
 		close(netsocket);
 		return NULL;
 	}
 	if (option_verbose > 1)
-		cw_verbose(VERBOSE_PREFIX_2 "Using TOS bits %d\n", tos);
+		opbx_verbose(VERBOSE_PREFIX_2 "Using TOS bits %d\n", tos);
 
 	if (setsockopt(netsocket, IPPROTO_IP, IP_TOS, &tos, sizeof(tos))) 
-		cw_log(LOG_WARNING, "Unable to set TOS to %d\n", tos);
+		opbx_log(LOG_WARNING, "Unable to set TOS to %d\n", tos);
 
-	cw_enable_packet_fragmentation(netsocket);
+	opbx_enable_packet_fragmentation(netsocket);
 
-	ns = malloc(sizeof(struct cw_netsock));
+	ns = malloc(sizeof(struct opbx_netsock));
 	if (ns) {
 		/* Establish I/O callback for socket read */
-		ioref = cw_io_add(ioc, netsocket, callback, CW_IO_IN, ns);
+		ioref = opbx_io_add(ioc, netsocket, callback, OPBX_IO_IN, ns);
 		if (!ioref) {
-			cw_log(LOG_WARNING, "Out of memory!\n");
+			opbx_log(LOG_WARNING, "Out of memory!\n");
 			close(netsocket);
 			free(ns);
 			return NULL;
 		}	
-		CWOBJ_INIT(ns);
+		ASTOBJ_INIT(ns);
 		ns->ioref = ioref;
 		ns->ioc = ioc;
 		ns->sockfd = netsocket;
 		ns->data = data;
 		memcpy(&ns->bindaddr, bindaddr, sizeof(ns->bindaddr));
-		CWOBJ_CONTAINER_LINK(list, ns);
+		ASTOBJ_CONTAINER_LINK(list, ns);
 	} else {
-		cw_log(LOG_WARNING, "Out of memory!\n");
+		opbx_log(LOG_WARNING, "Out of memory!\n");
 		close(netsocket);
 	}
 
 	return ns;
 }
 
-struct cw_netsock *cw_netsock_bind(struct cw_netsock_list *list, struct io_context *ioc, const char *bindinfo, int defaultport, int tos, cw_io_cb callback, void *data)
+struct opbx_netsock *opbx_netsock_bind(struct opbx_netsock_list *list, struct io_context *ioc, const char *bindinfo, int defaultport, int tos, opbx_io_cb callback, void *data)
 {
 	struct sockaddr_in sin;
 	char *tmp;
@@ -188,7 +188,11 @@ struct cw_netsock *cw_netsock_bind(struct cw_netsock_list *list, struct io_conte
 	memset(&sin, 0, sizeof(sin));
 	sin.sin_family = AF_INET;
 	sin.sin_port = htons(defaultport);
-	tmp = cw_strdupa(bindinfo);
+	tmp = opbx_strdupa(bindinfo);
+	if (!tmp) {
+		opbx_log(LOG_WARNING, "Out of memory!\n");
+		return NULL;
+	}
 
 	host = strsep(&tmp, ":");
 	port = tmp;
@@ -198,20 +202,20 @@ struct cw_netsock *cw_netsock_bind(struct cw_netsock_list *list, struct io_conte
 
 	inet_aton(host, &sin.sin_addr);
 
-	return cw_netsock_bindaddr(list, ioc, &sin, tos, callback, data);
+	return opbx_netsock_bindaddr(list, ioc, &sin, tos, callback, data);
 }
 
-int cw_netsock_sockfd(const struct cw_netsock *ns)
+int opbx_netsock_sockfd(const struct opbx_netsock *ns)
 {
 	return ns ? ns-> sockfd : -1;
 }
 
-const struct sockaddr_in *cw_netsock_boundaddr(const struct cw_netsock *ns)
+const struct sockaddr_in *opbx_netsock_boundaddr(const struct opbx_netsock *ns)
 {
 	return &(ns->bindaddr);
 }
 
-void *cw_netsock_data(const struct cw_netsock *ns)
+void *opbx_netsock_data(const struct opbx_netsock *ns)
 {
 	return ns->data;
 }

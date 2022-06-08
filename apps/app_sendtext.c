@@ -1,12 +1,12 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  *
  * Copyright (C) 1999 - 2005, Digium, Inc.
  *
  * Mark Spencer <markster@digium.com>
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -29,28 +29,28 @@
 #include <string.h>
 #include <stdlib.h>
 
-#include "callweaver.h"
+#include "openpbx.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/apps/app_sendtext.c $", "$Revision: 4723 $")
+OPENPBX_FILE_VERSION("$HeadURL$", "$Revision$")
 
-#include "callweaver/lock.h"
-#include "callweaver/file.h"
-#include "callweaver/logger.h"
-#include "callweaver/channel.h"
-#include "callweaver/pbx.h"
-#include "callweaver/module.h"
-#include "callweaver/translate.h"
-#include "callweaver/image.h"
-#include "callweaver/options.h"
+#include "openpbx/lock.h"
+#include "openpbx/file.h"
+#include "openpbx/logger.h"
+#include "openpbx/channel.h"
+#include "openpbx/pbx.h"
+#include "openpbx/module.h"
+#include "openpbx/translate.h"
+#include "openpbx/image.h"
+#include "openpbx/options.h"
 
 static const char *tdesc = "Send Text Applications";
 
-static void *sendtext_app;
-static const char *sendtext_name = "SendText";
-static const char *sendtext_synopsis = "Send a Text Message";
-static const char *sendtext_syntax = "SendText(text)";
-static const char *sendtext_descrip = 
-"Sends text to current channel (callee).\n"
+static const char *app = "SendText";
+
+static const char *synopsis = "Send a Text Message";
+
+static const char *descrip = 
+"  SendText(text): Sends text to current channel (callee).\n"
 "Otherwise, execution will continue at the next priority level.\n"
 "Result of transmission will be stored in the SENDTEXTSTATUS\n"
 "channel variable:\n"
@@ -58,55 +58,59 @@ static const char *sendtext_descrip =
 "      FAILURE      Transmission failed\n"
 "      UNSUPPORTED  Text transmission not supported by channel\n"
 "\n"
-"At this moment, text is supposed to be 7 bit ASCII in most channels.\n";
+"At this moment, text is supposed to be 7 bit ASCII in most channels.\n"
+"Old deprecated behavior: \n"
+" SendText only returns 0 if the text was sent correctly or if\n"
+" the channel does not support text transport.\n"
+" If the client does not support text transport, and there exists a\n"
+" step with priority n + 101, then execution will continue at that step.\n";
 
 STANDARD_LOCAL_USER;
 
 LOCAL_USER_DECL;
 
-static int sendtext_exec(struct cw_channel *chan, int argc, char **argv)
+static int sendtext_exec(struct opbx_channel *chan, void *data)
 {
-	int res;
+	int res = 0;
 	struct localuser *u;
+	char *status = "UNSUPPORTED";
 		
-	if (argc == 0) {
-		cw_log(LOG_ERROR, "Syntax: %s\n", sendtext_syntax);
+	if (opbx_strlen_zero(data)) {
+		opbx_log(LOG_WARNING, "SendText requires an argument (text)\n");
 		return -1;
 	}
 	
 	LOCAL_USER_ADD(u);
 
-	cw_mutex_lock(&chan->lock);
+	opbx_mutex_lock(&chan->lock);
 	if (!chan->tech->send_text) {
-		cw_mutex_unlock(&chan->lock);
+		opbx_mutex_unlock(&chan->lock);
 		/* Does not support transport */
+		if (option_priority_jumping)
+			opbx_goto_if_exists(chan, chan->context, chan->exten, chan->priority + 101);
 		LOCAL_USER_REMOVE(u);
 		return 0;
 	}
-	cw_mutex_unlock(&chan->lock);
-
-	res = 0;
-	for (; !res && argc; argv++, argc--)
-		res = cw_sendtext(chan, argv[0]);
-
-	pbx_builtin_setvar_helper(chan, "SENDTEXTSTATUS", (res ? "FAILURE" : "SUCCESS"));
-
+	status = "FAILURE";
+	opbx_mutex_unlock(&chan->lock);
+	res = opbx_sendtext(chan, (char *)data);
+	if (!res)
+		status = "SUCCESS";
+	pbx_builtin_setvar_helper(chan, "SENDTEXTSTATUS", status);
 	LOCAL_USER_REMOVE(u);
 	return 0;
 }
 
 int unload_module(void)
 {
-	int res = 0;
 	STANDARD_HANGUP_LOCALUSERS;
-	res |= cw_unregister_application(sendtext_app);
-	return res;
+
+	return opbx_unregister_application(app);
 }
 
 int load_module(void)
 {
-	sendtext_app = cw_register_application(sendtext_name, sendtext_exec, sendtext_synopsis, sendtext_syntax, sendtext_descrip);
-	return 0;
+	return opbx_register_application(app, sendtext_exec, synopsis, descrip);
 }
 
 char *description(void)

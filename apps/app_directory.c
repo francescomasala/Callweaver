@@ -1,12 +1,12 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  *
  * Copyright (C) 1999 - 2005, Digium, Inc.
  *
  * Mark Spencer <markster@digium.com>
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -31,28 +31,26 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-#include "callweaver.h"
+#include "openpbx.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/apps/app_directory.c $", "$Revision: 4723 $")
+OPENPBX_FILE_VERSION("$HeadURL$", "$Revision$")
 
-#include "callweaver/lock.h"
-#include "callweaver/file.h"
-#include "callweaver/logger.h"
-#include "callweaver/channel.h"
-#include "callweaver/pbx.h"
-#include "callweaver/module.h"
-#include "callweaver/config.h"
-#include "callweaver/say.h"
-#include "callweaver/utils.h"
+#include "openpbx/lock.h"
+#include "openpbx/file.h"
+#include "openpbx/logger.h"
+#include "openpbx/channel.h"
+#include "openpbx/pbx.h"
+#include "openpbx/module.h"
+#include "openpbx/config.h"
+#include "openpbx/say.h"
+#include "openpbx/utils.h"
 
 static char *tdesc = "Extension Directory";
+static char *app = "Directory";
 
-static void *directory_app;
-static char *directory_name = "Directory";
-static char *directory_synopsis = "Provide directory of voicemail extensions";
-static char *directory_syntax = "Directory(vm-context[, dial-context[, options]])";
-static char *directory_descrip =
-"Presents the user with a directory\n"
+static char *synopsis = "Provide directory of voicemail extensions";
+static char *descrip =
+"  Directory(vm-context[|dial-context[|options]]): Presents the user with a directory\n"
 "of extensions from which they  may  select  by name. The  list  of  names \n"
 "and  extensions  is discovered from  voicemail.conf. The  vm-context  argument\n"
 "is required, and specifies  the  context  of voicemail.conf to use.  The\n"
@@ -151,7 +149,7 @@ static char *convert(char *lastname)
  *           '1' for selected entry from directory
  *           '*' for skipped entry from directory
  */
-static int play_mailbox_owner(struct cw_channel *chan, char *context, char *dialcontext, char *ext, char *name) {
+static int play_mailbox_owner(struct opbx_channel *chan, char *context, char *dialcontext, char *ext, char *name) {
 	int res = 0;
 	int loop = 3;
 	char fn[256];
@@ -159,48 +157,48 @@ static int play_mailbox_owner(struct cw_channel *chan, char *context, char *dial
 
 	/* Check for the VoiceMail2 greeting first */
 	snprintf(fn, sizeof(fn), "%s/voicemail/%s/%s/greet",
-		(char *)cw_config_CW_SPOOL_DIR, context, ext);
+		(char *)opbx_config_OPBX_SPOOL_DIR, context, ext);
 
 	/* Otherwise, check for an old-style Voicemail greeting */
 	snprintf(fn2, sizeof(fn2), "%s/vm/%s/greet",
-		(char *)cw_config_CW_SPOOL_DIR, ext);
+		(char *)opbx_config_OPBX_SPOOL_DIR, ext);
 
-	if (cw_fileexists(fn, NULL, chan->language) > 0) {
-		res = cw_streamfile(chan, fn, chan->language);
+	if (opbx_fileexists(fn, NULL, chan->language) > 0) {
+		res = opbx_streamfile(chan, fn, chan->language);
 		if (!res) {
-			res = cw_waitstream(chan, CW_DIGIT_ANY);
+			res = opbx_waitstream(chan, OPBX_DIGIT_ANY);
 		}
-		cw_stopstream(chan);
-	} else if (cw_fileexists(fn2, NULL, chan->language) > 0) {
-		res = cw_streamfile(chan, fn2, chan->language);
+		opbx_stopstream(chan);
+	} else if (opbx_fileexists(fn2, NULL, chan->language) > 0) {
+		res = opbx_streamfile(chan, fn2, chan->language);
 		if (!res) {
-			res = cw_waitstream(chan, CW_DIGIT_ANY);
+			res = opbx_waitstream(chan, OPBX_DIGIT_ANY);
 		}
-		cw_stopstream(chan);
+		opbx_stopstream(chan);
 	} else {
-		res = cw_say_character_str(chan, !cw_strlen_zero(name) ? name : ext,
-					CW_DIGIT_ANY, chan->language);
+		res = opbx_say_character_str(chan, !opbx_strlen_zero(name) ? name : ext,
+					OPBX_DIGIT_ANY, chan->language);
 	}
 
 	while (loop) {
 		if (!res) {
-			res = cw_streamfile(chan, "dir-instr", chan->language);
+			res = opbx_streamfile(chan, "dir-instr", chan->language);
 		}
 		if (!res) {
-			res = cw_waitstream(chan, CW_DIGIT_ANY);
+			res = opbx_waitstream(chan, OPBX_DIGIT_ANY);
 		}
 		if (!res) {
-			res = cw_waitfordigit(chan, 3000);
+			res = opbx_waitfordigit(chan, 3000);
 		}
-		cw_stopstream(chan);
+		opbx_stopstream(chan);
 	
 		if (res > -1) {
 			switch (res) {
 				case '1':
 					/* Name selected */
 					loop = 0;
-					if (cw_goto_if_exists(chan, dialcontext, ext, 1)) {
-						cw_log(LOG_WARNING,
+					if (opbx_goto_if_exists(chan, dialcontext, ext, 1)) {
+						opbx_log(LOG_WARNING,
 							"Can't find extension '%s' in context '%s'.  "
 							"Did you pass the wrong context to Directory?\n",
 							ext, dialcontext);
@@ -229,100 +227,100 @@ static int play_mailbox_owner(struct cw_channel *chan, char *context, char *dial
 	return(res);
 }
 
-static struct cw_config *realtime_directory(char *context)
+static struct opbx_config *realtime_directory(char *context)
 {
-	struct cw_config *cfg;
-	struct cw_config *rtdata;
-	struct cw_category *cat;
-	struct cw_variable *var;
+	struct opbx_config *cfg;
+	struct opbx_config *rtdata;
+	struct opbx_category *cat;
+	struct opbx_variable *var;
 	char *mailbox;
 	char *fullname;
 	char *hidefromdir;
 	char tmp[100];
 
 	/* Load flat file config. */
-	cfg = cw_config_load(VOICEMAIL_CONFIG);
+	cfg = opbx_config_load(VOICEMAIL_CONFIG);
 
 	if (!cfg) {
 		/* Loading config failed. */
-		cw_log(LOG_WARNING, "Loading config failed.\n");
+		opbx_log(LOG_WARNING, "Loading config failed.\n");
 		return NULL;
 	}
 
 	/* Get realtime entries, categorized by their mailbox number
 	   and present in the requested context */
-	rtdata = cw_load_realtime_multientry("voicemail", "mailbox LIKE", "%", "context", context, NULL);
+	rtdata = opbx_load_realtime_multientry("voicemail", "mailbox LIKE", "%", "context", context, NULL);
 
 	/* if there are no results, just return the entries from the config file */
 	if (!rtdata)
 		return cfg;
 
 	/* Does the context exist within the config file? If not, make one */
-	cat = cw_category_get(cfg, context);
+	cat = opbx_category_get(cfg, context);
 	if (!cat) {
-		cat = cw_category_new(context);
+		cat = opbx_category_new(context);
 		if (!cat) {
-			cw_log(LOG_WARNING, "Out of memory\n");
-			cw_config_destroy(cfg);
+			opbx_log(LOG_WARNING, "Out of memory\n");
+			opbx_config_destroy(cfg);
 			return NULL;
 		}
-		cw_category_append(cfg, cat);
+		opbx_category_append(cfg, cat);
 	}
 
-	mailbox = cw_category_browse(rtdata, NULL);
+	mailbox = opbx_category_browse(rtdata, NULL);
 	while (mailbox) {
-		fullname = cw_variable_retrieve(rtdata, mailbox, "fullname");
-		hidefromdir = cw_variable_retrieve(rtdata, mailbox, "hidefromdir");
+		fullname = opbx_variable_retrieve(rtdata, mailbox, "fullname");
+		hidefromdir = opbx_variable_retrieve(rtdata, mailbox, "hidefromdir");
 		snprintf(tmp, sizeof(tmp), "no-password,%s,hidefromdir=%s",
 			 fullname ? fullname : "",
 			 hidefromdir ? hidefromdir : "no");
-		var = cw_variable_new(mailbox, tmp);
+		var = opbx_variable_new(mailbox, tmp);
 		if (var)
-			cw_variable_append(cat, var);
+			opbx_variable_append(cat, var);
 		else
-			cw_log(LOG_WARNING, "Out of memory adding mailbox '%s'\n", mailbox);
-		mailbox = cw_category_browse(rtdata, mailbox);
+			opbx_log(LOG_WARNING, "Out of memory adding mailbox '%s'\n", mailbox);
+		mailbox = opbx_category_browse(rtdata, mailbox);
 	}
-	cw_config_destroy(rtdata);
+	opbx_config_destroy(rtdata);
 
 	return cfg;
 }
 
-static int do_directory(struct cw_channel *chan, struct cw_config *cfg, char *context, char *dialcontext, char digit, int last)
+static int do_directory(struct opbx_channel *chan, struct opbx_config *cfg, char *context, char *dialcontext, char digit, int last)
 {
 	/* Read in the first three digits..  "digit" is the first digit, already read */
 	char ext[NUMDIGITS + 1];
 	char name[80] = "";
-	struct cw_variable *v;
+	struct opbx_variable *v;
 	int res;
 	int found=0;
 	int lastuserchoice = 0;
 	char *start, *pos, *conv,*stringp=NULL;
 
-	if (cw_strlen_zero(context)) {
-		cw_log(LOG_WARNING,
+	if (opbx_strlen_zero(context)) {
+		opbx_log(LOG_WARNING,
 			"Directory must be called with an argument "
 			"(context in which to interpret extensions)\n");
 		return -1;
 	}
 	if (digit == '0') {
-		if (!cw_goto_if_exists(chan, chan->context, "o", 1) ||
-		    (!cw_strlen_zero(chan->proc_context) &&
-		     !cw_goto_if_exists(chan, chan->proc_context, "o", 1))) {
+		if (!opbx_goto_if_exists(chan, chan->context, "o", 1) ||
+		    (!opbx_strlen_zero(chan->macrocontext) &&
+		     !opbx_goto_if_exists(chan, chan->macrocontext, "o", 1))) {
 			return 0;
 		} else {
-			cw_log(LOG_WARNING, "Can't find extension 'o' in current context.  "
+			opbx_log(LOG_WARNING, "Can't find extension 'o' in current context.  "
 				"Not Exiting the Directory!\n");
 			res = 0;
 		}
 	}	
 	if (digit == '*') {
-		if (!cw_goto_if_exists(chan, chan->context, "a", 1) ||
-		    (!cw_strlen_zero(chan->proc_context) &&
-		     !cw_goto_if_exists(chan, chan->proc_context, "a", 1))) {
+		if (!opbx_goto_if_exists(chan, chan->context, "a", 1) ||
+		    (!opbx_strlen_zero(chan->macrocontext) &&
+		     !opbx_goto_if_exists(chan, chan->macrocontext, "a", 1))) {
 			return 0;
 		} else {
-			cw_log(LOG_WARNING, "Can't find extension 'a' in current context.  "
+			opbx_log(LOG_WARNING, "Can't find extension 'a' in current context.  "
 				"Not Exiting the Directory!\n");
 			res = 0;
 		}
@@ -330,10 +328,10 @@ static int do_directory(struct cw_channel *chan, struct cw_config *cfg, char *co
 	memset(ext, 0, sizeof(ext));
 	ext[0] = digit;
 	res = 0;
-	if (cw_readstring(chan, ext + 1, NUMDIGITS - 1, 3000, 3000, "#") < 0) res = -1;
+	if (opbx_readstring(chan, ext + 1, NUMDIGITS - 1, 3000, 3000, "#") < 0) res = -1;
 	if (!res) {
 		/* Search for all names which start with those digits */
-		v = cw_variable_browse(cfg, context);
+		v = opbx_variable_browse(cfg, context);
 		while(v && !res) {
 			/* Find all candidate extensions */
 			while(v) {
@@ -344,7 +342,7 @@ static int do_directory(struct cw_channel *chan, struct cw_config *cfg, char *co
 					strsep(&stringp, ",");
 					pos = strsep(&stringp, ",");
 					if (pos) {
-						cw_copy_string(name, pos, sizeof(name));
+						opbx_copy_string(name, pos, sizeof(name));
 						/* Grab the last name */
 						if (last && strrchr(pos,' '))
 							pos = strrchr(pos, ' ') + 1;
@@ -396,9 +394,9 @@ static int do_directory(struct cw_channel *chan, struct cw_config *cfg, char *co
 
 		if (lastuserchoice != '1') {
 			if (found) 
-				res = cw_streamfile(chan, "dir-nomore", chan->language);
+				res = opbx_streamfile(chan, "dir-nomore", chan->language);
 			else
-				res = cw_streamfile(chan, "dir-nomatch", chan->language);
+				res = opbx_streamfile(chan, "dir-nomatch", chan->language);
 			if (!res)
 				res = 1;
 			return res;
@@ -408,25 +406,35 @@ static int do_directory(struct cw_channel *chan, struct cw_config *cfg, char *co
 	return res;
 }
 
-static int directory_exec(struct cw_channel *chan, int argc, char **argv)
+static int directory_exec(struct opbx_channel *chan, void *data)
 {
-	struct localuser *u;
-	struct cw_config *cfg;
-	char *context, *dialcontext, *dirintro;
 	int res = 0;
+	struct localuser *u;
+	struct opbx_config *cfg;
 	int last = 1;
+	char *context, *dialcontext, *dirintro, *options;
 
-	if (argc < 1 || argc > 3) {
-		cw_log(LOG_ERROR, "Syntax: %s\n", directory_syntax);
+	if (opbx_strlen_zero(data)) {
+		opbx_log(LOG_WARNING, "Directory requires an argument (context[,dialcontext])\n");
 		return -1;
 	}
 
 	LOCAL_USER_ADD(u);
 
-	context = argv[0];
-	dialcontext = (argc > 1 && argv[1][0] ? argv[1] : context);
-	if (argc > 2 && strchr(argv[2], 'f'))
-		last = 0;
+	context = opbx_strdupa(data);
+	dialcontext = strchr(context, '|');
+	if (dialcontext) {
+		*dialcontext = '\0';
+		dialcontext++;
+		options = strchr(dialcontext, '|');
+		if (options) {
+			*options = '\0';
+			options++; 
+			if (strchr(options, 'f'))
+				last = 0;
+		}
+	} else	
+		dialcontext = context;
 
 	cfg = realtime_directory(context);
 	if (!cfg) {
@@ -434,10 +442,10 @@ static int directory_exec(struct cw_channel *chan, int argc, char **argv)
 		return -1;
 	}
 
-	dirintro = cw_variable_retrieve(cfg, context, "directoryintro");
-	if (cw_strlen_zero(dirintro))
-		dirintro = cw_variable_retrieve(cfg, "general", "directoryintro");
-	if (cw_strlen_zero(dirintro)) {
+	dirintro = opbx_variable_retrieve(cfg, context, "directoryintro");
+	if (opbx_strlen_zero(dirintro))
+		dirintro = opbx_variable_retrieve(cfg, "general", "directoryintro");
+	if (opbx_strlen_zero(dirintro)) {
 		if (last)
 			dirintro = "dir-intro";	
 		else
@@ -446,17 +454,17 @@ static int directory_exec(struct cw_channel *chan, int argc, char **argv)
 	
 	for (;;) {
 		if (!res)
-			res = cw_streamfile(chan, dirintro, chan->language);
+			res = opbx_streamfile(chan, dirintro, chan->language);
 		if (!res)
-			res = cw_waitstream(chan, CW_DIGIT_ANY);
-		cw_stopstream(chan);
+			res = opbx_waitstream(chan, OPBX_DIGIT_ANY);
+		opbx_stopstream(chan);
 		if (!res)
-			res = cw_waitfordigit(chan, 5000);
+			res = opbx_waitfordigit(chan, 5000);
 		if (res >0) {
 			res = do_directory(chan, cfg, context, dialcontext, res, last);
 			if (res > 0){
-				res = cw_waitstream(chan, CW_DIGIT_ANY);
-				cw_stopstream(chan);
+				res = opbx_waitstream(chan, OPBX_DIGIT_ANY);
+				opbx_stopstream(chan);
 				if (res >= 0) {
 					continue;
 				}
@@ -464,23 +472,20 @@ static int directory_exec(struct cw_channel *chan, int argc, char **argv)
 		}
 		break;
 	}
-	cw_config_destroy(cfg);
+	opbx_config_destroy(cfg);
 	LOCAL_USER_REMOVE(u);
 	return res;
 }
 
 int unload_module(void)
 {
-	int res = 0;
 	STANDARD_HANGUP_LOCALUSERS;
-	res |= cw_unregister_application(directory_app);
-	return res;
+	return opbx_unregister_application(app);
 }
 
 int load_module(void)
 {
-	directory_app = cw_register_application(directory_name, directory_exec, directory_synopsis, directory_syntax, directory_descrip);
-	return 0;
+	return opbx_register_application(app, directory_exec, synopsis, descrip);
 }
 
 char *description(void)

@@ -1,12 +1,12 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  *
  * Copyright (C) 1999 - 2005, Digium, Inc.
  *
  * Russell Bryant <russell@digium.com>
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -49,7 +49,7 @@ int main(int argc, char *argv[])
 
 	if (argc != 3) {
 		fprintf(stderr, "streamplayer -- A utility for reading from a stream.\n");
-		fprintf(stderr, "Written for use with CallWeaver (http://www.callweaver.org)\n");
+		fprintf(stderr, "Written for use with OpenPBX (http://www.openpbx.org)\n");
 		fprintf(stderr, "Copyright (C) 2005 -- Russell Bryant -- Digium, Inc.\n\n");
 		fprintf(stderr, "Usage: ./streamplayer <ip> <port>\n");
 		exit(1);

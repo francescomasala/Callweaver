@@ -1,7 +1,7 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- A telephony toolkit for Linux.
  *
- * Implementation of Inter-CallWeaver eXchange
+ * Implementation of Inter-OpenPBX eXchange
  * 
  * Copyright (C) 2003, Digium
  *
@@ -18,7 +18,7 @@
 #ifndef _IAX2_PARSER_H
 #define _IAX2_PARSER_H
 
-#include "callweaver/frame.h"
+#include "openpbx/frame.h"
 
 struct iax_ies {
 	char *called_number;
@@ -120,10 +120,8 @@ struct iax_frame {
 	struct iax_frame *next;
 	struct iax_frame *prev;
 	/* Actual, isolated frame header */
-	struct cw_frame af;
-	/* Amount of data _allocated_ for afdata */
-	size_t afdatalen;
-	unsigned char unused[CW_FRIENDLY_OFFSET];
+	struct opbx_frame af;
+	unsigned char unused[OPBX_FRIENDLY_OFFSET];
 	unsigned char afdata[0];	/* Data for frame */
 };
 
@@ -136,7 +134,7 @@ struct iax_ie_data {
 extern void iax_set_output(void (*output)(const char *data));
 /* Choose a different function for errors */
 extern void iax_set_error(void (*output)(const char *data));
-extern void iax_showframe(struct iax_frame *f, struct cw_iax2_full_hdr *fhi, int rx, struct sockaddr_in *sin, int datalen);
+extern void iax_showframe(struct iax_frame *f, struct opbx_iax2_full_hdr *fhi, int rx, struct sockaddr_in *sin, int datalen);
 
 extern const char *iax_ie2str(int ie);
 
@@ -153,7 +151,7 @@ extern int iax_get_frames(void);
 extern int iax_get_iframes(void);
 extern int iax_get_oframes(void);
 
-extern void iax_frame_wrap(struct iax_frame *fr, struct cw_frame *f);
+extern void iax_frame_wrap(struct iax_frame *fr, struct opbx_frame *f);
 extern struct iax_frame *iax_frame_new(int direction, int datalen);
 extern void iax_frame_free(struct iax_frame *fr);
 #endif

@@ -4,7 +4,7 @@
  *
  * --- Peter Nixon [ codemonkey@peternixon.net ]
  *
- * This is a PostgreSQL schema for doing CDR accounting with CallWeaver
+ * This is a PostgreSQL schema for doing CDR accounting with OpenPBX
  *
  * The calls will automatically be logged as long as the module is loaded.
  *

@@ -1,0 +1,64 @@
+#!/bin/sh
+# $Id: ast_grab_core,v 1.1 2005/05/15 05:07:14 kpfleming Exp $
+# lame quickie script to snarf a core of a hung openpbx process.
+# bugs to ast_grab_core, blinky-lights.org  (derrick daugherty)
+
+DATE=`date +%Y%m%d%H%M`
+DUMPDIR=/var/tmp
+HOSTNAME=`hostname`
+ADMINEMAIL="root@localhost"
+
+#the following should be improved
+if [ -e /etc/openpbx/openpbx.conf ]; then
+	RUNDIR=`awk -F"=>" '/astrundir/ {print $2}' /etc/openpbx/openpbx.conf`
+	PID=`cat ${RUNDIR}/openpbx.pid`
+elif [ -e /var/run/openpbx.pid ] ; then 
+	PID=`cat /var/run/openpbx.pid`
+else 
+	echo Could not find an openpbx.conf definition for astrundir,  using \'ps\'
+	echo to try and determine process ID.  This is not reliable.
+	PID=`ps auxwf|grep openpbx|grep vv|head -1|awk '{print $2}'`
+fi
+
+echo Snarfing openpbx core, this could take a few seconds depending
+echo on how much memory is in use.
+echo
+echo \*\*\* WARNING \*\*\*  If the system is not already locked this will cause the 
+echo \*\*\* WARNING \*\*\*  process to STOP while memory is dumped to disk.
+echo
+
+/usr/bin/gdb > /dev/null << EOF
+	attach ${PID}
+	gcore ${DUMPDIR}/openpbx_${DATE}.core.${PID}
+	detach
+	quit
+EOF
+
+echo Snarfed!  ${DUMPDIR}/openpbx_${DATE}.core.${PID}
+echo
+
+
+echo Trying for a backtrace of the captured core.
+/usr/bin/gdb /usr/sbin/openpbx ${DUMPDIR}/openpbx_${DATE}.core.${PID} > /tmp/gdb_dump.${PID} 2> /dev/null << EOF
+set prompt \n
+echo --------------------------------------------------------------------------------\n
+echo INFO THREAD
+info thread
+echo --------------------------------------------------------------------------------\n
+echo THREAD APPLY ALL BT
+thread apply all bt
+echo --------------------------------------------------------------------------------\n
+echo THREAD APPLY ALL BT FULL
+thread apply all bt full
+quit
+EOF
+echo Done trying for a bt.
+
+
+echo Notifying admins of the core.
+/usr/bin/mail -s "${HOSTNAME} core dumped at ${DUMPDIR}/openpbx_${DATE}.core.${PID}" ${ADMINEMAIL} < /tmp/gdb_dump.${PID}
+/bin/rm /tmp/gdb_dump.${PID}
+echo Done.
+echo
+echo Reproducible deadlocks should be posted with a full backtrace and instructions
+echo to reproduce the issue at http://bugs.digium.com/    Thanks!

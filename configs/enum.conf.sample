@@ -1,7 +1,7 @@
 ;
 ; ENUM Configuration for resolving phone numbers over DNS
 ;
-; Sample config for CallWeaver
+; Sample config for OpenPBX
 ; This file is reloaded at "reload enum" in the CLI
 ;
 [general]

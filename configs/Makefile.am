@@ -1,10 +1,6 @@
 AUTOMAKE_OPTS = gnu
-
-DEFS += -include $(top_builddir)/include/confdefs.h
-
 SAMPLES = adsi.conf.sample \
 	adtranvofr.conf.sample \
-	db-memcached.conf.sample \
 	cdr.conf.sample \
 	cdr_custom.conf.sample \
 	cdr_manager.conf.sample \
@@ -23,17 +19,13 @@ SAMPLES = adsi.conf.sample \
 	modules.conf.sample \
 	musiconhold.conf.sample \
 	muted.conf.sample \
-	callweaver.adsi.sample \
-	callweaver.conf.sample \
+	openpbx.adsi.sample \
+	openpbx.conf.sample \
 	osp.conf.sample \
 	privacy.conf.sample \
-	res_snmp.conf.sample \
+	rpt.conf.sample \
 	rtp.conf.sample \
 	udptl.conf.sample
-
-if WANT_MEMCACHE
-SAMPLES += db-memcached.conf.sample
-endif WANT_MEMCACHE
 
 if WANT_APP_QUEUE
 SAMPLES += queues.conf.sample
@@ -47,17 +39,13 @@ if WANT_CDR_MYSQL
 SAMPLES	+= cdr_mysql.conf.sample
 endif WANT_CDR_MYSQL
 
-#if WANT_CDR_ODBC
-#SAMPLES	+= cdr_odbc.conf.sample
-#endif WANT_CDR_ODBC
+if WANT_CDR_ODBC
+SAMPLES	+= cdr_odbc.conf.sample
+endif WANT_CDR_ODBC
 
 if WANT_CDR_PGSQL
 SAMPLES	+= cdr_pgsql.conf.sample
 endif WANT_CDR_PGSQL
-
-if WANT_CDR_PGSQL_CUSTOM
-SAMPLES += cdr_pgsql_custom.conf.sample
-endif WANT_CDR_PGSQL_CUSTOM
 
 if WANT_CHAN_AGENT
 SAMPLES += agents.conf.sample
@@ -123,9 +111,9 @@ if WANT_RES_JABBER
 SAMPLES += res_jabber.conf.sample
 endif WANT_RES_JABBER
 
-#if WANT_RES_ODBC
-#SAMPLES += res_odbc.conf.sample
-#endif WANT_RES_ODBC
+if WANT_RES_ODBC
+SAMPLES += res_odbc.conf.sample
+endif WANT_RES_ODBC
 
 if WANT_RES_CONFIG_MYSQL
 SAMPLES += res_mysql.conf.sample
@@ -151,13 +139,13 @@ noinst_DATA = $(SAMPLES)
 
 @substitute@
 
-EXTRA_DIST = $(SAMPLES) callweaver.conf.sample.in logger.conf.sample.in
-CLEANFILES = callweaver.conf.sample logger.conf.sample musiconhold.conf.sample
+EXTRA_DIST = $(SAMPLES) openpbx.conf.sample.in logger.conf.sample.in 
+CLEANFILES = openpbx.conf.sample logger.conf.sample musiconhold.conf.sample
 
-callweaver.conf.sample: callweaver.conf.sample.in Makefile
-	rm -f callweaver.conf.sample.tmp
-	$(substitute) $(srcdir)/callweaver.conf.sample.in > callweaver.conf.sample.tmp
-	mv callweaver.conf.sample.tmp callweaver.conf.sample
+openpbx.conf.sample: openpbx.conf.sample.in Makefile
+	rm -f openpbx.conf.sample.tmp
+	$(substitute) $(srcdir)/openpbx.conf.sample.in > openpbx.conf.sample.tmp
+	mv openpbx.conf.sample.tmp openpbx.conf.sample
 
 logger.conf.sample: logger.conf.sample.in Makefile
 	rm -f logger.conf.sample.tmp
@@ -170,24 +158,21 @@ musiconhold.conf.sample: musiconhold.conf.sample.in Makefile
 	mv musiconhold.conf.sample.tmp musiconhold.conf.sample
 
 install-data-local:
-	if [ ! -d "$(DESTDIR)${cwconfdir}" ]; \
-	then \
-	    mkdir -p $(DESTDIR)${cwconfdir}; \
-	    chmod 0750 $(DESTDIR)${cwconfdir}; \
-	fi; \
+	mkdir -p $(DESTDIR)${opbxconfdir}; \
 	if test -z "$(DESTDIR)"; \
 	then \
-		chown ${cwrunuser}:${cwrungroup} $(DESTDIR)${cwconfdir}; \
+		chown ${opbxrunuser}:${opbxrungroup} $(DESTDIR)${opbxconfdir}; \
 	fi; \
+	chmod 0750 $(DESTDIR)${opbxconfdir}; \
 	for samplefile in $(SAMPLES); \
 	do \
 		configfile=`basename $${samplefile} .sample`; \
-		if test ! -f $(DESTDIR)${cwconfdir}/$${configfile}; \
+		if test ! -f $(DESTDIR)${opbxconfdir}/$${configfile}; \
 		then \
-			$(INSTALL) -m 0640 $${samplefile} $(DESTDIR)${cwconfdir}/$${configfile}; \
+			$(INSTALL) -m 0640 $${samplefile} $(DESTDIR)${opbxconfdir}/$${configfile}; \
 			if test -z "$(DESTDIR)"; \
 			then \
-				chown ${cwrunuser}:${cwrungroup} $(DESTDIR)${cwconfdir}/$${configfile}; \
+				chown ${opbxrunuser}:${opbxrungroup} $(DESTDIR)${opbxconfdir}/$${configfile}; \
 			fi; \
 		fi; \
 	done

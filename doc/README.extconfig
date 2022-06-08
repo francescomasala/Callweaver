@@ -1,20 +1,20 @@
-CallWeaver external configuration
+OpenPBX external configuration
 ===============================
 
-The CallWeaver external configuration engine is the result of work by
+The OpenPBX external configuration engine is the result of work by
 Anthony Minessale II, Mark Spencer and Constantine Filin.
 
 It is designed to provide a flexible, seamless integration between
-CallWeaver's internal configuration structure and external SQL other other
+OpenPBX's internal configuration structure and external SQL other other
 databases (maybe even LDAP one day).
 
 The external configuration engine is the basis for the ARA, the
-CallWeaver Realtime Architecture (see README.realtime for more 
+OpenPBX Realtime Architecture (see README.realtime for more 
 information).
 
 * Configuration
 
-External configuration is configured in /etc/callweaver/extconfig.conf
+External configuration is configured in /etc/openpbx/extconfig.conf
 allowing you to map any configuration file (static mappings) to
 be pulled from the database, or to map special runtime entries which
 permit the dynamic creation of objects, entities, peers, etc. without
@@ -33,11 +33,11 @@ context=local
 
 could be stored in a table like this:
 
-+------+--------+-------+--------------+----------+-----+-----------+---------+---------+
-| name | host   | secret| context      | ipaddr   | port| regseconds|useragent|regserver|
-+------+--------+-------+--------------+----------+-----+-----------+---------+---------+
-| foo  | dynamic|  bar  | default;local| 127.0.0.1| 4569| 1096954152|  NULL   |  NULL   |
-+------+--------+-------+--------------+----------+-----+-----------+---------+---------+
++------+--------+-------+--------------+----------+-----+-----------+
+| name | host   | secret| context      | ipaddr   | port| regseconds|
++------+--------+-------+--------------+----------+-----+-----------+
+| foo  | dynamic|  bar  | default;local| 127.0.0.1| 4569| 1096954152|
++------+--------+-------+--------------+----------+-----+-----------+
 
 Note that for use with IAX or SIP, the table will also need the "name", 
 "ipaddr", "port", "regseconds" columns.  If you wanted to be able to 
@@ -46,21 +46,13 @@ table, for example.
 
 A SIP table would look more like this:
 
-+------+--------+-------+----------+-----+------------+----------+---------+---------+
-| name | host   | secret| ipaddr   | port| regseconds | username |useragent|regserver|
-+------+--------+-------+----------+-----+------------+----------+---------+---------+
-| foo  | dynamic|  bar  | 127.0.0.1| 4569| 1096954152 |   1234   |  NULL   |  NULL   |
-+------+--------+-------+----------+-----+------------+----------+---------+---------+
++------+--------+-------+----------+-----+------------+----------+
+| name | host   | secret| ipaddr   | port| regseconds | username |
++------+--------+-------+----------+-----+------------+----------+
+| foo  | dynamic|  bar  | 127.0.0.1| 4569| 1096954152 |   1234   |
++------+--------+-------+----------+-----+------------+----------+
 
 in order to store appropriate parameters required for SIP.
-The useragent column is filled by the sip channel when the peer registers.
-
-The regserver column is filled by the sip channel when the peer registers if you
-have the system name set in callweaver.conf.
-CallWeaver.org will store the system name that the user registered on in 
-the database. This can be used to direct calls to go through the server 
-that holds the registration (for NAT traversal purposes).
-
 
 A Voicemail table would look more like this:
 

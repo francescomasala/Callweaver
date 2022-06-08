@@ -70,9 +70,9 @@ towards replacing all the strcmp() and strcasecmp() calls in pbx.c with hash
 comparisons by providing this hashing API and hash codes for keywords used in
 there. This comprises the following files ...
 
-cw_hash.h -- header file of the hashing API
-cw_hash.c -- implementation of the hashing API
-cw_keywords.h -- hash values for keywords found in pbx.c
+opbx_hash.h -- header file of the hashing API
+opbx_hash.c -- implementation of the hashing API
+opbx_keywords.h -- hash values for keywords found in pbx.c
 
 Eventually, everything should be hashed, contexts, extensions, variables etc.
 
@@ -81,17 +81,17 @@ The following is a description of the main steps of the conversion to a hash
 based approach, using hash comparison instead of strcmp() and strcasecmp(),
 but not yet using hashtables for storage (this is the next step, though).
 
-In pbx.c the structs cw_app and cw_builtin got an additional member ...
+In pbx.c the structs opbx_app and opbx_builtin got an additional member ...
 
 unsigned int hash;
 
 Function pbx_findapp() changed to ...
 
-unsigned int hash = cw_hash_string(app);
+unsigned int hash = opbx_hash_string(app);
 
 alternatively, ...
 
-unsigned int hash = cw_hash_string_toupper(app);
+unsigned int hash = opbx_hash_string_toupper(app);
 
 ... in case you want to retain case insensitivity. Note, that this is
 slightly more expensive, computationally.
@@ -124,14 +124,14 @@ context switch plus average number of characters in an application name times
 the number of registered applications.
 
 Now, in order to get the hash codes for arbitrary applications into the
-cw_app struct in the first place, the following code was added to function
-cw_register_application() ...
+opbx_app struct in the first place, the following code was added to function
+opbx_register_application() ...
 
-unsigned int hash = cw_hash_string(app);
+unsigned int hash = opbx_hash_string(app);
 
 or, again, for retaining case insensitivity ...
 
-unsigned int hash = cw_hash_string_toupper(app);
+unsigned int hash = opbx_hash_string_toupper(app);
 
 Then, ...
 
@@ -142,23 +142,23 @@ Then, ...
 and ...
 
         if (tmp) {
-                memset(tmp, 0, sizeof(struct cw_app));
+                memset(tmp, 0, sizeof(struct opbx_app));
                 strncpy(tmp->name, app, sizeof(tmp->name)-1);
                 tmp->hash = hash;
 
-Function cw_unregister_application() has also been modified accordingly.
+Function opbx_unregister_application() has also been modified accordingly.
 
 
 Finally, all the strcmp()'s for builtin keyword checks were replaced by ...
 
-if (c && (hash == CW_KEYWORD_CALLERIDNUM)) {
+if (c && (hash == OPBX_KEYWORD_CALLERIDNUM)) {
                 // replaced code: (c && !strcmp(var, "CALLERIDNUM")) {
 
 etc etc
 
 
 Eventually, I will replace the linked list storage and linear search with a
-hashtable storage library so CallWeaver can store arbitrary objects in a hash
+hashtable storage library so OpenPBX can store arbitrary objects in a hash
 table from where they can be retrieved much faster than the current method
 using linear searches on linked lists and arrays.
 
@@ -174,7 +174,7 @@ benjk, August 2006
 
 In pbx.c file, exactly in function
 
-static int pbx_builtin_noop(struct cw_channel *chan, void *data)
+static int pbx_builtin_noop(struct opbx_channel *chan, void *data)
 
 we have added a call to usleep(1);
 

@@ -17,10 +17,10 @@
 ;
 ;uncomment to load queues.conf via the odbc engine.
 ;
-;queues.conf => odbc,callweaver,ast_config
+;queues.conf => odbc,openpbx,ast_config
 ;
 ; The following files CANNOT be loaded from Realtime storage:
-;	callweaver.conf
+;	openpbx.conf
 ;	extconfig.conf (this file)
 ;	logger.conf
 ;
@@ -39,13 +39,13 @@
 ; database and table (or uses the name of
 ; the family if the table is not specified
 ;
-;example => odbc,callweaver,alttable
-;iaxusers => odbc,callweaver
-;iaxpeers => odbc,callweaver
-;sipusers => odbc,callweaver
-;sippeers => odbc,callweaver
-;voicemail => odbc,callweaver
-;extensions => odbc,callweaver
-;queues => odbc,callweaver
-;queue_members => odbc,callweaver
+;example => odbc,openpbx,alttable
+;iaxusers => odbc,openpbx
+;iaxpeers => odbc,openpbx
+;sipusers => odbc,openpbx
+;sippeers => odbc,openpbx
+;voicemail => odbc,openpbx
+;extensions => odbc,openpbx
+;queues => odbc,openpbx
+;queue_members => odbc,openpbx
 

@@ -1,12 +1,12 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  *
  * Copyright (C) 1999 - 2005, Digium, Inc.
  *
  * Mark Spencer <markster@digium.com>
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -20,7 +20,7 @@
  *
  * \brief Realtime PBX Module
  *
- * \arg See also: \ref cwARA
+ * \arg See also: \ref AstARA
  */
 
 
@@ -35,28 +35,28 @@
 #include <errno.h>
 
 
-#include "callweaver.h"
+#include "openpbx.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/pbx/pbx_realtime.c $", "$Revision: 4723 $")
+OPENPBX_FILE_VERSION("$HeadURL$", "$Revision: 46 $")
 
-#include "callweaver/file.h"
-#include "callweaver/logger.h"
-#include "callweaver/channel.h"
-#include "callweaver/config.h"
-#include "callweaver/options.h"
-#include "callweaver/pbx.h"
-#include "callweaver/module.h"
-#include "callweaver/frame.h"
-#include "callweaver/term.h"
-#include "callweaver/manager.h"
-#include "callweaver/cli.h"
-#include "callweaver/linkedlists.h"
-#include "callweaver/chanvars.h"
-#include "callweaver/sched.h"
-#include "callweaver/io.h"
-#include "callweaver/utils.h"
-#include "callweaver/crypto.h"
-#include "callweaver/callweaver_db.h"
+#include "openpbx/file.h"
+#include "openpbx/logger.h"
+#include "openpbx/channel.h"
+#include "openpbx/config.h"
+#include "openpbx/options.h"
+#include "openpbx/pbx.h"
+#include "openpbx/module.h"
+#include "openpbx/frame.h"
+#include "openpbx/term.h"
+#include "openpbx/manager.h"
+#include "openpbx/cli.h"
+#include "openpbx/linkedlists.h"
+#include "openpbx/chanvars.h"
+#include "openpbx/sched.h"
+#include "openpbx/io.h"
+#include "openpbx/utils.h"
+#include "openpbx/crypto.h"
+#include "openpbx/opbxdb.h"
 
 #define MODE_MATCH 		0
 #define MODE_MATCHMORE 	1
@@ -86,33 +86,36 @@ static char *tdesc = "Realtime Switch";
 	const char *cxt; \
 	char *table; \
 	int res=-1; \
-	struct cw_variable *var=NULL; \
-	buf = cw_strdupa(data); \
-	opts = strchr(buf, '/'); \
-	if (opts) { \
-		*opts='\0'; \
-		opts++; \
+	struct opbx_variable *var=NULL; \
+	buf = opbx_strdupa(data); \
+	if (buf) { \
+		opts = strchr(buf, '/'); \
+		if (opts) { \
+			*opts='\0'; \
+			opts++; \
+		} else \
+			opts=""; \
+		table = strchr(buf, '@'); \
+		if (table) { \
+			*table = '\0'; \
+			table++;\
+			cxt = buf; \
+		} else cxt = NULL; \
+		if (!cxt || opbx_strlen_zero(cxt)) \
+			cxt = context;\
+		if (!table || opbx_strlen_zero(table)) \
+			table = "extensions"; \
+		var = realtime_switch_common(table, cxt, exten, priority, mode); \
 	} else \
-		opts=""; \
-	table = strchr(buf, '@'); \
-	if (table) { \
-		*table = '\0'; \
-		table++;\
-		cxt = buf; \
-	} else cxt = NULL; \
-	if (!cxt || cw_strlen_zero(cxt)) \
-		cxt = context;\
-	if (!table || cw_strlen_zero(table)) \
-		table = "extensions"; \
-	var = realtime_switch_common(table, cxt, exten, priority, mode);
+		res = -1; 
 
-static struct cw_variable *realtime_switch_common(const char *table, const char *context, const char *exten, int priority, int mode)
+static struct opbx_variable *realtime_switch_common(const char *table, const char *context, const char *exten, int priority, int mode)
 {
-	struct cw_variable *var;
-	struct cw_config *cfg;
+	struct opbx_variable *var;
+	struct opbx_config *cfg;
 	char pri[20];
 	char *ematch;
-	char rexten[CW_MAX_EXTENSION + 20]="";
+	char rexten[OPBX_MAX_EXTENSION + 20]="";
 	int match;
 
 	snprintf(pri, sizeof(pri), "%d", priority);
@@ -131,17 +134,17 @@ static struct cw_variable *realtime_switch_common(const char *table, const char 
 		ematch = "exten";
 		strncpy(rexten, exten, sizeof(rexten) - 1);
 	}
-	var = cw_load_realtime(table, ematch, rexten, "context", context, "priority", pri, NULL);
+	var = opbx_load_realtime(table, ematch, rexten, "context", context, "priority", pri, NULL);
 	if (!var)
     {
-		cfg = cw_load_realtime_multientry(table, "exten LIKE", "\\_%", "context", context, "priority", pri, NULL);	
+		cfg = opbx_load_realtime_multientry(table, "exten LIKE", "\\_%", "context", context, "priority", pri, NULL);	
 		if (cfg)
         {
-			char *cat = cw_category_browse(cfg, NULL);
+			char *cat = opbx_category_browse(cfg, NULL);
 
 			while (cat)
             {
-                match = cw_extension_pattern_match(exten, cat);
+                match = opbx_extension_pattern_match(exten, cat);
 				switch (mode)
                 {
 				case MODE_MATCHMORE:
@@ -156,36 +159,36 @@ static struct cw_variable *realtime_switch_common(const char *table, const char 
 				}
 				if (match)
                 {
-					var = cw_category_detach_variables(cw_category_get(cfg, cat));
+					var = opbx_category_detach_variables(opbx_category_get(cfg, cat));
 					break;
 				}
-				cat = cw_category_browse(cfg, cat);
+				cat = opbx_category_browse(cfg, cat);
 			}
-			cw_config_destroy(cfg);
+			opbx_config_destroy(cfg);
 		}
 	}
 	return var;
 }
 
-static int realtime_exists(struct cw_channel *chan, const char *context, const char *exten, int priority, const char *callerid, const char *data)
+static int realtime_exists(struct opbx_channel *chan, const char *context, const char *exten, int priority, const char *callerid, const char *data)
 {
 	REALTIME_COMMON(MODE_MATCH);
-	if (var) cw_variables_destroy(var);
+	if (var) opbx_variables_destroy(var);
 	if (var)
 		res = 1;
 	return res > 0 ? res : 0;
 }
 
-static int realtime_canmatch(struct cw_channel *chan, const char *context, const char *exten, int priority, const char *callerid, const char *data)
+static int realtime_canmatch(struct opbx_channel *chan, const char *context, const char *exten, int priority, const char *callerid, const char *data)
 {
 	REALTIME_COMMON(MODE_CANMATCH);
-	if (var) cw_variables_destroy(var);
+	if (var) opbx_variables_destroy(var);
 	if (var)
 		res = 1;
 	return res > 0 ? res : 0;
 }
 
-static int realtime_exec(struct cw_channel *chan, const char *context, const char *exten, int priority, const char *callerid, const char *data)
+static int realtime_exec(struct opbx_channel *chan, const char *context, const char *exten, int priority, const char *callerid, int newstack, const char *data)
 {
 	char app[256];
 	char appdata[512]="";
@@ -193,8 +196,8 @@ static int realtime_exec(struct cw_channel *chan, const char *context, const cha
     char tmp1[80];
     char tmp2[80];
     char tmp3[EXT_DATA_SIZE];
-	struct cw_app *a;
-	struct cw_variable *v;
+	struct opbx_app *a;
+	struct opbx_variable *v;
 	REALTIME_COMMON(MODE_MATCH);
 	if (var) {
 		v = var;
@@ -202,20 +205,20 @@ static int realtime_exec(struct cw_channel *chan, const char *context, const cha
 			if (!strcasecmp(v->name, "app"))
 				strncpy(app, v->value, sizeof(app) -1 );
 			else if (!strcasecmp(v->name, "appdata"))
-				tmp = cw_strdupa(v->value);
+				tmp = opbx_strdupa(v->value);
 			v = v->next;
 		}
-		cw_variables_destroy(var);
-		if (!cw_strlen_zero(app)) {
+		opbx_variables_destroy(var);
+		if (!opbx_strlen_zero(app)) {
 			a = pbx_findapp(app);
 			if (a) {
-				if(!cw_strlen_zero(tmp))
-				   pbx_substitute_variables_helper(chan, tmp, appdata, sizeof(appdata));
+				if(!opbx_strlen_zero(tmp))
+				   pbx_substitute_variables_helper(chan, tmp, appdata, sizeof(appdata) - 1);
                 if (option_verbose > 2)
-					cw_verbose( VERBOSE_PREFIX_3 "Executing %s(\"%s\", \"%s\")\n",
-					    cw_term_color(tmp1, app, COLOR_BRCYAN, 0, sizeof(tmp1)),
-					    cw_term_color(tmp2, chan->name, COLOR_BRMAGENTA, 0, sizeof(tmp2)),
-					    cw_term_color(tmp3, (!cw_strlen_zero(appdata) ? (char *)appdata : ""), COLOR_BRMAGENTA, 0, sizeof(tmp3)));
+					opbx_verbose( VERBOSE_PREFIX_3 "Executing %s(\"%s\", \"%s\")\n",
+					    opbx_term_color(tmp1, app, COLOR_BRCYAN, 0, sizeof(tmp1)),
+					    opbx_term_color(tmp2, chan->name, COLOR_BRMAGENTA, 0, sizeof(tmp2)),
+					    opbx_term_color(tmp3, (!opbx_strlen_zero(appdata) ? (char *)appdata : ""), COLOR_BRMAGENTA, 0, sizeof(tmp3)));
                 manager_event(EVENT_FLAG_CALL, "Newexten",
 							  "Channel: %s\r\n"
 							  "Context: %s\r\n"
@@ -226,24 +229,24 @@ static int realtime_exec(struct cw_channel *chan, const char *context, const cha
 							  "Uniqueid: %s\r\n",
 							  chan->name, chan->context, chan->exten, chan->priority, app, appdata ? appdata : "(NULL)", chan->uniqueid);
 				
-				res = pbx_exec(chan, a, appdata);
+				res = pbx_exec(chan, a, appdata, newstack);
 			} else
-				cw_log(LOG_NOTICE, "No such application '%s' for extension '%s' in context '%s'\n", app, exten, context);
+				opbx_log(LOG_NOTICE, "No such application '%s' for extension '%s' in context '%s'\n", app, exten, context);
 		}
 	}
 	return res;
 }
 
-static int realtime_matchmore(struct cw_channel *chan, const char *context, const char *exten, int priority, const char *callerid, const char *data)
+static int realtime_matchmore(struct opbx_channel *chan, const char *context, const char *exten, int priority, const char *callerid, const char *data)
 {
 	REALTIME_COMMON(MODE_MATCHMORE);
-	if (var) cw_variables_destroy(var);
+	if (var) opbx_variables_destroy(var);
 	if (var)
 		res = 1;
 	return res > 0 ? res : 0;
 }
 
-static struct cw_switch realtime_switch =
+static struct opbx_switch realtime_switch =
 {
         name:                   "Realtime",
         description:    		"Realtime Dialplan Switch",
@@ -265,13 +268,13 @@ int usecount(void)
 
 int unload_module(void)
 {
-	cw_unregister_switch(&realtime_switch);
+	opbx_unregister_switch(&realtime_switch);
 	return 0;
 }
 
 int load_module(void)
 {
-	cw_register_switch(&realtime_switch);
+	opbx_register_switch(&realtime_switch);
 	return 0;
 }
 

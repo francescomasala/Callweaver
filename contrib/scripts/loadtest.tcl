@@ -12,8 +12,8 @@
 #
 
 
-# where CallWeaver's pbx/pbx_spool.c will be looking for work
-set SPOOLDIR /var/spool/callweaver/outgoing
+# where OpenPBX's pbx/pbx_spool.c will be looking for work
+set SPOOLDIR /var/spool/openpbx/outgoing
 # pbx_spool is fairly aggresive, so make files here first
 set TEMPDIR /tmp
 

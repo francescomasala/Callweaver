@@ -1,9 +1,9 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  *
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the Asterisk project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -17,42 +17,43 @@
 #include "confdefs.h"
 #endif
 
-#include <callweaver/monitor.h>
+#include <openpbx/monitor.h>
 
-static int stub_cw_monitor_start( struct cw_channel *chan, const char *format_spec, const char *fname_base, int need_lock )
+
+static int stub_opbx_monitor_start( struct opbx_channel *chan, const char *format_spec, const char *fname_base, int need_lock )
 {
-	cw_log(LOG_NOTICE, "res_monitor not loaded!\n");
+	opbx_log(LOG_NOTICE, "res_monitor not loaded!\n");
 	return -1;
 }
 
-static int stub_cw_monitor_stop( struct cw_channel *chan, int need_lock)
+static int stub_opbx_monitor_stop( struct opbx_channel *chan, int need_lock)
 {
-	cw_log(LOG_NOTICE, "res_monitor not loaded!\n");
+	opbx_log(LOG_NOTICE, "res_monitor not loaded!\n");
 	return -1;
 }
 
-static int stub_cw_monitor_change_fname( struct cw_channel *chan, const char *fname_base, int need_lock )
+static int stub_opbx_monitor_change_fname( struct opbx_channel *chan, const char *fname_base, int need_lock )
 {
-	cw_log(LOG_NOTICE, "res_monitor not loaded!\n");
+	opbx_log(LOG_NOTICE, "res_monitor not loaded!\n");
 	return -1;
 }
 
-static void stub_cw_monitor_setjoinfiles(struct cw_channel *chan, int turnon)
+static void stub_opbx_monitor_setjoinfiles(struct opbx_channel *chan, int turnon)
 {
-	cw_log(LOG_NOTICE, "res_monitor not loaded!\n");
+	opbx_log(LOG_NOTICE, "res_monitor not loaded!\n");
 }
 
 
 
-int (*cw_monitor_start)( struct cw_channel *chan, const char *format_spec, const char *fname_base, int need_lock ) =
-	stub_cw_monitor_start;
+int (*opbx_monitor_start)( struct opbx_channel *chan, const char *format_spec, const char *fname_base, int need_lock ) =
+	stub_opbx_monitor_start;
 
-int (*cw_monitor_stop)( struct cw_channel *chan, int need_lock) =
-	stub_cw_monitor_stop;
+int (*opbx_monitor_stop)( struct opbx_channel *chan, int need_lock) =
+	stub_opbx_monitor_stop;
 
-int (*cw_monitor_change_fname)( struct cw_channel *chan, const char *fname_base, int need_lock ) =
-	stub_cw_monitor_change_fname;
+int (*opbx_monitor_change_fname)( struct opbx_channel *chan, const char *fname_base, int need_lock ) =
+	stub_opbx_monitor_change_fname;
 
-void (*cw_monitor_setjoinfiles)(struct cw_channel *chan, int turnon) =
-	stub_cw_monitor_setjoinfiles;
+void (*opbx_monitor_setjoinfiles)(struct opbx_channel *chan, int turnon) =
+	stub_opbx_monitor_setjoinfiles;
 

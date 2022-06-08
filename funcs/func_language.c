@@ -1,10 +1,10 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  *
  * Copyright (C) 1999 - 2005, Digium, Inc.
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -28,57 +28,56 @@
 #include <string.h>
 #include <sys/types.h>
 
-#include "callweaver.h"
+#include "openpbx.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/funcs/func_language.c $", "$Revision: 4723 $")
+OPENPBX_FILE_VERSION("$HeadURL$", "$Revision$")
 
-#include "callweaver/module.h"
-#include "callweaver/channel.h"
-#include "callweaver/pbx.h"
-#include "callweaver/logger.h"
-#include "callweaver/utils.h"
-#include "callweaver/app.h"
+#include "openpbx/module.h"
+#include "openpbx/channel.h"
+#include "openpbx/pbx.h"
+#include "openpbx/logger.h"
+#include "openpbx/utils.h"
+#include "openpbx/app.h"
 
+static char *builtin_function_language_read(struct opbx_channel *chan, char *cmd, char *data, char *buf, size_t len) 
+{
+	opbx_copy_string(buf, chan->language, len);
 
-static void *language_function;
-static const char *language_func_name = "LANGUAGE";
-static const char *language_func_synopsis = "Gets or sets the channel's language.";
-static const char *language_func_syntax = "LANGUAGE()";
-static const char *language_func_desc =
-	"Gets or sets the channel language.  This information is used for the\n"
+	return buf;
+}
+
+static void builtin_function_language_write(struct opbx_channel *chan, char *cmd, char *data, const char *value) 
+{
+	if (value)
+		opbx_copy_string(chan->language, value, sizeof(chan->language));
+}
+
+static struct opbx_custom_function language_function = {
+	.name = "LANGUAGE",
+	.synopsis = "Gets or sets the channel's language.",
+	.syntax = "LANGUAGE()",
+	.desc = "Gets or sets the channel language.  This information is used for the\n"
 	"syntax in generation of numbers, and to choose a natural language file\n"
 	"when available.  For example, if language is set to 'fr' and the file\n"
 	"'demo-congrats' is requested to be played, if the file\n"
 	"'fr/demo-congrats' exists, then it will play that file, and if not\n"
 	"will play the normal 'demo-congrats'.  For some language codes,\n"
-	"changing the language also changes the syntax of some CallWeaver\n"
-	"functions, like SayNumber.\n";
-
-
-static char *builtin_function_language_read(struct cw_channel *chan, int argc, char **argv, char *buf, size_t len) 
-{
-	cw_copy_string(buf, chan->language, len);
-
-	return buf;
-}
-
-static void builtin_function_language_write(struct cw_channel *chan, int argc, char **argv, const char *value) 
-{
-	if (value)
-		cw_copy_string(chan->language, value, sizeof(chan->language));
-}
+	"changing the language also changes the syntax of some OpenPBX\n"
+	"functions, like SayNumber.\n",
+	.read = builtin_function_language_read,
+	.write = builtin_function_language_write,
+};
 
 static char *tdesc = "language functions";
 
 int unload_module(void)
 {
-        return cw_unregister_function(language_function);
+        return opbx_custom_function_unregister(&language_function);
 }
 
 int load_module(void)
 {
-        language_function =  cw_register_function(language_func_name, builtin_function_language_read, builtin_function_language_write, language_func_synopsis, language_func_syntax, language_func_desc);
-	return 0;
+        return opbx_custom_function_register(&language_function);
 }
 
 char *description(void)

@@ -1,6 +1,6 @@
-# vim:tw=80:ft=txt
+
 ***********************************************************************************
-INSTALLING CALLWEAVER ON FREEBSD
+INSTALLING OPENPBX ON FREEBSD
 ***********************************************************************************
 
 
@@ -17,18 +17,20 @@ Due to a bug in aclocal, some files are placed under the wrong directory, so to
 
 Having this done, the ./bootstrap.sh works. Then, after installing libtiff,
 available under /usr/ports/graphics/tiff, you need to set a couple of variables
-to have spandsp and callweaver find libtiff.
+to have spandsp and openpbx find libtiff.
 
-run this:
+# CFLAGS="-I/usr/local/include"
+# LDFLAGS="-L/usr/local/lib"
+# export CFLAGS LDFLAGS
 
-# CFLAGS="-I/usr/local/include" LDFLAGS="-L/usr/local/lib" make all install
+now make install, and it'll quite possibly end up with a compile error since
+the porting process isn't quite finished... :)
 
-and it'll quite possibly end up with a compile error since the porting process
-isn't quite finished... :)
+
 
 -----------------------------------------------------------------------------------
 COMPILING 
 -----------------------------------------------------------------------------------
 
-GNU Readline is required to compile callweaver.
+GNU Readline is required to compile openpbx.
 

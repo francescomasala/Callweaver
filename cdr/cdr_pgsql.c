@@ -1,5 +1,5 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  *
  * Copyright (C) 1999 - 2005, Digium, Inc.
  *
@@ -11,8 +11,8 @@
  *
  * Based in part on original by Matthew D. Hardeman <mhardemn@papersoft.com>
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -39,17 +39,17 @@
 
 #include <sys/types.h>
 
-#include "callweaver.h"
+#include "openpbx.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/cdr/cdr_pgsql.c $", "$Revision: 4723 $")
+OPENPBX_FILE_VERSION("$HeadURL$", "$Revision$")
 
-#include "callweaver/channel.h"
-#include "callweaver/cdr.h"
-#include "callweaver/module.h"
-#include "callweaver/config.h"
-#include "callweaver/pbx.h"
-#include "callweaver/logger.h"
-#include "callweaver/utils.h"
+#include "openpbx/channel.h"
+#include "openpbx/cdr.h"
+#include "openpbx/module.h"
+#include "openpbx/config.h"
+#include "openpbx/pbx.h"
+#include "openpbx/logger.h"
+#include "openpbx/utils.h"
 
 #define DATE_FORMAT "%Y-%m-%d %T"
 
@@ -66,7 +66,7 @@ CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branche
 static char *desc = "PostgreSQL CDR Backend";
 static char *name = "pgsql";
 
-CW_MUTEX_DEFINE_STATIC(pgsql_lock);
+OPBX_MUTEX_DEFINE_STATIC(pgsql_lock);
 #define CDR_PGSQL_CONF "cdr_pgsql.conf"
 static char conninfo[512];
 static char table[128];
@@ -77,35 +77,35 @@ static int pgsql_reconnect(void);
 
 static int parse_config(void)
 {
-	struct cw_config *config;
+	struct opbx_config *config;
 	char *s;
 
-	config = cw_config_load(CDR_PGSQL_CONF);
+	config = opbx_config_load(CDR_PGSQL_CONF);
 
 	if (config) {
 
 		/* get the PostgreSQL DSN */
-		s = cw_variable_retrieve(config, "global", "dsn");
+		s = opbx_variable_retrieve(config, "global", "dsn");
 		if (s == NULL) {
-			cw_log(LOG_WARNING, "cdr_pgsql: No DSN found, using 'dbname=callweaver user=callweaver'.\n");
-			strncpy(conninfo, "dbname=callweaver user=callweaver", sizeof(conninfo));
+			opbx_log(LOG_WARNING, "cdr_pgsql: No DSN found, using 'dbname=openpbx user=openpbx'.\n");
+			strncpy(conninfo, "dbname=openpbx user=openpbx", sizeof(conninfo));
 		} else {
 			strncpy(conninfo, s, sizeof(conninfo));
 		}
 		
 		/* get the CDR table name */
-		s = cw_variable_retrieve(config, "global", "table");
+		s = opbx_variable_retrieve(config, "global", "table");
 		if (s == NULL) {
-			cw_log(LOG_WARNING, "No database table found, assuming 'cdr'.\n");
+			opbx_log(LOG_WARNING, "No database table found, assuming 'cdr'.\n");
 			strncpy(table, "cdr", sizeof(table));
 		} else {
 			strncpy(table, s, sizeof(table));
 		}
 
 	} else {
-		cw_log(LOG_WARNING, "Config file (%s) not found.\n", CDR_PGSQL_CONF);
+		opbx_log(LOG_WARNING, "Config file (%s) not found.\n", CDR_PGSQL_CONF);
 	}
-	cw_config_destroy(config);
+	opbx_config_destroy(config);
 
 	return 1;
 }
@@ -117,7 +117,7 @@ static int pgsql_reconnect(void)
 		if (PQstatus(conn) == CONNECTION_OK) {
 			return 1;
 		} else {
-			cw_log(LOG_NOTICE, "Existing database connection broken. Trying to reset.\n");
+			opbx_log(LOG_NOTICE, "Existing database connection broken. Trying to reset.\n");
 
 			/* try to reset the connection */
 			if (PQstatus(conn) != CONNECTION_BAD)
@@ -125,11 +125,11 @@ static int pgsql_reconnect(void)
 
 			/* check the connection status again */
 			if (PQstatus(conn) == CONNECTION_OK) {
-				cw_log(LOG_NOTICE, "Existing database connection reset ok.\n");
+				opbx_log(LOG_NOTICE, "Existing database connection reset ok.\n");
 				return 1;
 			} else {
 				/* still no luck, tear down the connection and we'll make a new connection */
-				cw_log(LOG_NOTICE, "Unable to reset existing database connection.\n");
+				opbx_log(LOG_NOTICE, "Unable to reset existing database connection.\n");
 				PQfinish(conn);
 			}
 		}
@@ -138,17 +138,17 @@ static int pgsql_reconnect(void)
 	conn = PQconnectdb(conninfo);
 
 	if (PQstatus(conn) == CONNECTION_OK) {
-		cw_log(LOG_NOTICE, "Successfully connected to PostgreSQL database.\n");
+		opbx_log(LOG_NOTICE, "Successfully connected to PostgreSQL database.\n");
 		return 1;
 	} else {
-		cw_log(LOG_WARNING, "Couldn't establish DB connection. Check debug.\n");
-		cw_log(LOG_ERROR, "Reason %s\n", PQerrorMessage(conn));
+		opbx_log(LOG_WARNING, "Couldn't establish DB connection. Check debug.\n");
+		opbx_log(LOG_ERROR, "Reason %s\n", PQerrorMessage(conn));
 	}		
 
 	return -1;
 }
 
-static int pgsql_log(struct cw_cdr *cdr)
+static int pgsql_log(struct opbx_cdr *cdr)
 {
 	PGresult *res;
 	struct tm tm;
@@ -161,52 +161,58 @@ static int pgsql_log(struct cw_cdr *cdr)
 	strftime(timestr, sizeof(timestr), DATE_FORMAT, &tm);
 
 	/* maximum space needed would be if all characters needed to be escaped, plus a trailing NULL */
-	clid = alloca(strlen(cdr->clid) * 2 + 1);
-	PQescapeString(clid, cdr->clid, strlen(cdr->clid));
-	dcontext = alloca(strlen(cdr->dcontext) * 2 + 1);
-	PQescapeString(dcontext, cdr->dcontext, strlen(cdr->dcontext));
-	channel = alloca(strlen(cdr->channel) * 2 + 1);
-	PQescapeString(channel, cdr->channel, strlen(cdr->channel));
-	dstchannel = alloca(strlen(cdr->dstchannel) * 2 + 1);
-	PQescapeString(dstchannel, cdr->dstchannel, strlen(cdr->dstchannel));
-	lastapp = alloca(strlen(cdr->lastapp) * 2 + 1);
-	PQescapeString(lastapp, cdr->lastapp, strlen(cdr->lastapp));
-	lastdata = alloca(strlen(cdr->lastdata) * 2 + 1);
-	PQescapeString(lastdata, cdr->lastdata, strlen(cdr->lastdata));
-	uniqueid = alloca(strlen(cdr->uniqueid) * 2 + 1);
-	PQescapeString(uniqueid, cdr->uniqueid, strlen(cdr->uniqueid));
-	userfield = alloca(strlen(cdr->userfield) * 2 + 1);
-	PQescapeString(userfield, cdr->userfield, strlen(cdr->userfield));
+	if ((clid = alloca(strlen(cdr->clid) * 2 + 1)) != NULL)
+		PQescapeString(clid, cdr->clid, strlen(cdr->clid));
+	if ((dcontext = alloca(strlen(cdr->dcontext) * 2 + 1)) != NULL)
+		PQescapeString(dcontext, cdr->dcontext, strlen(cdr->dcontext));
+	if ((channel = alloca(strlen(cdr->channel) * 2 + 1)) != NULL)
+		PQescapeString(channel, cdr->channel, strlen(cdr->channel));
+	if ((dstchannel = alloca(strlen(cdr->dstchannel) * 2 + 1)) != NULL)
+		PQescapeString(dstchannel, cdr->dstchannel, strlen(cdr->dstchannel));
+	if ((lastapp = alloca(strlen(cdr->lastapp) * 2 + 1)) != NULL)
+		PQescapeString(lastapp, cdr->lastapp, strlen(cdr->lastapp));
+	if ((lastdata = alloca(strlen(cdr->lastdata) * 2 + 1)) != NULL)
+		PQescapeString(lastdata, cdr->lastdata, strlen(cdr->lastdata));
+	if ((uniqueid = alloca(strlen(cdr->uniqueid) * 2 + 1)) != NULL)
+		PQescapeString(uniqueid, cdr->uniqueid, strlen(cdr->uniqueid));
+	if ((userfield = alloca(strlen(cdr->userfield) * 2 + 1)) != NULL)
+		PQescapeString(userfield, cdr->userfield, strlen(cdr->userfield));
 
-	cw_log(LOG_DEBUG,"Inserting a CDR record.\n");
+	/* check for all alloca() failures above */
+	if ((!clid) || (!dcontext) || (!channel) || (!dstchannel) || (!lastapp) || (!lastdata) || (!uniqueid) || (!userfield)) {
+		opbx_log(LOG_ERROR, "Out of memory error (insert fails)\n");
+		return -1;
+	}
+
+	opbx_log(LOG_DEBUG,"Inserting a CDR record.\n");
 
 	snprintf(sql, sizeof(sql), "INSERT INTO %s (calldate,clid,src,dst,dcontext,channel,dstchannel,"
 		"lastapp,lastdata,duration,billsec,disposition,amaflags,accountcode,uniqueid,userfield) VALUES"
 		" ('%s','%s','%s','%s','%s', '%s','%s','%s','%s',%d,%d,'%s',%d,'%s','%s','%s')",
 		table, timestr, clid, cdr->src, cdr->dst, dcontext,channel, dstchannel, lastapp, lastdata,
-		cdr->duration, cdr->billsec, cw_cdr_disp2str(cdr->disposition), cdr->amaflags, cdr->accountcode, uniqueid, userfield);
+		cdr->duration, cdr->billsec, opbx_cdr_disp2str(cdr->disposition), cdr->amaflags, cdr->accountcode, uniqueid, userfield);
 
-	cw_log(LOG_DEBUG, "SQL command executed:  %s\n", sql);
+	opbx_log(LOG_DEBUG, "SQL command executed:  %s\n", sql);
 
 	/* check if database connection is still good */
 	if (!pgsql_reconnect()) {
-		cw_log(LOG_ERROR, "Unable to reconnect to database server. Some calls will not be logged!\n");
+		opbx_log(LOG_ERROR, "Unable to reconnect to database server. Some calls will not be logged!\n");
 		return -1;
 	}
 
-	cw_mutex_lock(&pgsql_lock);
+	opbx_mutex_lock(&pgsql_lock);
 	res = PQexec(conn, sql);
 
 	if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-		cw_log(LOG_ERROR, "Failed to insert call detail record into database!\n");
-		cw_log(LOG_ERROR, "Reason: %s\n", PQresultErrorMessage(res));
+		opbx_log(LOG_ERROR, "Failed to insert call detail record into database!\n");
+		opbx_log(LOG_ERROR, "Reason: %s\n", PQresultErrorMessage(res));
 		PQclear(res);
-		cw_mutex_unlock(&pgsql_lock);
+		opbx_mutex_unlock(&pgsql_lock);
 		return -1;
 	}
 
 	PQclear(res);
-	cw_mutex_unlock(&pgsql_lock);
+	opbx_mutex_unlock(&pgsql_lock);
 	return 0;
 }
 
@@ -217,7 +223,7 @@ char *description(void)
 
 static int my_unload_module(void)
 { 
-	cw_cdr_unregister(name);
+	opbx_cdr_unregister(name);
 	return 0;
 }
 
@@ -229,9 +235,9 @@ static int my_load_module(void)
 	
 	pgsql_reconnect();
 
-	res = cw_cdr_register(name, desc, pgsql_log);
+	res = opbx_cdr_register(name, desc, pgsql_log);
 	if (res) {
-		cw_log(LOG_ERROR, "Unable to register PGSQL CDR handling\n");
+		opbx_log(LOG_ERROR, "Unable to register PGSQL CDR handling\n");
 	}
 
 	return res;
@@ -256,10 +262,10 @@ int reload(void)
 int usecount(void)
 {
 	/* To be able to unload the module */
-	if ( cw_mutex_trylock(&pgsql_lock) ) {
+	if ( opbx_mutex_trylock(&pgsql_lock) ) {
 		return 1;
 	} else {
-		cw_mutex_unlock(&pgsql_lock);
+		opbx_mutex_unlock(&pgsql_lock);
 		return 0;
 	}
 }

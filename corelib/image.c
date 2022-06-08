@@ -1,12 +1,12 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  *
  * Copyright (C) 1999 - 2005, Digium, Inc.
  *
  * Mark Spencer <markster@digium.com>
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -34,38 +34,38 @@
 #include <errno.h>
 #include <unistd.h>
 
-#include "callweaver.h"
+#include "openpbx.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/corelib/image.c $", "$Revision: 4723 $")
+OPENPBX_FILE_VERSION("$HeadURL$", "$Revision$")
 
-#include "callweaver/sched.h"
-#include "callweaver/options.h"
-#include "callweaver/channel.h"
-#include "callweaver/logger.h"
-#include "callweaver/file.h"
-#include "callweaver/image.h"
-#include "callweaver/translate.h"
-#include "callweaver/cli.h"
-#include "callweaver/lock.h"
+#include "openpbx/sched.h"
+#include "openpbx/options.h"
+#include "openpbx/channel.h"
+#include "openpbx/logger.h"
+#include "openpbx/file.h"
+#include "openpbx/image.h"
+#include "openpbx/translate.h"
+#include "openpbx/cli.h"
+#include "openpbx/lock.h"
 
-static struct cw_imager *list;
-CW_MUTEX_DEFINE_STATIC(listlock);
+static struct opbx_imager *list;
+OPBX_MUTEX_DEFINE_STATIC(listlock);
 
-int cw_image_register(struct cw_imager *img)
+int opbx_image_register(struct opbx_imager *img)
 {
 	if (option_verbose > 1)
-		cw_verbose(VERBOSE_PREFIX_2 "Registered format '%s' (%s)\n", img->name, img->desc);
-	cw_mutex_lock(&listlock);
+		opbx_verbose(VERBOSE_PREFIX_2 "Registered format '%s' (%s)\n", img->name, img->desc);
+	opbx_mutex_lock(&listlock);
 	img->next = list;
 	list = img;
-	cw_mutex_unlock(&listlock);
+	opbx_mutex_unlock(&listlock);
 	return 0;
 }
 
-void cw_image_unregister(struct cw_imager *img)
+void opbx_image_unregister(struct opbx_imager *img)
 {
-	struct cw_imager *i, *prev = NULL;
-	cw_mutex_lock(&listlock);
+	struct opbx_imager *i, *prev = NULL;
+	opbx_mutex_lock(&listlock);
 	i = list;
 	while(i) {
 		if (i == img) {
@@ -78,12 +78,12 @@ void cw_image_unregister(struct cw_imager *img)
 		prev = i;
 		i = i->next;
 	}
-	cw_mutex_unlock(&listlock);
+	opbx_mutex_unlock(&listlock);
 	if (i && (option_verbose > 1))
-		cw_verbose(VERBOSE_PREFIX_2 "Unregistered format '%s' (%s)\n", img->name, img->desc);
+		opbx_verbose(VERBOSE_PREFIX_2 "Unregistered format '%s' (%s)\n", img->name, img->desc);
 }
 
-int cw_supports_images(struct cw_channel *chan)
+int opbx_supports_images(struct opbx_channel *chan)
 {
 	if (!chan || !chan->tech)
 		return 0;
@@ -111,24 +111,24 @@ static void make_filename(char *buf, int len, char *filename, char *preflang, ch
 			snprintf(buf, len, "%s.%s", filename, ext);
 	} else {
 		if (preflang && strlen(preflang))
-			snprintf(buf, len, "%s/%s/%s-%s.%s", cw_config_CW_VAR_DIR, "images", filename, preflang, ext);
+			snprintf(buf, len, "%s/%s/%s-%s.%s", opbx_config_OPBX_VAR_DIR, "images", filename, preflang, ext);
 		else
-			snprintf(buf, len, "%s/%s/%s.%s", cw_config_CW_VAR_DIR, "images", filename, ext);
+			snprintf(buf, len, "%s/%s/%s.%s", opbx_config_OPBX_VAR_DIR, "images", filename, ext);
 	}
 }
 
-struct cw_frame *cw_read_image(char *filename, char *preflang, int format)
+struct opbx_frame *opbx_read_image(char *filename, char *preflang, int format)
 {
-	struct cw_imager *i;
+	struct opbx_imager *i;
 	char buf[256];
 	char tmp[80];
 	char *e;
-	struct cw_imager *found = NULL;
+	struct opbx_imager *found = NULL;
 	int fd;
 	int len=0;
-	struct cw_frame *f = NULL;
+	struct opbx_frame *f = NULL;
 #if 0 /* We need to have some sort of read-only lock */
-	cw_mutex_lock(&listlock);
+	opbx_mutex_lock(&listlock);
 #endif	
 	i = list;
 	while(!found && i) {
@@ -136,7 +136,7 @@ struct cw_frame *cw_read_image(char *filename, char *preflang, int format)
 			char *stringp=NULL;
 			strncpy(tmp, i->exts, sizeof(tmp)-1);
 			stringp=tmp;
-			e = strsep(&stringp, "|,");
+			e = strsep(&stringp, "|");
 			while(e) {
 				make_filename(buf, sizeof(buf), filename, preflang, e);
 				if ((len = file_exists(buf))) {
@@ -148,7 +148,7 @@ struct cw_frame *cw_read_image(char *filename, char *preflang, int format)
 					found = i;
 					break;
 				}
-				e = strsep(&stringp, "|,");
+				e = strsep(&stringp, "|");
 			}
 		}
 		i = i->next;
@@ -161,29 +161,28 @@ struct cw_frame *cw_read_image(char *filename, char *preflang, int format)
 				lseek(fd, 0, SEEK_SET);
 				f = found->read_image(fd,len); 
 			} else
-				cw_log(LOG_WARNING, "%s does not appear to be a %s file\n", buf, i->name);
+				opbx_log(LOG_WARNING, "%s does not appear to be a %s file\n", buf, i->name);
 			close(fd);
 		} else
-			cw_log(LOG_WARNING, "Unable to open '%s': %s\n", buf, strerror(errno));
+			opbx_log(LOG_WARNING, "Unable to open '%s': %s\n", buf, strerror(errno));
 	} else
-		cw_log(LOG_WARNING, "Image file '%s' not found\n", filename);
+		opbx_log(LOG_WARNING, "Image file '%s' not found\n", filename);
 #if 0
-	cw_mutex_unlock(&listlock);
+	opbx_mutex_unlock(&listlock);
 #endif	
 	return f;
 }
 
 
-int cw_send_image(struct cw_channel *chan, char *filename)
+int opbx_send_image(struct opbx_channel *chan, char *filename)
 {
-	struct cw_frame *f;
+	struct opbx_frame *f;
 	int res = -1;
-
 	if (chan->tech->send_image) {
-		f = cw_read_image(filename, chan->language, -1);
+		f = opbx_read_image(filename, chan->language, -1);
 		if (f) {
 			res = chan->tech->send_image(chan, f);
-			cw_fr_free(f);
+			opbx_frfree(f);
 		}
 	}
 	return res;
@@ -193,19 +192,19 @@ static int show_image_formats(int fd, int argc, char *argv[])
 {
 #define FORMAT "%10s %10s %50s %10s\n"
 #define FORMAT2 "%10s %10s %50s %10s\n"
-	struct cw_imager *i;
+	struct opbx_imager *i;
 	if (argc != 3)
 		return RESULT_SHOWUSAGE;
-	cw_cli(fd, FORMAT, "Name", "Extensions", "Description", "Format");
+	opbx_cli(fd, FORMAT, "Name", "Extensions", "Description", "Format");
 	i = list;
 	while(i) {
-		cw_cli(fd, FORMAT2, i->name, i->exts, i->desc, cw_getformatname(i->format));
+		opbx_cli(fd, FORMAT2, i->name, i->exts, i->desc, opbx_getformatname(i->format));
 		i = i->next;
 	};
 	return RESULT_SUCCESS;
 }
 
-struct cw_cli_entry show_images =
+struct opbx_cli_entry show_images =
 {
 	{ "show", "image", "formats" },
 	show_image_formats,
@@ -215,9 +214,9 @@ struct cw_cli_entry show_images =
 };
 
 
-int cw_image_init(void)
+int opbx_image_init(void)
 {
-	cw_cli_register(&show_images);
+	opbx_cli_register(&show_images);
 	return 0;
 }
 

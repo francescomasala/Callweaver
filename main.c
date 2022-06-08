@@ -1,11 +1,11 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  *
  * Based on Asterisk written by Mark Spencer <markster@digium.com>
  *  Copyright (C) 1999 - 2005, Digium, Inc.
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -17,12 +17,12 @@
 
 /*
  *
- * Very Top level source file for callweaver
+ * Very Top level source file for openpbx
  * 
  */
-#include "callweaver.h"
+#include "openpbx.h"
 
 int main(int argc, char *argv[])
 {
-	return callweaver_main(argc, argv);
+	return openpbx_main(argc, argv);
 }

@@ -28,7 +28,7 @@ $table_name = "extensions";
 $global_table_name = "globals";
 # the path to the extensions.conf file
 # WARNING: this file will be substituted by the output of this program
-$extensions_conf = "/etc/callweaver/extensions.conf";
+$extensions_conf = "/etc/openpbx/extensions.conf";
 # the name of the box the MySQL database is running on
 $hostname = "localhost";
 # the name of the database our tables are kept

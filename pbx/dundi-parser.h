@@ -12,8 +12,8 @@
 #ifndef _DUNDI_PARSER_H
 #define _DUNDI_PARSER_H
 
-#include "callweaver/dundi.h"
-#include "callweaver/aes.h"
+#include "openpbx/dundi.h"
+#include "openpbx/aes.h"
 
 #define DUNDI_MAX_STACK 512
 #define DUNDI_MAX_ANSWERS	100

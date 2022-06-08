@@ -22,8 +22,8 @@ the forth argument onward as a message to be queued. All this does is create
 the file in the me-sc directory. If 's' is set then the number is the source
 address and the message placed in the sc-me directory.
 
-All text messages are in /var/spool/callweaver/sms
-A log is recorded in /var/log/callweaver/sms
+All text messages are in /var/spool/openpbx/sms
+A log is recorded in /var/log/openpbx/sms
 
 There are two subdirectories called sc-me.<queuename> holding all
 messages from service centre to phone, and me-sc.<queuename> holding all
@@ -114,9 +114,9 @@ For incoming calls you can use a context like this :-
 
 [incoming]
 exten = _XXXXXX/_8005875290,1,SMS(${EXTEN:3},a)
-exten = _XXXXXX/_8005875290,2,System(/usr/lib/callweaver/smsin ${EXTEN:3})
+exten = _XXXXXX/_8005875290,2,System(/usr/lib/openpbx/smsin ${EXTEN:3})
 exten = _XXXXXX/_80058752[0-8]0,1,SMS(${EXTEN:3}${CALLERIDNUM:8:1},a)
-exten = _XXXXXX/_80058752[0-8]0,2,System(/usr/lib/callweaver/smsin
+exten = _XXXXXX/_80058752[0-8]0,2,System(/usr/lib/openpbx/smsin
 ${EXTEN:3}${CALLERIDNUM:8:1})
 exten = _XXXXXX/_80058752X0,3,Hangup
 

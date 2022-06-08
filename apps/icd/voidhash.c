@@ -6,17 +6,17 @@
  * Written by Anthony Minessale II <anthmct at yahoo dot com>
  * Written by Bruce Atherton <bruce at callenish dot com>
  * Additions, Changes and Support by Tim R. Clark <tclark at shaw dot ca>
- * Changed to adopt to jabber interaction and adjusted for CallWeaver.org by
+ * Changed to adopt to jabber interaction and adjusted for OpenPBX.org by
  * Halo Kwadrat Sp. z o.o., Piotr Figurny and Michal Bielicki
  * 
  * This application is a part of:
  * 
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  * Copyright (C) 1999 - 2005, Digium, Inc.
  * Mark Spencer <markster@digium.com>
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -33,8 +33,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include "callweaver/icd/voidhash.h"
-#include "callweaver/icd/icd_types.h"
+#include "openpbx/icd/voidhash.h"
+#include "openpbx/icd/icd_types.h"
 
 /*--- VH_ElfHash ---------------------------------------------------
  *  The published hash algorithm used in the UNIX ELF format
@@ -137,7 +137,7 @@ int vh_destroy(void_hash_table ** hash)
 int vh_write_store(void_hash_table * hash, hash_storage * new)
 {
     hash_storage *store, *last;
-    unsigned long key = VH_ElfHash((unsigned char *) new->var) & VOID_HASH_TABLE_KEY_SIZE;
+    unsigned long key = VH_ElfHash(new->var) & VOID_HASH_TABLE_KEY_SIZE;
     int ow = 0;
 
     store = last = NULL;
@@ -169,7 +169,7 @@ int vh_write_store(void_hash_table * hash, hash_storage * new)
 int vh_write(void_hash_table * hash, char *name, void *value)
 {
     hash_storage *store, *last;
-    unsigned long key = VH_ElfHash((unsigned char *) name) & VOID_HASH_TABLE_KEY_SIZE;
+    unsigned long key = VH_ElfHash(name) & VOID_HASH_TABLE_KEY_SIZE;
     int ow = 0;
 
     store = last = NULL;
@@ -234,7 +234,7 @@ int vh_write_cp_string(void_hash_table * hash, char *key, char *string)
 
 void *vh_read(void_hash_table * hash, char *name)
 {
-    unsigned long key = VH_ElfHash((unsigned char *) name) & VOID_HASH_TABLE_KEY_SIZE;
+    unsigned long key = VH_ElfHash(name) & VOID_HASH_TABLE_KEY_SIZE;
     hash_storage *store;
 
     store = hash->data[key];
@@ -251,7 +251,7 @@ void *vh_read(void_hash_table * hash, char *name)
 
 int vh_delete(void_hash_table * hash, char *name)
 {
-    unsigned long key = VH_ElfHash((unsigned char *) name) & VOID_HASH_TABLE_KEY_SIZE;
+    unsigned long key = VH_ElfHash(name) & VOID_HASH_TABLE_KEY_SIZE;
     hash_storage *store = NULL, *last = NULL;
     int ret = 0;
 
@@ -301,7 +301,7 @@ int split_and_add(void_hash_table * hash, char *pair)
     char helper[50];
     int x = 0, y = 0;
 
-    for (val = pair; val && y <= strlen(pair); val++, y++) {
+    for (val = pair; val && y <= strlen(pair); val++ && y++) {
         if (val[0] == '=') {
             val[0] = '\0';
             val++;

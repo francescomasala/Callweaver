@@ -7,31 +7,28 @@ substitute = $(SED) \
 	-e 's,@sysconfdir\@,${sysconfdir},g' \
 	-e 's,@localstatedir\@,${localstatedir},g' \
 	-e 's,@datadir\@,${datadir},g' \
-	-e 's,@cwexecdir\@,${cwexecdir},g' \
-	-e 's,@cwutilsdir\@,${cwutilsdir},g' \
-	-e 's,@cwconfdir\@,${cwconfdir},g' \
-	-e 's,@cwconffile\@,${cwconffile},g' \
-	-e 's,@cwlibdir\@,${cwlibdir},g' \
-	-e 's,@cwmoddir\@,${cwmoddir},g' \
-	-e 's,@cwvardir\@,${cwvardir},g' \
-	-e 's,@cwvardir\@,${cwvardir},g' \
-	-e 's,@cwdbdir\@,${cwdbdir},g' \
-	-e 's,@cwdbfile\@,${cwdbfile},g' \
-	-e 's,@cwtmpdir\@,${cwtmpdir},g' \
-	-e 's,@cwrundir\@,${cwrundir},g' \
-	-e 's,@cwpidfile\@,${cwpidfile},g' \
-	-e 's,@cwsocketfile\@,${cwsocketfile},g' \
-	-e 's,@cwlogdir\@,${cwlogdir},g' \
-	-e 's,@cwspooldir\@,${cwspooldir},g' \
-	-e 's,@cwmohdir\@,${cwmohdir},g' \
-	-e 's,@cwdatadir\@,${cwdatadir},g' \
-	-e 's,@cwmandir\@,${cwmandir},g' \
-	-e 's,@cwdocdir\@,${cwdocdir},g' \
-	-e 's,@cwkeydir\@,${cwkeydir},g' \
-	-e 's,@cwsqlitedir\@,${cwsqlitedir},g' \
-	-e 's,@cwogidir\@,${cwogidir},g' \
-	-e 's,@cwsoundsdir\@,${cwsoundsdir},g' \
-	-e 's,@cwimagesdir\@,${cwimagesdir},g' \
-	-e 's,@cwincludedir\@,${cwincludedir},g' \
-	-e 's,@cwrunuser\@,${cwrunuser},g' \
-	-e 's,@cwrungroup\@,${cwrungroup},g'
+	-e 's,@opbxconfdir\@,${opbxconfdir},g' \
+	-e 's,@opbxconffile\@,${opbxconffile},g' \
+	-e 's,@opbxlibdir\@,${opbxlibdir},g' \
+	-e 's,@opbxmoddir\@,${opbxmoddir},g' \
+	-e 's,@opbxvardir\@,${opbxvardir},g' \
+	-e 's,@opbxvardir\@,${opbxvardir},g' \
+	-e 's,@opbxdbdir\@,${opbxdbdir},g' \
+	-e 's,@opbxdbfile\@,${opbxdbfile},g' \
+	-e 's,@opbxtmpdir\@,${opbxtmpdir},g' \
+	-e 's,@opbxrundir\@,${opbxrundir},g' \
+	-e 's,@opbxpidfile\@,${opbxpidfile},g' \
+	-e 's,@opbxsocketfile\@,${opbxsocketfile},g' \
+	-e 's,@opbxlogdir\@,${opbxlogdir},g' \
+	-e 's,@opbxspooldir\@,${opbxspooldir},g' \
+	-e 's,@opbxmohdir\@,${opbxmohdir},g' \
+	-e 's,@opbxdatadir\@,${opbxdatadir},g' \
+	-e 's,@opbxdocdir\@,${opbxdocdir},g' \
+	-e 's,@opbxkeydir\@,${opbxkeydir},g' \
+	-e 's,@opbxsqlitedir\@,${opbxsqlitedir},g' \
+	-e 's,@opbxogidir\@,${opbxogidir},g' \
+	-e 's,@opbxsoundsdir\@,${opbxsoundsdir},g' \
+	-e 's,@opbximagesdir\@,${opbximagesdir},g' \
+	-e 's,@opbxincludedir\@,${opbxincludedir},g' \
+	-e 's,@opbxrunuser\@,${opbxrunuser},g' \
+	-e 's,@opbxrungroup\@,${opbxrungroup},g'

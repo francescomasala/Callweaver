@@ -1,13 +1,13 @@
 %{
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * Asterisk -- An open source telephony toolkit.
  *
  * Copyright (C) 2006, Digium, Inc.
  *
  * Steve Murphy <murf@parsetree.com>
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.asterisk.org for more information about
+ * the Asterisk project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -22,14 +22,14 @@
  *
  */
 
-#include "callweaver.h"
+#include "asterisk.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include "callweaver/logger.h"
-#include "callweaver/ael_structs.h"
+#include "openpbx/logger.h"
+#include "openpbx/ael_structs.h"
 
 static pval * linku1(pval *head, pval *tail);
 
@@ -78,7 +78,7 @@ static pval *update_last(pval *, YYLTYPE *);
 
 
 %token KW_CONTEXT LC RC LP RP SEMI EQ COMMA COLON AMPER BAR AT
-%token KW_PROC KW_GLOBALS KW_IGNOREPAT KW_SWITCH KW_IF KW_IFTIME KW_ELSE KW_RANDOM KW_ABSTRACT
+%token KW_MACRO KW_GLOBALS KW_IGNOREPAT KW_SWITCH KW_IF KW_IFTIME KW_ELSE KW_RANDOM KW_ABSTRACT
 %token EXTENMARK KW_GOTO KW_JUMP KW_RETURN KW_BREAK KW_CONTINUE KW_REGEXTEN KW_HINT
 %token KW_FOR KW_WHILE KW_CASE KW_PATTERN KW_DEFAULT KW_CATCH KW_SWITCHES KW_ESWITCHES
 %token KW_INCLUDES
@@ -92,14 +92,14 @@ static pval *update_last(pval *, YYLTYPE *);
 %type <pval>switchlist
 %type <pval>eswitches
 %type <pval>switches
-%type <pval>proc_statement
-%type <pval>proc_statements
+%type <pval>macro_statement
+%type <pval>macro_statements
 %type <pval>case_statement
 %type <pval>case_statements
 %type <pval>eval_arglist
 %type <pval>application_call
 %type <pval>application_call_head
-%type <pval>proc_call
+%type <pval>macro_call
 %type <pval>target jumptarget
 %type <pval>statement
 %type <pval>switch_statement
@@ -114,7 +114,7 @@ static pval *update_last(pval *, YYLTYPE *);
 %type <pval>assignment
 %type <pval>global_statements
 %type <pval>globals
-%type <pval>proc
+%type <pval>macro
 %type <pval>context
 %type <pval>object
 %type <pval>objects
@@ -163,12 +163,12 @@ static pval *update_last(pval *, YYLTYPE *);
 		destroy_pval($$);
 		prev_word=0;
 	}	includes includeslist switchlist eswitches switches
-		proc_statement proc_statements case_statement case_statements
+		macro_statement macro_statements case_statement case_statements
 		eval_arglist application_call application_call_head
-		proc_call target jumptarget statement switch_statement
+		macro_call target jumptarget statement switch_statement
 		if_like_head statements extension
 		ignorepat element elements arglist assignment
-		global_statements globals proc context object objects
+		global_statements globals macro context object objects
 		opt_else
 		timespec included_entry
 
@@ -189,7 +189,7 @@ objects : object {$$=$1;}
 	;
 
 object : context {$$=$1;}
-	| proc {$$=$1;}
+	| macro {$$=$1;}
 	| globals {$$=$1;}
 	| SEMI  {$$=0;/* allow older docs to be read */}
 	;
@@ -210,9 +210,9 @@ opt_abstract: KW_ABSTRACT { $$ = 1; }
 	| /* nothing */ { $$ = 0; }
 	;
 
-proc : KW_PROC word LP arglist RP LC proc_statements RC {
-		$$ = npval2(PV_PROC, &@1, &@8);
-		$$->u1.str = $2; $$->u2.arglist = $4; $$->u3.proc_statements = $7; }
+macro : KW_MACRO word LP arglist RP LC macro_statements RC {
+		$$ = npval2(PV_MACRO, &@1, &@8);
+		$$->u1.str = $2; $$->u2.arglist = $4; $$->u3.macro_statements = $7; }
 	;
 
 globals : KW_GLOBALS LC global_statements RC {
@@ -300,11 +300,6 @@ timerange: word3_list COLON word3_list COLON word3_list {
 
 /* full time specification range|dow|*|* */
 timespec : timerange BAR word3_list BAR word3_list BAR word3_list {
-		$$ = nword($1, &@1);
-		$$->next = nword($3, &@3);
-		$$->next->next = nword($5, &@5);
-		$$->next->next->next = nword($7, &@7); }
-	| timerange COMMA word3_list COMMA word3_list COMMA word3_list {
 		$$ = nword($1, &@1);
 		$$->next = nword($3, &@3);
 		$$->next->next = nword($5, &@5);
@@ -401,7 +396,7 @@ statement : LC statements RC {
 		$$->u1.str = $2;
 		$$->u2.statements = $3; }
 	| switch_statement { $$ = $1; }
-	| AMPER proc_call SEMI { $$ = update_last($2, &@2); }
+	| AMPER macro_call SEMI { $$ = update_last($2, &@2); }
 	| application_call SEMI { $$ = update_last($1, &@2); }
 	| word SEMI {
 		$$= npval2(PV_APPLICATION_CALL, &@1, &@2);
@@ -432,7 +427,7 @@ statement : LC statements RC {
 		strcat(bufx,")");
 #ifdef AAL_ARGCHECK
 		if ( !ael_is_funcname($1->u1.str) )
-			cw_log(LOG_WARNING, "==== File: %s, Line %d, Cols: %d-%d: Function call? The name %s is not in my internal list of function names\n",
+			opbx_log(LOG_WARNING, "==== File: %s, Line %d, Cols: %d-%d: Function call? The name %s is not in my internal list of function names\n",
 				my_file, @1.first_line, @1.first_column, @1.last_column, $1->u1.str);
 #endif
 		$$->u1.str = bufx;
@@ -492,13 +487,13 @@ jumptarget : goto_word opt_pri {			/* ext[, pri] default 1 */
 		$$->next->next = nword($2, &@2); }
 	;
 
-proc_call : word LP {reset_argcount(parseio->scanner);} eval_arglist RP {
+macro_call : word LP {reset_argcount(parseio->scanner);} eval_arglist RP {
 		/* XXX original code had @2 but i think we need @5 */
-		$$ = npval2(PV_PROC_CALL, &@1, &@5);
+		$$ = npval2(PV_MACRO_CALL, &@1, &@5);
 		$$->u1.str = $1;
 		$$->u2.arglist = $4;}
 	| word LP RP {
-		$$= npval2(PV_PROC_CALL, &@1, &@3);
+		$$= npval2(PV_MACRO_CALL, &@1, &@3);
 		$$->u1.str = $1; }
 	;
 
@@ -509,7 +504,7 @@ application_call_head: word LP {reset_argcount(parseio->scanner);} {
 		if (strcasecmp($1,"goto") == 0) {
 			$$ = npval2(PV_GOTO, &@1, &@2);
 			free($1); /* won't be using this */
-			cw_log(LOG_WARNING, "==== File: %s, Line %d, Cols: %d-%d: Suggestion: Use the goto statement instead of the Goto() application call in AEL.\n", my_file, @1.first_line, @1.first_column, @1.last_column );
+			opbx_log(LOG_WARNING, "==== File: %s, Line %d, Cols: %d-%d: Suggestion: Use the goto statement instead of the Goto() application call in AEL.\n", my_file, @1.first_line, @1.first_column, @1.last_column );
 		} else {
 			$$= npval2(PV_APPLICATION_CALL, &@1, &@2);
 			$$->u1.str = $1;
@@ -526,7 +521,7 @@ application_call : application_call_head eval_arglist RP {
 	| application_call_head RP { $$ = update_last($1, &@2); }
 	;
 
-opt_word : word { $$ = $1; }
+opt_word : word { $$ = $1 }
 	| { $$ = strdup(""); }
 	;
 
@@ -555,11 +550,11 @@ case_statement: KW_CASE word COLON statements {
 		$$->u2.statements = $4;}
 	;
 
-proc_statements: /* empty */ { $$ = NULL; }
-	| proc_statement proc_statements { $$ = linku1($1, $2); }
+macro_statements: /* empty */ { $$ = NULL; }
+	| macro_statement macro_statements { $$ = linku1($1, $2); }
 	;
 
-proc_statement : statement {$$=$1;}
+macro_statement : statement {$$=$1;}
 	| KW_CATCH word LC statements RC {
 		$$ = npval2(PV_CATCH, &@1, &@5);
 		$$->u1.str = $2;
@@ -583,10 +578,6 @@ switchlist : /* empty */ { $$ = NULL; }
 
 included_entry : context_name { $$ = nword($1, &@1); }
 	| context_name BAR timespec {
-		$$ = nword($1, &@1);
-		$$->u2.arglist = $3;
-		prev_word=0; /* XXX sure ? */ }
-	| context_name COMMA timespec {
 		$$ = nword($1, &@1);
 		$$->u2.arglist = $3;
 		prev_word=0; /* XXX sure ? */ }
@@ -634,7 +625,7 @@ static char *token_equivs1[] =
 	"KW_IGNOREPAT",
 	"KW_INCLUDES"
 	"KW_JUMP",
-	"KW_PROC",
+	"KW_MACRO",
 	"KW_PATTERN",
 	"KW_REGEXTEN",
 	"KW_RETURN",
@@ -674,7 +665,7 @@ static char *token_equivs2[] =
 	"ignorepat",
 	"includes"
 	"jump",
-	"proc",
+	"macro",
 	"pattern",
 	"regexten",
 	"return",
@@ -736,9 +727,9 @@ void yyerror(YYLTYPE *locp, struct parse_io *parseio,  char const *s)
 {
 	char *s2 = ael_token_subst((char *)s);
 	if (locp->first_line == locp->last_line) {
-		cw_log(LOG_ERROR, "==== File: %s, Line %d, Cols: %d-%d: Error: %s\n", my_file, locp->first_line, locp->first_column, locp->last_column, s2);
+		opbx_log(LOG_ERROR, "==== File: %s, Line %d, Cols: %d-%d: Error: %s\n", my_file, locp->first_line, locp->first_column, locp->last_column, s2);
 	} else {
-		cw_log(LOG_ERROR, "==== File: %s, Line %d Col %d  to Line %d Col %d: Error: %s\n", my_file, locp->first_line, locp->first_column, locp->last_line, locp->last_column, s2);
+		opbx_log(LOG_ERROR, "==== File: %s, Line %d Col %d  to Line %d Col %d: Error: %s\n", my_file, locp->first_line, locp->first_column, locp->last_line, locp->last_column, s2);
 	}
 	free(s2);
 	parseio->syntax_error_count++;

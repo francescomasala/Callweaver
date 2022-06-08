@@ -1,6 +1,6 @@
 ;
 ; Note - if the database server is hosted on the same machine as the
-; callweaver server, you can achieve a local Unix socket connection by
+; openpbx server, you can achieve a local Unix socket connection by
 ; setting hostname=localhost
 ;
 ; port and sock are both optional parameters.  If hostname is specified
@@ -12,10 +12,10 @@
 ;
 ;[global]
 ;hostname=database.host.name
-;dbname=callweavercdrdb
+;dbname=openpbxcdrdb
 ;table=cdr
 ;password=password 
-;user=callweavercdruser
+;user=openpbxcdruser
 ;port=3306
 ;sock=/tmp/mysql.sock
 ;userfield=1

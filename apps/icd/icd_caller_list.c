@@ -6,17 +6,17 @@
  * Written by Anthony Minessale II <anthmct at yahoo dot com>
  * Written by Bruce Atherton <bruce at callenish dot com>
  * Additions, Changes and Support by Tim R. Clark <tclark at shaw dot ca>
- * Changed to adopt to jabber interaction and adjusted for CallWeaver.org by
+ * Changed to adopt to jabber interaction and adjusted for OpenPBX.org by
  * Halo Kwadrat Sp. z o.o., Piotr Figurny and Michal Bielicki
  * 
  * This application is a part of:
  * 
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  * Copyright (C) 1999 - 2005, Digium, Inc.
  * Mark Spencer <markster@digium.com>
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -47,11 +47,11 @@
 #endif 
 
 #include <assert.h>
-#include "callweaver/icd/icd_common.h"
-#include "callweaver/icd/icd_caller_list.h"
-#include "callweaver/icd/icd_list.h"
-#include "callweaver/icd/icd_list_private.h"
-#include "callweaver/icd/icd_caller.h"
+#include "openpbx/icd/icd_common.h"
+#include "openpbx/icd/icd_caller_list.h"
+#include "openpbx/icd/icd_list.h"
+#include "openpbx/icd/icd_list_private.h"
+#include "openpbx/icd/icd_caller.h"
 
 /*===== Private APIs, Types, and Variables =====*/
 
@@ -89,7 +89,7 @@ icd_caller_list *create_icd_caller_list(char *name, icd_config * data)
     assert(data != NULL);
     ICD_MALLOC(list, sizeof(icd_caller_list));
     if (list == NULL) {
-        cw_log(LOG_ERROR, "No memory available to create a new ICD Caller List\n");
+        opbx_log(LOG_ERROR, "No memory available to create a new ICD Caller List\n");
         return NULL;
     }
     list->allocated = 1;
@@ -124,7 +124,7 @@ icd_status destroy_icd_caller_list(icd_caller_list ** listp)
     that = (icd_list *) (*listp);
     vetoed = icd_event__notify(ICD_EVENT_DESTROY, NULL, that->dstry_fn, that->dstry_fn_extra);
     if (vetoed == ICD_EVETO) {
-        cw_log(LOG_NOTICE, "Destruction of ICD Caller List %s has been vetoed\n",
+        opbx_log(LOG_NOTICE, "Destruction of ICD Caller List %s has been vetoed\n",
             icd_caller_list__get_name(*listp));
         return ICD_EVETO;
     }
@@ -430,16 +430,16 @@ icd_status icd_caller_list__standard_dump(icd_list * list, int verbosity, int fd
 
     call_list = (icd_caller_list *) list;
 
-    //cw_cli(fd,"\nDumping icd_caller list {\n");
+    //opbx_cli(fd,"\nDumping icd_caller list {\n");
     //icd_list__standard_dump(list, verbosity, fd, ((void *)&skipconst));
-    //cw_cli(fd,"       moh=%s\n", icd_caller_list__get_moh(call_list));
-    //cw_cli(fd,"   context=%s\n", icd_caller_list__get_context(call_list));
-    //cw_cli(fd,"  announce=%s\n", icd_caller_list__get_announce(call_list));
+    //opbx_cli(fd,"       moh=%s\n", icd_caller_list__get_moh(call_list));
+    //opbx_cli(fd,"   context=%s\n", icd_caller_list__get_context(call_list));
+    //opbx_cli(fd,"  announce=%s\n", icd_caller_list__get_announce(call_list));
 
     /* TBD Print these as well (though don't descend on dist)
        icd_distributor *dist;
        int (*state_fn)(icd_caller *caller, int oldstate, int newstate);
-       int (*chan_fn)(icd_caller *caller, cw_channel *chan);
+       int (*chan_fn)(icd_caller *caller, opbx_channel *chan);
        int (*link_fn)(icd_caller *caller, icd_caller *associate);
        int (*bridge_fn)(icd_caller *caller, icd_caller *bridged_to);
        int (*authn_fn)(icd_caller *caller, int id);
@@ -447,7 +447,7 @@ icd_status icd_caller_list__standard_dump(icd_list * list, int verbosity, int fd
      */
 
     if (verbosity > 1) {
-        cw_cli(fd, "    caller {\n");
+        opbx_cli(fd, "    caller {\n");
         iter = icd_list__get_iterator(list);
         if (iter == NULL) {
             return ICD_ERESOURCE;
@@ -457,7 +457,7 @@ icd_status icd_caller_list__standard_dump(icd_list * list, int verbosity, int fd
             icd_caller__dump(caller, verbosity - 1, fd);
         }
         destroy_icd_list_iterator(&iter);
-        cw_cli(fd, "    }\n");
+        opbx_cli(fd, "    }\n");
     } else {
         iter = icd_list__get_iterator(list);
         if (iter == NULL) {

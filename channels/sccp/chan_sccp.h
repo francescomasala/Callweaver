@@ -14,12 +14,12 @@
 #include <stdlib.h>
 #include <errno.h>
 
-#include "callweaver/acl.h"
-#include "callweaver/module.h"
-#include "callweaver/rtp.h"
-#include "callweaver/options.h"
-#include "callweaver/logger.h"
-#include "callweaver/config.h"
+#include <openpbx/acl.h>
+#include <openpbx/module.h>
+#include <openpbx/rtp.h>
+#include <openpbx/options.h>
+#include <openpbx/logger.h>
+#include <openpbx/config.h>
 
 #define SCCP_LITTLE_ENDIAN   1234 /* byte 0 is least significant (i386) */
 #define SCCP_BIG_ENDIAN      4321 /* byte 0 is most significant (mc68k) */
@@ -121,19 +121,19 @@ static inline unsigned long long bswap_64(unsigned long long x) {
 #define SCCP_VERSION "20051217"
 
 /* I don't like the -1 returned value */
-#define sccp_true(x) (cw_true(x) ? 1 : 0)
-#define sccp_log(x) if (sccp_globals->debug >= x) cw_verbose
+#define sccp_true(x) (opbx_true(x) ? 1 : 0)
+#define sccp_log(x) if (sccp_globals->debug >= x) opbx_verbose
 #define GLOB(x) sccp_globals->x
 
 #define DEV_ID_LOG(x) x ? x->id : "SCCP"
 
-#define CS_CW_CHANNEL_PVT(x) x->tech_pvt
+#define CS_OPBX_CHANNEL_PVT(x) x->tech_pvt
 
-#define CS_CW_BRIDGED_CHANNEL(x) cw_bridged_channel(x)
+#define CS_OPBX_BRIDGED_CHANNEL(x) opbx_bridged_channel(x)
 
 /*
-#ifndef CS_CW_HAS_CW_GROUP_T
-typedef unsigned int cw_group_t;
+#ifndef CS_OPBX_HAS_OPBX_GROUP_T
+typedef unsigned int opbx_group_t;
 #endif
 */
 
@@ -158,8 +158,8 @@ struct sccp_hint {
 	int hintid;
 	sccp_device_t  *device;
 	uint8_t	instance;
-	char context[CW_MAX_CONTEXT];
-	char exten[CW_MAX_EXTENSION];
+	char context[OPBX_MAX_CONTEXT];
+	char exten[OPBX_MAX_EXTENSION];
 	sccp_hint_t *next;
 };
 
@@ -167,7 +167,7 @@ struct sccp_hint {
 struct sccp_line {
 
 	/* lockmeupandtiemedown */
-	cw_mutex_t lock;
+	opbx_mutex_t lock;
 
 	/* This line's ID, used for logging into (for mobility) */
 	char id[4];
@@ -178,7 +178,7 @@ struct sccp_line {
 	/* The lines position/instanceId on the current device*/
 	uint8_t instance;
 
-	/* the name of the line, so use in callweaver (i.e SCCP/<name>) */
+	/* the name of the line, so use in openpbx (i.e SCCP/<name>) */
 	char name[80];
 
 	/* A description for the line, displayed on in header (on7960/40)
@@ -189,24 +189,24 @@ struct sccp_line {
 	char label[StationMaxNameSize];
 
 	/* mainbox numbers (seperated by commas) to check for messages */
-	char mailbox[CW_MAX_EXTENSION];
+	char mailbox[OPBX_MAX_EXTENSION];
 
 	/* Voicemail number to dial */
-	char vmnum[CW_MAX_EXTENSION];
+	char vmnum[OPBX_MAX_EXTENSION];
 
 	/* The context we use for outgoing calls. */
-	char context[CW_MAX_CONTEXT];
+	char context[OPBX_MAX_CONTEXT];
 	char language[MAX_LANGUAGE];
-	char accountcode[CW_MAX_ACCOUNT_CODE];
+	char accountcode[OPBX_MAX_ACCOUNT_CODE];
 	char musicclass[MAX_MUSICCLASS];
 	int						amaflags;
-	cw_group_t				callgroup;
+	opbx_group_t				callgroup;
 #ifdef CS_SCCP_PICKUP
-	cw_group_t				pickupgroup;
+	opbx_group_t				pickupgroup;
 #endif
 	/* CallerId to use on outgoing calls*/
-	char cid_name[CW_MAX_EXTENSION];
-	char cid_num[CW_MAX_EXTENSION];
+	char cid_name[OPBX_MAX_EXTENSION];
+	char cid_num[OPBX_MAX_EXTENSION];
 
 	/* max incoming calls limit */
 	uint8_t incominglimit;
@@ -270,8 +270,8 @@ struct sccp_speed {
 	char name[StationMaxNameSize];
 
 	/* The number to dial when it's hit */
-	char ext[CW_MAX_EXTENSION];
-	char hint[CW_MAX_EXTENSION];
+	char ext[OPBX_MAX_EXTENSION];
+	char hint[OPBX_MAX_EXTENSION];
 
 	/* Pointer to next speed dial */
 	sccp_speed_t * next;
@@ -279,7 +279,7 @@ struct sccp_speed {
 
 
 struct sccp_device {
-	cw_mutex_t lock;
+	opbx_mutex_t lock;
 
 	/* SEP<macAddress> of the device. */
 	char id[StationMaxDeviceNameSize];
@@ -305,8 +305,8 @@ struct sccp_device {
 	/* If the device has been rully registered yet */
 	uint8_t registrationState;
 
-	/* callweaver codec device preference */
-	struct cw_codec_pref codecs;
+	/* openpbx codec device preference */
+	struct opbx_codec_pref codecs;
 
 	/* SCCP_DEVICE_ONHOOK or SCCP_DEVICE_OFFHOOK */
 	uint8_t state;
@@ -318,9 +318,9 @@ struct sccp_device {
 	uint8_t dndmode;
 
 	/* last dialed number */
-	char lastNumber[CW_MAX_EXTENSION];
+	char lastNumber[OPBX_MAX_EXTENSION];
 
-	/* callweaver codec capability */
+	/* openpbx codec capability */
 	int capability;
 
 	/* channel state where to open the rtp media stream */
@@ -335,7 +335,7 @@ struct sccp_device {
 /*	btnlist					*btntemplate; XXX remove */
 
 	/* permit or deny connections to the main socket */
-	struct cw_ha			*ha;
+	struct opbx_ha			*ha;
 	/* permit registration to the hostname ip address */
 	sccp_hostname_t			*permithost;
 
@@ -367,7 +367,7 @@ struct sccp_device {
 };
 
 struct sccp_session {
-  cw_mutex_t			lock;
+  opbx_mutex_t			lock;
   void					*buffer;
   size_t				buffer_size;
   struct sockaddr_in	sin;
@@ -382,8 +382,8 @@ struct sccp_session {
 };
 
 struct sccp_channel {
-	cw_mutex_t			lock;
-	/* codec requested by callweaver */
+	opbx_mutex_t			lock;
+	/* codec requested by openpbx */
 	int					format;
 	char				calledPartyName[StationMaxNameSize];
 	char				calledPartyNumber[StationMaxDirnumSize];
@@ -401,12 +401,12 @@ struct sccp_channel {
 	/* SCCPRingerMode application */
 	uint8_t				ringermode;
 	/* last dialed number */
-	char dialedNumber[CW_MAX_EXTENSION];
+	char dialedNumber[OPBX_MAX_EXTENSION];
 
 	sccp_device_t 	 *	device;
-	struct cw_channel *	owner;
+	struct opbx_channel *	owner;
 	sccp_line_t		 *	line;
-	struct cw_rtp	 *	rtp;
+	struct opbx_rtp	 *	rtp;
 	struct sockaddr_in	rtp_addr;
 	sccp_channel_t	 *	prev, * next,
 					 *	prev_on_line, * next_on_line;
@@ -419,45 +419,45 @@ struct sccp_channel {
 };
 
 struct sccp_global_vars {
-	cw_mutex_t				lock;
+	opbx_mutex_t				lock;
 
 	sccp_session_t			*sessions;
-	cw_mutex_t				sessions_lock;
+	opbx_mutex_t				sessions_lock;
 	sccp_device_t			*devices;
-	cw_mutex_t				devices_lock;
+	opbx_mutex_t				devices_lock;
 	sccp_line_t	  			*lines;
-	cw_mutex_t				lines_lock;
+	opbx_mutex_t				lines_lock;
 	sccp_channel_t 			*channels;
-	cw_mutex_t				channels_lock;
-	cw_mutex_t				socket_lock;
+	opbx_mutex_t				channels_lock;
+	opbx_mutex_t				socket_lock;
 	int 					descriptor;
 	/* Keep track of when we're in use. */
 	int						usecnt;
-	cw_mutex_t				usecnt_lock;
+	opbx_mutex_t				usecnt_lock;
 
 	char					servername[StationMaxDisplayNotifySize];
 	struct sockaddr_in		bindaddr;
 	int						ourport;
 	/* permit or deny connections to the main socket */
-	struct cw_ha			*ha;
+	struct opbx_ha			*ha;
 	/* localnet for NAT */
-	struct cw_ha			*localaddr;
+	struct opbx_ha			*localaddr;
 	struct sockaddr_in		externip;
 	char 					externhost[MAXHOSTNAMELEN];
 	time_t 					externexpire;
 	int 					externrefresh;
 
-	char					context[CW_MAX_CONTEXT];
+	char					context[OPBX_MAX_CONTEXT];
 	char					language[MAX_LANGUAGE];
-	char					accountcode[CW_MAX_ACCOUNT_CODE];
+	char					accountcode[OPBX_MAX_ACCOUNT_CODE];
 	char					musicclass[MAX_MUSICCLASS];
 	int						amaflags;
-	cw_group_t				callgroup;
+	opbx_group_t				callgroup;
 #ifdef CS_SCCP_PICKUP
-	cw_group_t				pickupgroup;
+	opbx_group_t				pickupgroup;
 #endif
 	int						global_capability;
-	struct					cw_codec_pref global_codecs;
+	struct					opbx_codec_pref global_codecs;
 	int						keepalive;
 	int						debug;
 	char 					date_format[7];
@@ -496,7 +496,7 @@ struct sccp_global_vars *sccp_globals;
 
 uint8_t sccp_handle_message(sccp_moo_t * r, sccp_session_t * s);
 
-struct cw_channel *sccp_request(const char *type, int format, void *data, int *cause);
+struct opbx_channel *sccp_request(const char *type, int format, void *data, int *cause);
 
 int sccp_devicestate(void *data);
 sccp_hint_t * sccp_hint_make(sccp_device_t *d, uint8_t instance);

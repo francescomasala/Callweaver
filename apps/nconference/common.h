@@ -2,7 +2,7 @@
  * app_nconference
  *
  * NConference
- * A channel independent conference application for CallWeaver
+ * A channel independent conference application for Openpbx
  *
  * Copyright (C) 2002, 2003 Navynet SRL
  * http://www.navynet.it
@@ -21,27 +21,26 @@
 #ifndef _NCONFERENCE_COMMON_H
 #define NCONFERENCE_COMMON_H
 
-/* callweaver includes */
-#include "callweaver.h"
-
-#include "callweaver/lock.h"
-#include "callweaver/file.h"
-#include "callweaver/logger.h"
-#include "callweaver/channel.h"
-#include "callweaver/pbx.h"
-#include "callweaver/module.h"
-#include "callweaver/config.h"
-#include "callweaver/app.h"
-#include "callweaver/dsp.h"
-#include "callweaver/musiconhold.h"
-#include "callweaver/manager.h"
-#include "callweaver/options.h"
-#include "callweaver/cli.h"
-#include "callweaver/say.h"
-#include "callweaver/utils.h"
-#include "callweaver/translate.h"
-#include "callweaver/frame.h"
-#include "callweaver/features.h"
+/* openpbx includes */
+#include "openpbx.h"
+#include "openpbx/lock.h"
+#include "openpbx/file.h"
+#include "openpbx/logger.h"
+#include "openpbx/channel.h"
+#include "openpbx/pbx.h"
+#include "openpbx/module.h"
+#include "openpbx/config.h"
+#include "openpbx/app.h"
+#include "openpbx/dsp.h"
+#include "openpbx/musiconhold.h"
+#include "openpbx/manager.h"
+#include "openpbx/options.h"
+#include "openpbx/cli.h"
+#include "openpbx/say.h"
+#include "openpbx/utils.h"
+#include "openpbx/translate.h"
+#include "openpbx/frame.h"
+#include "openpbx/features.h"
 
 /* standard includes */
 #include <stdio.h>
@@ -52,16 +51,16 @@
 #include <pthread.h>
 
 
-extern cw_mutex_t conflist_lock;
+extern opbx_mutex_t conflist_lock;
 
 
 // debug logging level
 #define APP_NCONFERENCE_DEBUG	0
 
 #if (APP_NCONFERENCE_DEBUG == 0)
-#define CW_CONF_DEBUG 	LOG_NOTICE
+#define OPBX_CONF_DEBUG 	LOG_DEBUG
 #else
-#define CW_CONF_DEBUG 	LOG_NOTICE
+#define OPBX_CONF_DEBUG 	LOG_NOTICE
 #endif
 
 
@@ -75,22 +74,22 @@ extern cw_mutex_t conflist_lock;
 #define ENABLE_VAD		1
 #define ENABLE AUTOGAIN		0	// Not used yet
 
-// sample information for CW_FORMAT_SLINEAR format
-#define CW_CONF_SAMPLE_RATE_8K 	8000
-#define CW_CONF_SAMPLE_RATE_16K 	16000
-#define CW_CONF_SAMPLE_RATE 		CW_CONF_SAMPLE_RATE_8K
+// sample information for OPBX_FORMAT_SLINEAR format
+#define OPBX_CONF_SAMPLE_RATE_8K 	8000
+#define OPBX_CONF_SAMPLE_RATE_16K 	16000
+#define OPBX_CONF_SAMPLE_RATE 		OPBX_CONF_SAMPLE_RATE_8K
 
 // Time to wait while reading a channel
-#define CW_CONF_WAITFOR_TIME 40 
+#define OPBX_CONF_WAITFOR_TIME 40 
 
 // Time to destroy empty conferences (seconds)
-#define CW_CONF_DESTROY_TIME 300
+#define OPBX_CONF_DESTROY_TIME 300
 
 // -----------------------------------------------
-#define CW_CONF_SKIP_MS_AFTER_VOICE_DETECTION 	210
-#define CW_CONF_SKIP_MS_WHEN_SILENT     		90
+#define OPBX_CONF_SKIP_MS_AFTER_VOICE_DETECTION 	210
+#define OPBX_CONF_SKIP_MS_WHEN_SILENT     		90
 
-#define CW_CONF_CBUFFER_8K_SIZE 3072
+#define OPBX_CONF_CBUFFER_8K_SIZE 3072
 
 
 // Timelog functions
@@ -106,7 +105,7 @@ extern cw_mutex_t conflist_lock;
 		func; \
 		gettimeofday(&t2,NULL); \
 		if((diff = usecdiff(&t2, &t1)) > min) \
-			cw_log( CW_CONF_DEBUG, "TimeLog: %s: %d ms\n", message, diff); \
+			opbx_log( OPBX_CONF_DEBUG, "TimeLog: %s: %d ms\n", message, diff); \
 	} while (0)
 
 #else

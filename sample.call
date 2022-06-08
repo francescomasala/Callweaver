@@ -1,5 +1,5 @@
 #
-# This is a sample file that can be dumped in /opt/callweaver.org/var/spool/outgoing
+# This is a sample file that can be dumped in /opt/openpbx.org/var/spool/outgoing
 # to generate a call.  Obviously, you MUST specify at least a channel in
 # the same format as you would for the "Dial" application.  Only one
 # channel name is permitted.

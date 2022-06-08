@@ -1,5 +1,5 @@
 A PBX is only really useful if you can get calls into it.  Of course, you
-can use CallWeaver with VoIP calls (SIP, H.323, IAX), but you can also talk
+can use OpenPBX with VoIP calls (SIP, H.323, IAX), but you can also talk
 to the real PSTN through various cards.
 
 Supported Hardware is divided into two general groups:  Zaptel devices and 

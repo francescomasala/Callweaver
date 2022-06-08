@@ -1,12 +1,12 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  *
  * Copyright (C) 2002, Pauline Middelink
  *
  * Pauline Middelink <middelink@polyware.nl>
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -22,7 +22,7 @@
  * 
  * \author Pauline Middelink <middelink at polyware.nl>
  *
- * Load the country specific dialtones into the callweaver PBX.
+ * Load the country specific dialtones into the openpbx PBX.
  */
 #ifdef HAVE_CONFIG_H
 #include "confdefs.h"
@@ -37,20 +37,20 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-#include "callweaver.h"
+#include "openpbx.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/res/res_indications.c $", "$Revision: 4723 $")
+OPENPBX_FILE_VERSION("$HeadURL$", "$Revision$")
 
-#include "callweaver/lock.h"
-#include "callweaver/file.h"
-#include "callweaver/cli.h"
-#include "callweaver/logger.h"
-#include "callweaver/config.h"
-#include "callweaver/channel.h"
-#include "callweaver/pbx.h"
-#include "callweaver/module.h"
-#include "callweaver/translate.h"
-#include "callweaver/indications.h"
+#include "openpbx/lock.h"
+#include "openpbx/file.h"
+#include "openpbx/cli.h"
+#include "openpbx/logger.h"
+#include "openpbx/config.h"
+#include "openpbx/channel.h"
+#include "openpbx/pbx.h"
+#include "openpbx/module.h"
+#include "openpbx/translate.h"
+#include "openpbx/indications.h"
 
 
 /* Globals */
@@ -73,9 +73,6 @@ static char help_show_indications[] =
 "       Show either a condensed for of all country/indications, or the\n"
 "       indications for the specified countries.\n";
 
-static void *playtones_app;
-static void *stopplaytones_app;
-
 char *playtones_desc=
 "PlayTones(arg): Plays a tone list. Execution will continue with the next step immediately,\n"
 "while the tones continue to play.\n"
@@ -97,31 +94,31 @@ static int handle_add_indication(int fd, int argc, char *argv[])
     int created_country = 0;
     if (argc != 5) return RESULT_SHOWUSAGE;
 
-    tz = cw_get_indication_zone(argv[2]);
+    tz = opbx_get_indication_zone(argv[2]);
     if (!tz) {
         /* country does not exist, create it */
-        cw_log(LOG_NOTICE, "Country '%s' does not exist, creating it.\n",argv[2]);
+        opbx_log(LOG_NOTICE, "Country '%s' does not exist, creating it.\n",argv[2]);
 
         if ((tz = malloc(sizeof(struct tone_zone))) == NULL)
         {
-            cw_log(LOG_WARNING, "Out of memory\n");
+            opbx_log(LOG_WARNING, "Out of memory\n");
             return -1;
         }
         memset(tz,0,sizeof(struct tone_zone));
-        cw_copy_string(tz->country,argv[2],sizeof(tz->country));
-        if (cw_register_indication_country(tz))
+        opbx_copy_string(tz->country,argv[2],sizeof(tz->country));
+        if (opbx_register_indication_country(tz))
         {
-            cw_log(LOG_WARNING, "Unable to register new country\n");
+            opbx_log(LOG_WARNING, "Unable to register new country\n");
             free(tz);
             return -1;
         }
         created_country = 1;
     }
-    if (cw_register_indication(tz,argv[3],argv[4]))
+    if (opbx_register_indication(tz,argv[3],argv[4]))
     {
-        cw_log(LOG_WARNING, "Unable to register indication %s/%s\n",argv[2],argv[3]);
+        opbx_log(LOG_WARNING, "Unable to register indication %s/%s\n",argv[2],argv[3]);
         if (created_country)
-            cw_unregister_indication_country(argv[2]);
+            opbx_unregister_indication_country(argv[2]);
         return -1;
     }
     return 0;
@@ -140,21 +137,21 @@ static int handle_remove_indication(int fd, int argc, char *argv[])
     if (argc == 3)
     {
         /* remove entiry country */
-        if (cw_unregister_indication_country(argv[2]))
+        if (opbx_unregister_indication_country(argv[2]))
         {
-            cw_log(LOG_WARNING, "Unable to unregister indication country %s\n",argv[2]);
+            opbx_log(LOG_WARNING, "Unable to unregister indication country %s\n",argv[2]);
             return -1;
         }
         return 0;
     }
 
-    tz = cw_get_indication_zone(argv[2]);
+    tz = opbx_get_indication_zone(argv[2]);
     if (!tz) {
-        cw_log(LOG_WARNING, "Unable to unregister indication %s/%s, country does not exists\n",argv[2],argv[3]);
+        opbx_log(LOG_WARNING, "Unable to unregister indication %s/%s, country does not exists\n",argv[2],argv[3]);
         return -1;
     }
-    if (cw_unregister_indication(tz,argv[3])) {
-        cw_log(LOG_WARNING, "Unable to unregister indication %s/%s\n",argv[2],argv[3]);
+    if (opbx_unregister_indication(tz,argv[3])) {
+        opbx_log(LOG_WARNING, "Unable to unregister indication %s/%s\n",argv[2],argv[3]);
         return -1;
     }
     return 0;
@@ -169,18 +166,18 @@ static int handle_show_indications(int fd, int argc, char *argv[])
     char buf[256];
     int found_country = 0;
 
-    if (cw_mutex_lock(&tzlock)) {
-        cw_log(LOG_WARNING, "Unable to lock tone_zones list\n");
+    if (opbx_mutex_lock(&tzlock)) {
+        opbx_log(LOG_WARNING, "Unable to lock tone_zones list\n");
         return 0;
     }
     if (argc == 2) {
         /* no arguments, show a list of countries */
-        cw_cli(fd,"Country Alias   Description\n"
+        opbx_cli(fd,"Country Alias   Description\n"
                "===========================\n");
         for (tz=tone_zones; tz; tz=tz->next) {
-            cw_cli(fd,"%-7.7s %-7.7s %s\n", tz->country, tz->alias, tz->description);
+            opbx_cli(fd,"%-7.7s %-7.7s %s\n", tz->country, tz->alias, tz->description);
         }
-        cw_mutex_unlock(&tzlock);
+        opbx_mutex_unlock(&tzlock);
         return 0;
     }
     /* there was a request for specific country(ies), lets humor them */
@@ -195,7 +192,7 @@ static int handle_show_indications(int fd, int argc, char *argv[])
                 if (!found_country)
                 {
                     found_country = 1;
-                    cw_cli(fd,"Country Indication      PlayList\n"
+                    opbx_cli(fd,"Country Indication      PlayList\n"
                            "=====================================\n");
                 }
                 j = snprintf(buf,sizeof(buf),"%-7.7s %-15.15s ",tz->country,"<ringcadence>");
@@ -205,49 +202,49 @@ static int handle_show_indications(int fd, int argc, char *argv[])
                 }
                 if (tz->nrringcadence)
                     j--;
-                cw_copy_string(buf+j,"\n",sizeof(buf)-j);
-                cw_cli(fd,buf);
+                opbx_copy_string(buf+j,"\n",sizeof(buf)-j);
+                opbx_cli(fd,buf);
                 for (ts = tz->tones;  ts;  ts = ts->next)
-                    cw_cli(fd,"%-7.7s %-15.15s %s\n", tz->country, ts->name, ts->data);
+                    opbx_cli(fd,"%-7.7s %-15.15s %s\n", tz->country, ts->name, ts->data);
                 break;
             }
         }
     }
     if (!found_country)
-        cw_cli(fd,"No countries matched your criteria.\n");
-    cw_mutex_unlock(&tzlock);
+        opbx_cli(fd,"No countries matched your criteria.\n");
+    opbx_mutex_unlock(&tzlock);
     return -1;
 }
 
 /*
  * Playtones command stuff
  */
-static int handle_playtones(struct cw_channel *chan, int argc, char **argv)
+static int handle_playtones(struct opbx_channel *chan, void *data)
 {
     struct tone_zone_sound *ts;
     int res;
 
-    if (argc < 1 || !argv[0][0])
+    if (data == NULL  ||  ((char *) data)[0] == 0)
     {
-        cw_log(LOG_NOTICE,"Nothing to play\n");
+        opbx_log(LOG_NOTICE,"Nothing to play\n");
         return -1;
     }
-    ts = cw_get_indication_tone(chan->zone, argv[0]);
+    ts = opbx_get_indication_tone(chan->zone, (const char*)data);
     if (ts  &&  ts->data[0])
-        res = cw_playtones_start(chan, 0, ts->data, 0);
+        res = opbx_playtones_start(chan, 0, ts->data, 0);
     else
-        res = cw_playtones_start(chan, 0, argv[0], 0);
+        res = opbx_playtones_start(chan, 0, (const char*)data, 0);
     if (res)
-        cw_log(LOG_NOTICE,"Unable to start playtones\n");
+        opbx_log(LOG_NOTICE,"Unable to start playtones\n");
     return res;
 }
 
 /*
  * StopPlaylist command stuff
  */
-static int handle_stopplaytones(struct cw_channel *chan, int argc, char **argv)
+static int handle_stopplaytones(struct opbx_channel *chan, void *data)
 {
-    cw_playtones_stop(chan);
+    opbx_playtones_stop(chan);
     return 0;
 }
 
@@ -256,8 +253,8 @@ static int handle_stopplaytones(struct cw_channel *chan, int argc, char **argv)
  */
 static int ind_load_module(void)
 {
-    struct cw_config *cfg;
-    struct cw_variable *v;
+    struct opbx_config *cfg;
+    struct opbx_variable *v;
     char *cxt;
     char *c;
     struct tone_zone *tones;
@@ -265,39 +262,39 @@ static int ind_load_module(void)
 
     /* that the following cast is needed, is yuk! */
     /* yup, checked it out. It is NOT written to. */
-    cfg = cw_config_load((char *)config);
+    cfg = opbx_config_load((char *)config);
     if (!cfg)
         return 0;
 
     /* Use existing config to populate the Indication table */
-    cxt = cw_category_browse(cfg, NULL);
+    cxt = opbx_category_browse(cfg, NULL);
     while (cxt)
     {
         /* All categories but "general" are considered countries */
         if (!strcasecmp(cxt, "general"))
         {
-            cxt = cw_category_browse(cfg, cxt);
+            cxt = opbx_category_browse(cfg, cxt);
             continue;
         }
         if ((tones = malloc(sizeof(struct tone_zone))) == NULL)
         {
-            cw_log(LOG_WARNING,"Out of memory\n");
-            cw_config_destroy(cfg);
+            opbx_log(LOG_WARNING,"Out of memory\n");
+            opbx_config_destroy(cfg);
             return -1;
         }
         memset(tones, 0, sizeof(struct tone_zone));
-        cw_copy_string(tones->country, cxt, sizeof(tones->country));
+        opbx_copy_string(tones->country, cxt, sizeof(tones->country));
 
-        v = cw_variable_browse(cfg, cxt);
+        v = opbx_variable_browse(cfg, cxt);
         while (v)
         {
             if (!strcasecmp(v->name, "description"))
             {
-                cw_copy_string(tones->description, v->value, sizeof(tones->description));
+                opbx_copy_string(tones->description, v->value, sizeof(tones->description));
             }
             else if (!strcasecmp(v->name,"ringcadence") || !strcasecmp(v->name,"ringcadance"))
             {
-                char *ring,*rings = cw_strdupa(v->value);
+                char *ring,*rings = opbx_strdupa(v->value);
                 c = rings;
                 ring = strsep(&c,",");
                 while (ring)
@@ -305,14 +302,14 @@ static int ind_load_module(void)
                     int *tmp, val;
                     if (!isdigit(ring[0]) || (val=atoi(ring))==-1)
                     {
-                        cw_log(LOG_WARNING,"Invalid ringcadence given '%s' at line %d.\n",ring,v->lineno);
+                        opbx_log(LOG_WARNING,"Invalid ringcadence given '%s' at line %d.\n",ring,v->lineno);
                         ring = strsep(&c,",");
                         continue;
                     }
                     if ((tmp = realloc(tones->ringcadence,(tones->nrringcadence+1)*sizeof(int))) == NULL)
                     {
-                        cw_log(LOG_WARNING, "Out of memory\n");
-                        cw_config_destroy(cfg);
+                        opbx_log(LOG_WARNING, "Out of memory\n");
+                        opbx_config_destroy(cfg);
                         return -1;
                     }
                     tones->ringcadence = tmp;
@@ -324,7 +321,7 @@ static int ind_load_module(void)
             }
             else if (!strcasecmp(v->name,"alias"))
             {
-                char *countries = cw_strdupa(v->value);
+                char *countries = opbx_strdupa(v->value);
                 c = countries;
                 country = strsep(&c,",");
                 while (country)
@@ -332,16 +329,16 @@ static int ind_load_module(void)
                     struct tone_zone* azone = malloc(sizeof(struct tone_zone));
                     if (!azone)
                     {
-                        cw_log(LOG_WARNING,"Out of memory\n");
-                        cw_config_destroy(cfg);
+                        opbx_log(LOG_WARNING,"Out of memory\n");
+                        opbx_config_destroy(cfg);
                         return -1;
                     }
                     memset(azone,0,sizeof(struct tone_zone));
-                    cw_copy_string(azone->country, country, sizeof(azone->country));
-                    cw_copy_string(azone->alias, cxt, sizeof(azone->alias));
-                    if (cw_register_indication_country(azone))
+                    opbx_copy_string(azone->country, country, sizeof(azone->country));
+                    opbx_copy_string(azone->alias, cxt, sizeof(azone->alias));
+                    if (opbx_register_indication_country(azone))
                     {
-                        cw_log(LOG_WARNING, "Unable to register indication alias at line %d.\n",v->lineno);
+                        opbx_log(LOG_WARNING, "Unable to register indication alias at line %d.\n",v->lineno);
                         free(tones);
                     }
                     /* next item */
@@ -357,15 +354,15 @@ static int ind_load_module(void)
                     if (strcasecmp(v->name,ts->name) == 0)
                     {
                         /* already there */
-                        cw_log(LOG_NOTICE,"Duplicate entry '%s', skipped.\n",v->name);
+                        opbx_log(LOG_NOTICE,"Duplicate entry '%s', skipped.\n",v->name);
                         goto out;
                     }
                 }
                 /* not there, add it to the back */
                 if ((ts = malloc(sizeof(struct tone_zone_sound))) == NULL)
                 {
-                    cw_log(LOG_WARNING, "Out of memory\n");
-                    cw_config_destroy(cfg);
+                    opbx_log(LOG_WARNING, "Out of memory\n");
+                    opbx_config_destroy(cfg);
                     return -1;
                 }
                 ts->next = NULL;
@@ -379,38 +376,38 @@ static int ind_load_module(void)
 out:            v = v->next;
         }
         if (tones->description[0] || tones->alias[0] || tones->tones) {
-            if (cw_register_indication_country(tones)) {
-                cw_log(LOG_WARNING, "Unable to register indication at line %d.\n",v->lineno);
+            if (opbx_register_indication_country(tones)) {
+                opbx_log(LOG_WARNING, "Unable to register indication at line %d.\n",v->lineno);
                 free(tones);
             }
         } else free(tones);
 
-        cxt = cw_category_browse(cfg, cxt);
+        cxt = opbx_category_browse(cfg, cxt);
     }
 
     /* determine which country is the default */
-    country = cw_variable_retrieve(cfg,"general","country");
-    if (!country || !*country || cw_set_indication_country(country))
-        cw_log(LOG_WARNING,"Unable to set the default country (for indication tones)\n");
+    country = opbx_variable_retrieve(cfg,"general","country");
+    if (!country || !*country || opbx_set_indication_country(country))
+        opbx_log(LOG_WARNING,"Unable to set the default country (for indication tones)\n");
 
-    cw_config_destroy(cfg);
+    opbx_config_destroy(cfg);
     return 0;
 }
 
 /*
  * CLI entries for commands provided by this module
  */
-static struct cw_cli_entry add_indication_cli =
+static struct opbx_cli_entry add_indication_cli =
     { { "indication", "add", NULL }, handle_add_indication,
         "Add the given indication to the country", help_add_indication,
         NULL };
 
-static struct cw_cli_entry remove_indication_cli =
+static struct opbx_cli_entry remove_indication_cli =
     { { "indication", "remove", NULL }, handle_remove_indication,
         "Remove the given indication from the country", help_remove_indication,
         NULL };
 
-static struct cw_cli_entry show_indications_cli =
+static struct opbx_cli_entry show_indications_cli =
     { { "show", "indications", NULL }, handle_show_indications,
         "Show a list of all country/indications", help_show_indications,
         NULL };
@@ -420,29 +417,27 @@ static struct cw_cli_entry show_indications_cli =
  */
 int unload_module(void)
 {
-    int res = 0;
-
     /* remove the registed indications... */
-    cw_unregister_indication_country(NULL);
+    opbx_unregister_indication_country(NULL);
 
     /* and the functions */
-    cw_cli_unregister(&add_indication_cli);
-    cw_cli_unregister(&remove_indication_cli);
-    cw_cli_unregister(&show_indications_cli);
-    res |= cw_unregister_application(playtones_app);
-    res |= cw_unregister_application(stopplaytones_app);
-    return res;
+    opbx_cli_unregister(&add_indication_cli);
+    opbx_cli_unregister(&remove_indication_cli);
+    opbx_cli_unregister(&show_indications_cli);
+    opbx_unregister_application("PlayTones");
+    opbx_unregister_application("StopPlayTones");
+    return 0;
 }
 
 int load_module(void)
 {
     if (ind_load_module()) return -1;
  
-    cw_cli_register(&add_indication_cli);
-    cw_cli_register(&remove_indication_cli);
-    cw_cli_register(&show_indications_cli);
-    playtones_app = cw_register_application("PlayTones", handle_playtones, "Play a tone list", NULL, playtones_desc);
-    stopplaytones_app = cw_register_application("StopPlayTones", handle_stopplaytones, "Stop playing a tone list", NULL, "Stop playing a tone list");
+    opbx_cli_register(&add_indication_cli);
+    opbx_cli_register(&remove_indication_cli);
+    opbx_cli_register(&show_indications_cli);
+    opbx_register_application("PlayTones", handle_playtones, "Play a tone list", playtones_desc);
+    opbx_register_application("StopPlayTones", handle_stopplaytones, "Stop playing a tone list","Stop playing a tone list");
 
     return 0;
 }
@@ -450,7 +445,7 @@ int load_module(void)
 int reload(void)
 {
     /* remove the registed indications... */
-    cw_unregister_indication_country(NULL);
+    opbx_unregister_indication_country(NULL);
 
     return ind_load_module();
 }

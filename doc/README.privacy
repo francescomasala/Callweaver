@@ -95,7 +95,7 @@ exten => s,107,Background(tt-monkeysintro)
 exten => s,108,Background(tt-monkeys)
 exten => s,109,Background(tt-weasels)
 exten => s,110,Hangup
-exten => s,5,GotoIf($[ "${CALLERIDNUM}"  = "7773334444" &  "${CALLERIDNAME}" : "Privacy Manager" ]?callerid-liar,s,1:s,7)
+exten => s,5,GotoIf($[ "${CALLERIDNUM}"  = "7773334444" &  "${CALLERIDNAME}" : "Privacy Manager" ]?callerid-liar|s|1:s|7)
 
 I suggest using Zapateller at the beginning of the context, before
 anything else, on incoming calls.This can be followed by the
@@ -121,7 +121,7 @@ Next: Torture Them!
 
 I have developed an elaborate script to torture Telemarketers, and
 entertain friends. (See
-http://www.voip-info.org/wiki-CallWeaver+Telemarketer+Torture )
+http://www.voip-info.org/wiki-OpenPBX+Telemarketer+Torture )
 
 While mostly those that call in and traverse my teletorture scripts
 are those we know, and are doing so out of curiosity, there have been
@@ -157,7 +157,7 @@ have a "memory".
 Turning on these modes in the dial command results in this sequence of
 events, when someone calls you at an extension:
 
-1. The caller calls the CallWeaver system, and at some point, selects an
+1. The caller calls the OpenPBX system, and at some point, selects an
 option or enters an extension number that would dial your extension.
 
 2. Before ringing your extension, the caller is asked to supply an
@@ -181,15 +181,15 @@ There are some variations, and these will be explained in due course.
 
 To use these options, set your Dial to something like:
 
-exten => 3,3,Dial(Zap/5r3&Zap/6r3,35,tmPA(beep))
+exten => 3,3,Dial(Zap/5r3&Zap/6r3|35|tmPA(beep))
 
 or 
 
-exten => 3,3,Dial(Zap/5r3&Zap/6r3,35,tmP(something)A(beep))
+exten => 3,3,Dial(Zap/5r3&Zap/6r3|35|tmP(something)A(beep))
 
 or 
 
-exten => 3,3,Dial(Zap/5r3&Zap/6r3,35,tmpA(beep))
+exten => 3,3,Dial(Zap/5r3&Zap/6r3|35|tmpA(beep))
 
 
 The 't' allows the dialed party to transfer the call using '#'. It's
@@ -215,7 +215,7 @@ helpful.
 
 When there is no CallerID, P and p options will always record an intro
 for the incoming caller. This intro will be stored temporarily in the
-/var/lib/callweaver/sounds/priv-callerintros dir, under the name
+/var/lib/openpbx/sounds/priv-callerintros dir, under the name
 NOCALLERID_<extension><channelname> and will be erased after the
 callee decides what to do with the call.
 
@@ -252,7 +252,7 @@ introductions are stored and re-used for the convenience of the CALLER.]
 
 Unless instructed to not save introductions (see the 'n' option above),
 the screening modes will save the recordings of the caller's names in
-the directory /var/lib/callweaver/sounds/priv-callerintros, if they have
+the directory /var/lib/openpbx/sounds/priv-callerintros, if they have
 a CallerID.  Just the 10-digit callerid numbers are used as filenames,
 with a ".gsm" at the end.
 
@@ -265,13 +265,13 @@ having to supply their name, which shortens their call a bit.
 Next of all, these intros can be used in voicemail, played over
 loudspeakers, and perhaps other nifty things. For instance:
 
-exten => s,7,System(/usr/bin/play /var/lib/callweaver/sounds/priv-callerintros/${CALLERIDNUM}.gsm&,0) 
+exten => s,7,System(/usr/bin/play /var/lib/openpbx/sounds/priv-callerintros/${CALLERIDNUM}.gsm&|0) 
 
 When a call comes in at the house, the above priority gets executed,
 and the callers intro is played over the phone systems speakers. This
 gives us a hint who is calling.
 
-(Note: the ,0 option at the end of the System command above, is a
+(Note: the |0 option at the end of the System command above, is a
 local mod I made to the System command. It forces a 0 result code to
 be returned, whether the play command successfully completed or
 not. Therefore, I don't have to ensure that the file exists or
@@ -282,7 +282,7 @@ handle it a little more intelligently)
 And one other thing. You can easily supply your callers with an option
 to listen to, and re-record their introductions. Here's what I did in
 the home system's extensions.conf. (assume that a
-Goto(home-introduction,s,1) exists somewhere in your main menu as an
+Goto(home-introduction|s|1) exists somewhere in your main menu as an
 option):
 
 [home-introduction]
@@ -345,7 +345,7 @@ exten => 1,2,Goto(2,1)
 exten => 2,1,Background,intro-start
                                 ;;  OK, here we go! After the beep, please give your introduction.
 exten => 2,2,Background,beep
-exten => 2,3,Record,priv-callerintros/${CALLERIDNUM}:gsm,4
+exten => 2,3,Record,priv-callerintros/${CALLERIDNUM}:gsm|4
 exten => 2,4,Background,priv-callerintros/${CALLERIDNUM}
 exten => 2,5,Goto(home-introduction,s,1)
 exten => t,1,Goto(s,1)

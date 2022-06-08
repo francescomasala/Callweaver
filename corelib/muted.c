@@ -1,5 +1,5 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  *
  * Copyright (C) 1999 - 2005, Digium, Inc.
  *
@@ -8,8 +8,8 @@
  * Updated for Mac OSX CoreAudio 
  * by Josh Roberson <josh@asteriasgi.com>
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -186,7 +186,7 @@ static int open_mixer(void)
 }
 #endif /* !__Darwin */
 
-static int connect_callweaver(void)
+static int connect_openpbx(void)
 {
 	int sock;
 	struct hostent *hp;
@@ -240,7 +240,7 @@ static char *get_line(void)
 		return NULL;
 }
 
-static int login_callweaver(void)
+static int login_openpbx(void)
 {
 	char *welcome;
 	char *resp;
@@ -647,13 +647,13 @@ int main(int argc, char *argv[])
 	if (open_mixer())
 		exit(1);
 #endif
-	if (connect_callweaver()) {
+	if (connect_openpbx()) {
 #ifndef __Darwin__
 		close(mixfd);
 #endif
 		exit(1);
 	}
-	if (login_callweaver()) {
+	if (login_openpbx()) {
 #ifndef __Darwin__		
 		close(mixfd);
 #endif
@@ -665,10 +665,10 @@ int main(int argc, char *argv[])
 	for(;;) {
 		if (wait_event()) {
 			fclose(astf);
-			while(connect_callweaver()) {
+			while(connect_openpbx()) {
 				sleep(5);
 			}
-			if (login_callweaver()) {
+			if (login_openpbx()) {
 				fclose(astf);
 				exit(1);
 			}

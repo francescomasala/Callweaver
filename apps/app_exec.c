@@ -1,5 +1,5 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  *
  * Copyright (c) 2004 - 2005, Tilghman Lesher.  All rights reserved.
  *
@@ -7,8 +7,8 @@
  *
  * This code is released by the author with no restrictions on usage.
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -31,28 +31,29 @@
 #include <unistd.h>
 #include <string.h>
 
-#include "callweaver.h"
+#include "openpbx.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/apps/app_exec.c $", "$Revision: 4723 $")
+OPENPBX_FILE_VERSION("$HeadURL$", "$Revision$")
 
-#include "callweaver/file.h"
-#include "callweaver/logger.h"
-#include "callweaver/options.h"
-#include "callweaver/channel.h"
-#include "callweaver/pbx.h"
-#include "callweaver/module.h"
+#include "openpbx/file.h"
+#include "openpbx/logger.h"
+#include "openpbx/options.h"
+#include "openpbx/channel.h"
+#include "openpbx/pbx.h"
+#include "openpbx/module.h"
 
 /* Maximum length of any variable */
 #define MAXRESULT	1024
 
 static char *tdesc = "Executes applications";
 
-static void *exec_app;
-static char *name_exec = "Exec";
+static char *app_exec = "Exec";
+
 static char *exec_synopsis = "Executes internal application";
-static char *exec_syntax = "Exec(appname(arguments))";
+
 static char *exec_descrip =
-"Allows an arbitrary application to be invoked even when not\n"
+"Usage: Exec(appname(arguments))\n"
+"  Allows an arbitrary application to be invoked even when not\n"
 "hardcoded into the dialplan. To invoke external applications\n"
 "see the application System. Returns whatever value the\n"
 "app returns or a non-zero value if the app cannot be found.\n";
@@ -61,33 +62,40 @@ STANDARD_LOCAL_USER;
 
 LOCAL_USER_DECL;
 
-static int exec_exec(struct cw_channel *chan, int argc, char **argv)
+static int exec_exec(struct opbx_channel *chan, void *data)
 {
 	int res=0;
 	struct localuser *u;
 	char *s, *appname, *endargs, args[MAXRESULT];
-	struct cw_app *app;
+	struct opbx_app *app;
 
 	LOCAL_USER_ADD(u);
 
+	memset(args, 0, MAXRESULT);
+
 	/* Check and parse arguments */
-	if (argc > 0) {
-		s = cw_strdupa(argv[0]);
-		appname = strsep(&s, "(");
+	if (data) {
+		s = opbx_strdupa((char *)data);
 		if (s) {
-			endargs = strrchr(s, ')');
-			if (endargs)
-				*endargs = '\0';
-			pbx_substitute_variables_helper(chan, s, args, sizeof(args));
-		}
-		if (appname) {
-			app = pbx_findapp(appname);
-			if (app) {
-				res = pbx_exec(chan, app, args);
-			} else {
-				cw_log(LOG_WARNING, "Could not find application (%s)\n", appname);
-				res = -1;
+			appname = strsep(&s, "(");
+			if (s) {
+				endargs = strrchr(s, ')');
+				if (endargs)
+					*endargs = '\0';
+				pbx_substitute_variables_helper(chan, s, args, MAXRESULT - 1);
 			}
+			if (appname) {
+				app = pbx_findapp(appname);
+				if (app) {
+					res = pbx_exec(chan, app, args, 1);
+				} else {
+					opbx_log(LOG_WARNING, "Could not find application (%s)\n", appname);
+					res = -1;
+				}
+			}
+		} else {
+			opbx_log(LOG_ERROR, "Out of memory\n");
+			res = -1;
 		}
 	}
 
@@ -97,16 +105,13 @@ static int exec_exec(struct cw_channel *chan, int argc, char **argv)
 
 int unload_module(void)
 {
-	int res = 0;
 	STANDARD_HANGUP_LOCALUSERS;
-	res |= cw_unregister_application(exec_app);
-	return res;
+	return opbx_unregister_application(app_exec);
 }
 
 int load_module(void)
 {
-	exec_app = cw_register_application(name_exec, exec_exec, exec_synopsis, exec_syntax, exec_descrip);
-	return 0;
+	return opbx_register_application(app_exec, exec_exec, exec_synopsis, exec_descrip);
 }
 
 char *description(void)

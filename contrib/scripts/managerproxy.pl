@@ -1,6 +1,6 @@
 #!/usr/bin/perl -w 
 #
-#  Simple CallWeaver Manager Proxy, Version 1.01
+#  Simple OpenPBX Manager Proxy, Version 1.01
 #  2004-09-26
 #  Copyright (c) 2004 David C. Troy &lt;dave@popvox.com>
 #
@@ -29,15 +29,15 @@ use POSIX qw(setsid);
 #############################
 # User Configurable Options
 #############################
-# Configuration for logging in to your callweaver server
-# Check you CallWeaver config file "manager.conf" for details
+# Configuration for logging in to your openpbx server
+# Check you OpenPBX config file "manager.conf" for details
 my $manager_host = '127.0.0.1';
 my $manager_port = 5038;
 my $manager_user = 'your_username';
 my $manager_secret = 'your_secret';
 # Port For this proxy
 my $listen_port = 1234;
-my $manager_pid = "/var/run/callweaver_managerproxy.pid";
+my $manager_pid = "/var/run/openpbx_managerproxy.pid";
 
 #############################
 # Declarations
@@ -77,7 +77,7 @@ $p =
                             Proto    => "tcp",
                             Type     => SOCK_STREAM
                            )
-  or die "\nCould not connect to CallWeaver Manager Port at $manager_host\n";
+  or die "\nCould not connect to OpenPBX Manager Port at $manager_host\n";
 
 $p->autoflush(1);
 
@@ -111,7 +111,7 @@ sub manager_reconnect()
         $attempt++;
         if ($attempt > $total_attempts)
         {
-            die("!! Could not reconnect to CallWeaver Manager port");
+            die("!! Could not reconnect to OpenPBX Manager port");
         }
         sleep(10);    # wait 10 seconds before trying to reconnect
     } until $p;
@@ -149,11 +149,11 @@ while (1)
                         $O->remove($_);
                         $_->close;
 
-                        # If we lost the socket for the CallWeaver Mgr, then reconnect
+                        # If we lost the socket for the OpenPBX Mgr, then reconnect
                         if ($_ == $p)
                         {
                             log_debug(
-                                     "** CallWeaver Manager connection lost!!!!!",
+                                     "** OpenPBX Manager connection lost!!!!!",
                                      16);
                             manager_reconnect();
                         } else {
@@ -170,10 +170,10 @@ while (1)
                     # do a 'next' unless we have completed a block; we are not ready to continue
 
                     # Process the completed block
-                    # If block is from callweaver, send to clients
+                    # If block is from openpbx, send to clients
                     if ($_ == $p) {
-                       # block is from callweaver, send to clients
-                       print "callweaver: $_\n$blocks{$_}" if $debug;
+                       # block is from openpbx, send to clients
+                       print "openpbx: $_\n$blocks{$_}" if $debug;
                        my $cnt = 0;
                        foreach my $client (values %proxy_clients) {
                           print "writing to $$client...\n" if $debug;
@@ -182,7 +182,7 @@ while (1)
                        }
                        print "sent block to $cnt clients\n" if $debug;
                     } else {
-                       # Blocks are from clients, send to callweaver
+                       # Blocks are from clients, send to openpbx
                        syswrite($p, $blocks{$_});
                        print "client: $_\n$blocks{$_}\n" if $debug;
                     }

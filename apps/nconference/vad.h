@@ -2,7 +2,7 @@
  * app_nconference
  *
  * NConference
- * A channel independent conference application for CallWeaver
+ * A channel independent conference application for Openpbx
  *
  * Copyright (C) 2002, 2003 Navynet SRL
  * http://www.navynet.it

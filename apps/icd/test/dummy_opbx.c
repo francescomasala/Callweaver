@@ -6,10 +6,10 @@
 #include <stdarg.h>
 #include <unistd.h>
 #include <time.h>
-#include "callweaver/cli.h"
-#include "callweaver/lock.h"
-#include "callweaver/logger.h"
-#include "callweaver/icd/icd_types.h"
+#include "openpbx/cli.h"
+#include "openpbx/lock.h"
+#include "openpbx/logger.h"
+#include "openpbx/icd/icd_types.h"
 
 struct opbx_channel { int x; };
 struct opbx_cdr { int x; };
@@ -249,11 +249,11 @@ int opbx_cli_register ( struct opbx_cli_entry * e ) {
     return 0; 
 }
 
-int opbx_register_application( char * name, int(* execute)(struct opbx_channel *, char **, int), char * synopsis, char * syntax, char * description) {
+int opbx_register_application ( char * app, int(* execute)(struct opbx_channel *, void *), char * synopsis, char * description) {
     return 0;
 }
 
-int opbx_unregister_application(void *app) {
+int opbx_unregister_application(char *app) {
     return 0;
 }
 
@@ -312,7 +312,7 @@ struct opbx_app *pbx_findapp(char *app) {
  return NULL;
 } 
 
-int pbx_exec(struct opbx_channel *c, struct opbx_app *app, void *data) {
+int pbx_exec(struct opbx_channel *c, struct opbx_app *app, void *data, int newstrck) {
  return 0;
 }
  

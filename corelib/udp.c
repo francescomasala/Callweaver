@@ -1,12 +1,12 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  *
  * Copyright (C) 2006, Steve Underwood
  *
  * Steve Underwood <steveu@coppice.org>
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -39,24 +39,24 @@
 #include <arpa/inet.h>
 #include <fcntl.h>
 
-#include "callweaver.h"
+#include "openpbx.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/corelib/udp.c $", "$Revision: 4723 $")
+OPENPBX_FILE_VERSION("$HeadURL: svn://svn.openpbx.org/openpbx/trunk/corelib/udp.c $", "$Revision: 1600 $")
 
-#include "callweaver/frame.h"
-#include "callweaver/logger.h"
-#include "callweaver/options.h"
-#include "callweaver/channel.h"
-#include "callweaver/acl.h"
-#include "callweaver/channel.h"
-#include "callweaver/config.h"
-#include "callweaver/lock.h"
-#include "callweaver/utils.h"
-#include "callweaver/cli.h"
-#include "callweaver/unaligned.h"
-#include "callweaver/utils.h"
-#include "callweaver/udp.h"
-#include "callweaver/stun.h"
+#include "openpbx/frame.h"
+#include "openpbx/logger.h"
+#include "openpbx/options.h"
+#include "openpbx/channel.h"
+#include "openpbx/acl.h"
+#include "openpbx/channel.h"
+#include "openpbx/config.h"
+#include "openpbx/lock.h"
+#include "openpbx/utils.h"
+#include "openpbx/cli.h"
+#include "openpbx/unaligned.h"
+#include "openpbx/utils.h"
+#include "openpbx/udp.h"
+#include "openpbx/stun.h"
 
 struct udp_socket_info_s
 {
@@ -98,7 +98,7 @@ udp_socket_info_t *udp_socket_create(int nochecksums)
     
     if ((fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
     {
-        cw_log(LOG_ERROR, "Unable to allocate socket: %s\n", strerror(errno));
+        opbx_log(LOG_ERROR, "Unable to allocate socket: %s\n", strerror(errno));
         return NULL;
     }
     flags = fcntl(fd, F_GETFL);
@@ -109,7 +109,7 @@ udp_socket_info_t *udp_socket_create(int nochecksums)
 #endif
     if ((info = malloc(sizeof(*info))) == NULL)
     {
-        cw_log(LOG_ERROR, "Unable to allocate socket data: %s\n", strerror(errno));
+        opbx_log(LOG_ERROR, "Unable to allocate socket data: %s\n", strerror(errno));
         close(fd);
         return NULL;
     }
@@ -202,7 +202,7 @@ udp_socket_info_t *udp_socket_create_group_with_bindaddr(int nochecksums, int gr
         }
         if (errno != EADDRINUSE)
         {
-            cw_log(LOG_ERROR, "Unexpected bind error: %s\n", strerror(errno));
+            opbx_log(LOG_ERROR, "Unexpected bind error: %s\n", strerror(errno));
             udp_socket_destroy_group(info);
             return NULL;
         }
@@ -212,7 +212,7 @@ udp_socket_info_t *udp_socket_create_group_with_bindaddr(int nochecksums, int gr
         if (x == startplace)
             break;
     }
-    cw_log(LOG_ERROR, "No ports available within the range %d to %d. Can't setup media stream.\n", startport, endport);
+    opbx_log(LOG_ERROR, "No ports available within the range %d to %d. Can't setup media stream.\n", startport, endport);
     /* Unravel what we did so far, and give up */
     udp_socket_destroy_group(info);
     return NULL;
@@ -245,7 +245,7 @@ int udp_socket_set_us(udp_socket_info_t *info, const struct sockaddr_in *us)
         close(info->fd);
         if ((info->fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
         {
-            cw_log(LOG_ERROR, "Unable to re-allocate socket: %s\n", strerror(errno));
+            opbx_log(LOG_ERROR, "Unable to re-allocate socket: %s\n", strerror(errno));
             return -1;
         }
         flags = fcntl(info->fd, F_GETFL);
@@ -278,7 +278,7 @@ int udp_socket_set_tos(udp_socket_info_t *info, int tos)
     if (info == NULL)
         return -1;
     if ((res = setsockopt(info->fd, IPPROTO_IP, IP_TOS, &tos, sizeof(tos)))) 
-        cw_log(LOG_WARNING, "Unable to set TOS to %d\n", tos);
+        opbx_log(LOG_WARNING, "Unable to set TOS to %d\n", tos);
     return res;
 }
 
@@ -290,8 +290,8 @@ void udp_socket_set_nat(udp_socket_info_t *info, int nat_mode)
     if (nat_mode  &&  info->stun_state == STUN_STATE_IDLE  &&  stun_active)
     {
         if (stundebug)
-            cw_log(LOG_DEBUG, "Sending stun request on this UDP channel (port %d) cause NAT is on\n",ntohs(info->us.sin_port) );
-        cw_udp_stun_bindrequest(info->fd, &stunserver_ip, NULL, NULL);
+            opbx_log(LOG_DEBUG, "Sending stun request on this UDP channel (port %d) cause NAT is on\n",ntohs(info->us.sin_port) );
+        opbx_udp_stun_bindrequest(info->fd, &stunserver_ip, NULL, NULL);
         info->stun_state = STUN_STATE_REQUEST_PENDING;
     }
 }
@@ -402,13 +402,13 @@ int udp_socket_recvfrom(udp_socket_info_t *info,
         if (info->stun_state == STUN_STATE_REQUEST_PENDING)
         {
             if (stundebug)
-                cw_log(LOG_DEBUG, "Checking if payload it is a stun RESPONSE\n");
+                opbx_log(LOG_DEBUG, "Checking if payload it is a stun RESPONSE\n");
             memset(&stun_me, 0, sizeof(struct stun_state));
             stun_handle_packet(info->stun_state, (struct sockaddr_in *) sa, buf, res, &stun_me);
             if (stun_me.msgtype == STUN_BINDRESP)
             {
                 if (stundebug)
-                    cw_log(LOG_DEBUG, "Got STUN bind response\n");
+                    opbx_log(LOG_DEBUG, "Got STUN bind response\n");
                 info->stun_state = STUN_STATE_RESPONSE_RECEIVED;
                 if (stun_addr2sockaddr(&stun_sin, stun_me.mapped_addr))
                 {
@@ -417,7 +417,7 @@ int udp_socket_recvfrom(udp_socket_info_t *info,
                 else
                 {
                     if (stundebug)
-                        cw_log(LOG_DEBUG, "Stun response did not contain mapped address\n");
+                        opbx_log(LOG_DEBUG, "Stun response did not contain mapped address\n");
                 }
                 stun_remove_request(&stun_me.id);
                 return -1;

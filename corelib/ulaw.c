@@ -1,12 +1,12 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  *
  * Copyright (C) 1999 - 2005, Digium, Inc.
  *
  * Mark Spencer <markster@digium.com>
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -36,24 +36,24 @@
 #endif
 #include <spandsp.h>
 
-#include "callweaver.h"
+#include "openpbx.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/corelib/ulaw.c $", "$Revision: 4723 $")
+OPENPBX_FILE_VERSION("$HeadURL$", "$Revision$")
 
-#include "callweaver/ulaw.h"
+#include "openpbx/ulaw.h"
 
-uint8_t __cw_lin2mu[16384];
-int16_t __cw_mulaw[256];
+uint8_t __opbx_lin2mu[16384];
+int16_t __opbx_mulaw[256];
 
-void cw_ulaw_init(void)
+void opbx_ulaw_init(void)
 {
 	int i;
 
 	/* Set up mu-law conversion table */
 	for (i = 0;  i < 256;  i++)
-        __cw_mulaw[i] = ulaw_to_linear(i);
+        __opbx_mulaw[i] = ulaw_to_linear(i);
 	/* Set up the reverse (mu-law) conversion table */
 	for (i = -32768; i < 32768; i++)
-		__cw_lin2mu[((unsigned short) i) >> 2] = linear_to_ulaw(i);
+		__opbx_lin2mu[((unsigned short) i) >> 2] = linear_to_ulaw(i);
 	return;
 }

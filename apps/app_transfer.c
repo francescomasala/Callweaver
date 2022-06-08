@@ -1,12 +1,12 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  *
  * Copyright (C) 1999 - 2005, Digium, Inc.
  *
  * Mark Spencer <markster@digium.com>
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -30,17 +30,17 @@
 #include <unistd.h>
 #include <string.h>
 
-#include "callweaver.h"
+#include "openpbx.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/apps/app_transfer.c $", "$Revision: 4723 $")
+OPENPBX_FILE_VERSION("$HeadURL$", "$Revision$")
 
-#include "callweaver/lock.h"
-#include "callweaver/file.h"
-#include "callweaver/logger.h"
-#include "callweaver/channel.h"
-#include "callweaver/pbx.h"
-#include "callweaver/module.h"
-#include "callweaver/options.h"
+#include "openpbx/lock.h"
+#include "openpbx/file.h"
+#include "openpbx/logger.h"
+#include "openpbx/channel.h"
+#include "openpbx/pbx.h"
+#include "openpbx/module.h"
+#include "openpbx/options.h"
 
 STANDARD_LOCAL_USER;
 
@@ -48,12 +48,12 @@ LOCAL_USER_DECL;
 
 static const char *tdesc = "Transfer";
 
-static void *transfer_app;
-static const char *transfer_name = "Transfer";
-static const char *transfer_synopsis = "Transfer caller to remote extension";
-static const char *transfer_syntax = "Transfer([Tech/]dest)";
-static const char *transfer_descrip = 
-"Requests the remote caller be transfered\n"
+static const char *app = "Transfer";
+
+static const char *synopsis = "Transfer caller to remote extension";
+
+static const char *descrip = 
+"  Transfer([Tech/]dest):  Requests the remote caller be transfered\n"
 "to a given extension. If TECH (SIP, IAX2, LOCAL etc) is used, only\n"
 "an incoming call with the same channel technology will be transfered.\n"
 "Note that for SIP, if you transfer before call is setup, a 302 redirect\n"
@@ -71,24 +71,23 @@ static const char *transfer_descrip =
 "successful and there exists a priority n + 101,\n"
 "then that priority will be taken next.\n" ;
 
-static int transfer_exec(struct cw_channel *chan, int argc, char **argv)
+static int transfer_exec(struct opbx_channel *chan, void *data)
 {
 	int res;
 	int len;
 	struct localuser *u;
 	char *slash;
 	char *tech = NULL;
-	char *dest;
+	char *dest = data;
 	char *status;
 
-	if (argc != 1) {
-		cw_log(LOG_ERROR, "Syntax: %s\n", transfer_syntax);
-		return -1;
+	if (opbx_strlen_zero(dest)) {
+		opbx_log(LOG_WARNING, "Transfer requires an argument ([Tech/]destination)\n");
+		pbx_builtin_setvar_helper(chan, "TRANSFERSTATUS", "FAILURE");
+		return 0;
 	}
 
 	LOCAL_USER_ADD(u);
-
-	dest = argv[0];
 
 	if ((slash = strchr(dest, '/')) && (len = (slash - dest))) {
 		tech = dest;
@@ -108,12 +107,12 @@ static int transfer_exec(struct cw_channel *chan, int argc, char **argv)
 		return 0;
 	}
 
-	res = cw_transfer(chan, dest);
+	res = opbx_transfer(chan, dest);
 
 	if (res < 0) {
 		status = "FAILURE";
 		if (option_priority_jumping)
-			cw_goto_if_exists(chan, chan->context, chan->exten, chan->priority + 101);
+			opbx_goto_if_exists(chan, chan->context, chan->exten, chan->priority + 101);
 		res = 0;
 	} else {
 		status = "SUCCESS";
@@ -129,16 +128,14 @@ static int transfer_exec(struct cw_channel *chan, int argc, char **argv)
 
 int unload_module(void)
 {
-	int res = 0;
 	STANDARD_HANGUP_LOCALUSERS;
-	res |= cw_unregister_application(transfer_app);
-	return res;
+
+	return opbx_unregister_application(app);
 }
 
 int load_module(void)
 {
-	transfer_app = cw_register_application(transfer_name, transfer_exec, transfer_synopsis, transfer_syntax, transfer_descrip);
-	return 0;
+	return opbx_register_application(app, transfer_exec, synopsis, descrip);
 }
 
 char *description(void)

@@ -1,15 +1,14 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  *
- * Copyright (C) 2008, Eris Associates Limited, UK
  * Copyright (C) 1999 - 2005 Thorsten Lockert
  *
  * Written by Thorsten Lockert <tholo@trollphone.org>
  *
  * Funding provided by Troll Phone Networks AS
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -21,7 +20,7 @@
 
 /*! \file
  *
- * \brief DNS Support for CallWeaver
+ * \brief DNS Support for OpenPBX
  *
  * \author Thorsten Lockert <tholo at trollphone.org>
  */
@@ -36,13 +35,13 @@
 #include <resolv.h>
 #include <unistd.h>
 
-#include "callweaver.h"
+#include "openpbx.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/corelib/dns.c $", "$Revision: 4723 $")
+OPENPBX_FILE_VERSION("$HeadURL$", "$Revision$")
 
-#include "callweaver/logger.h"
-#include "callweaver/channel.h"
-#include "callweaver/dns.h"
+#include "openpbx/logger.h"
+#include "openpbx/channel.h"
+#include "openpbx/dns.h"
 #define MAX_SIZE 4096
 
 typedef struct {
@@ -129,20 +128,20 @@ static int dns_parse_answer(void *context,
 
 	for (x = 0; x < ntohs(h->qdcount); x++) {
 		if ((res = skip_name(answer, len)) < 0) {
-			cw_log(LOG_WARNING, "Couldn't skip over name\n");
+			opbx_log(LOG_WARNING, "Couldn't skip over name\n");
 			return -1;
 		}
 		answer += res + 4;	/* Skip name and QCODE / QCLASS */
 		len -= res + 4;
 		if (len < 0) {
-			cw_log(LOG_WARNING, "Strange query size\n");
+			opbx_log(LOG_WARNING, "Strange query size\n");
 			return -1;
 		}
 	}
 
 	for (x = 0; x < ntohs(h->ancount); x++) {
 		if ((res = skip_name(answer, len)) < 0) {
-			cw_log(LOG_WARNING, "Failed skipping name\n");
+			opbx_log(LOG_WARNING, "Failed skipping name\n");
 			return -1;
 		}
 		answer += res;
@@ -151,18 +150,18 @@ static int dns_parse_answer(void *context,
 		answer += sizeof(struct dn_answer);
 		len -= sizeof(struct dn_answer);
 		if (len < 0) {
-			cw_log(LOG_WARNING, "Strange result size\n");
+			opbx_log(LOG_WARNING, "Strange result size\n");
 			return -1;
 		}
 		if (len < 0) {
-			cw_log(LOG_WARNING, "Length exceeds frame\n");
+			opbx_log(LOG_WARNING, "Length exceeds frame\n");
 			return -1;
 		}
 
 		if (ntohs(ans->class) == class && ntohs(ans->rtype) == type) {
 			if (callback) {
 				if ((res = callback(context, answer, ntohs(ans->size), fullanswer)) < 0) {
-					cw_log(LOG_WARNING, "Failed to parse result\n");
+					opbx_log(LOG_WARNING, "Failed to parse result\n");
 					return -1;
 				}
 				if (res > 0)
@@ -175,66 +174,55 @@ static int dns_parse_answer(void *context,
 	return 0;
 }
 
-
-CW_MUTEX_DEFINE_STATIC(res_lock);
-
 #if (defined(res_ninit) && !defined(__UCLIBC__))
 #define HAS_RES_NINIT
-struct state {
-	struct __res_state rs;
-	struct state *next;
-};
-
-static struct state *states;
+#else
+OPBX_MUTEX_DEFINE_STATIC(res_lock);
+#if 0
+#warning "Warning, res_ninit is missing...  Could have reentrancy issues"
+#endif
 #endif
 
-
-/*--- cw_search_dns: Lookup record in DNS */
-int cw_search_dns(void *context,
+/*--- opbx_search_dns: Lookup record in DNS */
+int opbx_search_dns(void *context,
 	   const char *dname, int class, int type,
 	   int (*callback)(void *context, char *answer, int len, char *fullanswer))
 {
-	char answer[MAX_SIZE];
-	int ret = -1;
 #ifdef HAS_RES_NINIT
-	struct state *s;
-
-	cw_mutex_lock(&res_lock);
-	if ((s = states))
-		states = states->next;
-	cw_mutex_unlock(&res_lock);
-
-	if (!s && !(s = calloc(1, sizeof(*s))))
-		return -1;
-
-	if (!(ret = res_ninit(&s->rs))) {
-		ret = res_nsearch(&s->rs, dname, class, type, (unsigned char *)answer, sizeof(answer));
-		res_nclose(&s->rs);
-	}
-
-	cw_mutex_lock(&res_lock);
-	s->next = states;
-	states = s;
-	cw_mutex_unlock(&res_lock);
-
-	if (ret > 0 && (ret = dns_parse_answer(context, class, type, answer, ret, callback)) < 0)
-		cw_log(LOG_WARNING, "DNS Parse error for %s\n", dname);
-	if (ret == 0)
-		cw_log(LOG_DEBUG, "No matches found in DNS for %s\n", dname);
-#else
-	cw_mutex_lock(&res_lock);
-	if ((ret = res_init())) {
-		ret = res_search(dname, class, type, answer, sizeof(answer));
-#ifndef __APPLE__
-		res_close();
+	struct __res_state dnsstate;
 #endif
-	}
-	cw_mutex_unlock(&res_lock);
+	char answer[MAX_SIZE];
+	int res, ret = -1;
 
-	if (ret > 0 && (ret = dns_parse_answer(context, class, type, answer, ret, callback)) < 0)
-		cw_log(LOG_WARNING, "DNS Parse error for %s\n", dname);
-	if (ret == 0)
-		cw_log(LOG_DEBUG, "No matches found in DNS for %s\n", dname);
+#ifdef HAS_RES_NINIT
+	memset(&dnsstate, 0, sizeof(dnsstate));
+
+	res_ninit(&dnsstate);
+	res = res_nsearch(&dnsstate, dname, class, type, (unsigned char *)answer, sizeof(answer));
+#else
+	opbx_mutex_lock(&res_lock);
+	res_init();
+	res = res_search(dname, class, type, answer, sizeof(answer));
+#endif
+	if (res > 0) {
+		if ((res = dns_parse_answer(context, class, type, answer, res, callback)) < 0) {
+			opbx_log(LOG_WARNING, "DNS Parse error for %s\n", dname);
+			ret = -1;
+		}
+		else if (ret == 0) {
+			opbx_log(LOG_DEBUG, "No matches found in DNS for %s\n", dname);
+			ret = 0;
+		}
+		else
+			ret = 1;
+	}
+#ifdef HAS_RES_NINIT
+	res_nclose(&dnsstate);
+#else
+#ifndef __APPLE__
+	res_close();
+#endif
+	opbx_mutex_unlock(&res_lock);
 #endif
 	return ret;
 }

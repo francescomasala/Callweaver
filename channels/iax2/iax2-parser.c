@@ -1,12 +1,12 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  *
  * Copyright (C) 1999 - 2005, Digium, Inc.
  *
  * Mark Spencer <markster@digium.com>
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -18,7 +18,7 @@
 
 /*! \file
  *
- * \brief Implementation of Inter-CallWeaver eXchange Protocol, v 2
+ * \brief Implementation of Inter-OpenPBX eXchange Protocol, v 2
  * 
  */
 #ifdef HAVE_CONFIG_H
@@ -34,13 +34,13 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-#include "callweaver.h"
+#include "openpbx.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/channels/iax2/iax2-parser.c $", "$Revision: 4723 $")
+OPENPBX_FILE_VERSION("$HeadURL$", "$Revision$")
 
-#include "callweaver/frame.h"
-#include "callweaver/utils.h"
-#include "callweaver/unaligned.h"
+#include "openpbx/frame.h"
+#include "openpbx/utils.h"
+#include "openpbx/unaligned.h"
 
 #include "iax2.h"
 #include "iax2-parser.h"
@@ -69,7 +69,7 @@ static void dump_addr(char *output, int maxlen, void *value, int len)
 	char iabuf[INET_ADDRSTRLEN];
 	if (len == (int)sizeof(sin)) {
 		memcpy(&sin, value, len);
-		snprintf(output, maxlen, "IPV4 %s:%d", cw_inet_ntoa(iabuf, sizeof(iabuf), sin.sin_addr), ntohs(sin.sin_port));
+		snprintf(output, maxlen, "IPV4 %s:%d", opbx_inet_ntoa(iabuf, sizeof(iabuf), sin.sin_addr), ntohs(sin.sin_port));
 	} else {
 		snprintf(output, maxlen, "Invalid Address");
 	}
@@ -80,13 +80,13 @@ static void dump_string(char *output, int maxlen, void *value, int len)
 	maxlen--;
 	if (maxlen > len)
 		maxlen = len;
-	cw_copy_string(output, value, maxlen);
+	opbx_copy_string(output, value, maxlen);
 	output[maxlen] = '\0';
 }
 
 static void dump_prefs(char *output, int maxlen, void *value, int len)
 {
-	struct cw_codec_pref pref;
+	struct opbx_codec_pref pref;
 	int total_len = 0;
 
 	maxlen--;
@@ -95,12 +95,12 @@ static void dump_prefs(char *output, int maxlen, void *value, int len)
 	if (maxlen > len)
 		maxlen = len;
 
-	cw_copy_string(output, value, maxlen);
+	opbx_copy_string(output, value, maxlen);
 	output[maxlen] = '\0';
 	
-	cw_codec_pref_convert(&pref, output, total_len, 0);
+	opbx_codec_pref_convert(&pref, output, total_len, 0);
 	memset(output,0,total_len);
-	cw_codec_pref_string(&pref, output, total_len);
+	opbx_codec_pref_string(&pref, output, total_len);
 }
 
 static void dump_int(char *output, int maxlen, void *value, int len)
@@ -108,7 +108,7 @@ static void dump_int(char *output, int maxlen, void *value, int len)
 	if (len == (int)sizeof(unsigned int))
 		snprintf(output, maxlen, "%lu", (unsigned long)ntohl(get_unaligned_uint32(value)));
 	else
-		cw_copy_string(output, "Invalid INT", maxlen);	
+		opbx_copy_string(output, "Invalid INT", maxlen);	
 }
 
 static void dump_short(char *output, int maxlen, void *value, int len)
@@ -116,7 +116,7 @@ static void dump_short(char *output, int maxlen, void *value, int len)
 	if (len == (int)sizeof(unsigned short))
 		snprintf(output, maxlen, "%d", ntohs(get_unaligned_uint16(value)));
 	else
-		cw_copy_string(output, "Invalid SHORT", maxlen);
+		opbx_copy_string(output, "Invalid SHORT", maxlen);
 }
 
 static void dump_byte(char *output, int maxlen, void *value, int len)
@@ -124,7 +124,7 @@ static void dump_byte(char *output, int maxlen, void *value, int len)
 	if (len == (int)sizeof(unsigned char))
 		snprintf(output, maxlen, "%d", *((unsigned char *)value));
 	else
-		cw_copy_string(output, "Invalid BYTE", maxlen);
+		opbx_copy_string(output, "Invalid BYTE", maxlen);
 }
 
 static void dump_datetime(char *output, int maxlen, void *value, int len)
@@ -140,7 +140,7 @@ static void dump_datetime(char *output, int maxlen, void *value, int len)
 		tm.tm_year = ((val >> 25) & 0x7f) + 100;
 		strftime(output, maxlen, "%Y-%m-%d  %T", &tm); 
 	} else
-		cw_copy_string(output, "Invalid DATETIME format!", maxlen);
+		opbx_copy_string(output, "Invalid DATETIME format!", maxlen);
 }
 
 static void dump_ipaddr(char *output, int maxlen, void *value, int len)
@@ -149,10 +149,10 @@ static void dump_ipaddr(char *output, int maxlen, void *value, int len)
 	char iabuf[INET_ADDRSTRLEN];
 	if (len == (int)sizeof(unsigned int)) {
 		memcpy(&sin.sin_addr, value, len);
-		cw_inet_ntoa(iabuf, sizeof(iabuf), sin.sin_addr);
+		opbx_inet_ntoa(iabuf, sizeof(iabuf), sin.sin_addr);
 		snprintf(output, maxlen, "%s", iabuf);
 	} else
-		cw_copy_string(output, "Invalid IPADDR", maxlen);
+		opbx_copy_string(output, "Invalid IPADDR", maxlen);
 }
 
 
@@ -163,7 +163,7 @@ static void dump_prov_flags(char *output, int maxlen, void *value, int len)
 		snprintf(output, maxlen, "%lu (%s)", (unsigned long)ntohl(get_unaligned_uint32(value)),
 			iax_provflags2str(buf, sizeof(buf), ntohl(get_unaligned_uint32(value))));
 	else
-		cw_copy_string(output, "Invalid INT", maxlen);
+		opbx_copy_string(output, "Invalid INT", maxlen);
 }
 
 static void dump_samprate(char *output, int maxlen, void *value, int len)
@@ -185,11 +185,11 @@ static void dump_samprate(char *output, int maxlen, void *value, int len)
 		if (sr & IAX_RATE_48KHZ)
 			strcat(tmp, ",48khz");
 		if (strlen(tmp))
-			cw_copy_string(output, &tmp[1], maxlen);
+			opbx_copy_string(output, &tmp[1], maxlen);
 		else
-			cw_copy_string(output, "None Specified!\n", maxlen);
+			opbx_copy_string(output, "None Specified!\n", maxlen);
 	} else
-		cw_copy_string(output, "Invalid SHORT", maxlen);
+		opbx_copy_string(output, "Invalid SHORT", maxlen);
 
 }
 
@@ -304,7 +304,7 @@ static void dump_prov_ies(char *output, int maxlen, unsigned char *iedata, int l
 		ielen = iedata[1];
 		if (ielen + 2> len) {
 			snprintf(tmp, (int)sizeof(tmp), "Total Prov IE length of %d bytes exceeds remaining prov frame length of %d bytes\n", ielen + 2, len);
-			cw_copy_string(output, tmp, maxlen);
+			opbx_copy_string(output, tmp, maxlen);
 			maxlen -= strlen(output);
 			output += strlen(output);
 			return;
@@ -315,7 +315,7 @@ static void dump_prov_ies(char *output, int maxlen, unsigned char *iedata, int l
 				if (prov_ies[x].dump) {
 					prov_ies[x].dump(interp, (int)sizeof(interp), iedata + 2, ielen);
 					snprintf(tmp, (int)sizeof(tmp), "       %-15.15s : %s\n", prov_ies[x].name, interp);
-					cw_copy_string(output, tmp, maxlen);
+					opbx_copy_string(output, tmp, maxlen);
 					maxlen -= strlen(output); output += strlen(output);
 				} else {
 					if (ielen)
@@ -323,7 +323,7 @@ static void dump_prov_ies(char *output, int maxlen, unsigned char *iedata, int l
 					else
 						strcpy(interp, "Present");
 					snprintf(tmp, (int)sizeof(tmp), "       %-15.15s : %s\n", prov_ies[x].name, interp);
-					cw_copy_string(output, tmp, maxlen);
+					opbx_copy_string(output, tmp, maxlen);
 					maxlen -= strlen(output); output += strlen(output);
 				}
 				found++;
@@ -331,7 +331,7 @@ static void dump_prov_ies(char *output, int maxlen, unsigned char *iedata, int l
 		}
 		if (!found) {
 			snprintf(tmp, (int)sizeof(tmp), "       Unknown Prov IE %03d  : Present\n", ie);
-			cw_copy_string(output, tmp, maxlen);
+			opbx_copy_string(output, tmp, maxlen);
 			maxlen -= strlen(output); output += strlen(output);
 		}
 		iedata += (2 + ielen);
@@ -385,7 +385,7 @@ static void dump_ies(unsigned char *iedata, int len)
 	outputf("\n");
 }
 
-void iax_showframe(struct iax_frame *f, struct cw_iax2_full_hdr *fhi, int rx, struct sockaddr_in *sin, int datalen)
+void iax_showframe(struct iax_frame *f, struct opbx_iax2_full_hdr *fhi, int rx, struct sockaddr_in *sin, int datalen)
 {
 	const char *frames[] = {
 		"(0?)",
@@ -448,7 +448,7 @@ void iax_showframe(struct iax_frame *f, struct cw_iax2_full_hdr *fhi, int rx, st
 		"BUSY   ",
 		"TKOFFHK",
 		"OFFHOOK" };
-	struct cw_iax2_full_hdr *fh;
+	struct opbx_iax2_full_hdr *fh;
 	char retries[20];
 	char class2[20];
 	char subclass2[20];
@@ -492,17 +492,17 @@ void iax_showframe(struct iax_frame *f, struct cw_iax2_full_hdr *fhi, int rx, st
 	} else {
 		class = frames[(int)fh->type];
 	}
-	if (fh->type == CW_FRAME_DTMF) {
+	if (fh->type == OPBX_FRAME_DTMF) {
 		sprintf(subclass2, "%c", fh->csub);
 		subclass = subclass2;
-	} else if (fh->type == CW_FRAME_IAX) {
+	} else if (fh->type == OPBX_FRAME_IAX) {
 		if (fh->csub >= (int)sizeof(iaxs)/(int)sizeof(iaxs[0])) {
 			snprintf(subclass2, sizeof(subclass2), "(%d?)", fh->csub);
 			subclass = subclass2;
 		} else {
 			subclass = iaxs[(int)fh->csub];
 		}
-	} else if (fh->type == CW_FRAME_CONTROL) {
+	} else if (fh->type == OPBX_FRAME_CONTROL) {
 		if (fh->csub >= (int)sizeof(cmds)/(int)sizeof(cmds[0])) {
 			snprintf(subclass2, sizeof(subclass2), "(%d?)", fh->csub);
 			subclass = subclass2;
@@ -522,9 +522,9 @@ void iax_showframe(struct iax_frame *f, struct cw_iax2_full_hdr *fhi, int rx, st
 		 "   Timestamp: %05lums  SCall: %5.5d  DCall: %5.5d [%s:%d]\n",
 		 (unsigned long)ntohl(fh->ts),
 		 ntohs(fh->scallno) & ~IAX_FLAG_FULL, ntohs(fh->dcallno) & ~IAX_FLAG_RETRANS,
-		 cw_inet_ntoa(iabuf, sizeof(iabuf), sin->sin_addr), ntohs(sin->sin_port));
+		 opbx_inet_ntoa(iabuf, sizeof(iabuf), sin->sin_addr), ntohs(sin->sin_port));
 	outputf(tmp);
-	if (fh->type == CW_FRAME_IAX)
+	if (fh->type == OPBX_FRAME_IAX)
 		dump_ies(fh->iedata, datalen);
 }
 
@@ -895,33 +895,26 @@ int iax_parse_ies(struct iax_ies *ies, unsigned char *data, int datalen)
 	return 0;
 }
 
-void iax_frame_wrap(struct iax_frame *fr, struct cw_frame *f)
+void iax_frame_wrap(struct iax_frame *fr, struct opbx_frame *f)
 {
 	fr->af.frametype = f->frametype;
 	fr->af.subclass = f->subclass;
 	fr->af.mallocd = 0;				/* Our frame is static relative to the container */
 	fr->af.datalen = f->datalen;
 	fr->af.samples = f->samples;
-	fr->af.offset = CW_FRIENDLY_OFFSET;
+	fr->af.offset = OPBX_FRIENDLY_OFFSET;
 	fr->af.src = f->src;
 	fr->af.delivery.tv_sec = 0;
 	fr->af.delivery.tv_usec = 0;
 	fr->af.data = fr->afdata;
 	if (fr->af.datalen) {
-		size_t copy_len = fr->af.datalen;
-		if (copy_len > fr->afdatalen) {
-			cw_log(LOG_ERROR, "Losing frame data because destination buffer size '%d' bytes not big enough for '%d' bytes in the frame\n",
-				(int) fr->afdatalen, (int) fr->af.datalen);
-			copy_len = fr->afdatalen;
-		}
 #if __BYTE_ORDER == __LITTLE_ENDIAN
 		/* We need to byte-swap slinear samples from network byte order */
-		if ((fr->af.frametype == CW_FRAME_VOICE) && (fr->af.subclass == CW_FORMAT_SLINEAR)) {
-			/* 2 bytes / sample for SLINEAR */
-			cw_swapcopy_samples(fr->af.data, f->data, copy_len / 2);
+		if ((fr->af.frametype == OPBX_FRAME_VOICE) && (fr->af.subclass == OPBX_FORMAT_SLINEAR)) {
+			opbx_swapcopy_samples(fr->af.data, f->data, fr->af.samples);
 		} else
 #endif
-		memcpy(fr->af.data, f->data, copy_len);
+		memcpy(fr->af.data, f->data, fr->af.datalen);
 	}
 }
 
@@ -930,7 +923,6 @@ struct iax_frame *iax_frame_new(int direction, int datalen)
 	struct iax_frame *fr;
 	fr = calloc(1, (int)sizeof(struct iax_frame) + datalen);
 	if (fr) {
-		fr->afdatalen = datalen;
 		fr->direction = direction;
 		fr->retrans = -1;
 		frames++;

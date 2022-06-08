@@ -1,12 +1,12 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  *
  * Copyright (C) 1999 - 2005, Digium, Inc.
  *
  * Mark Spencer <markster@digium.com>
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -37,19 +37,19 @@
 #include <stdio.h>
 #include <unistd.h>
 
-#include "callweaver.h"
+#include "openpbx.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/pbx/pbx_spool.c $", "$Revision: 4723 $")
+OPENPBX_FILE_VERSION("$HeadURL$", "$Revision$")
 
-#include "callweaver/lock.h"
-#include "callweaver/file.h"
-#include "callweaver/logger.h"
-#include "callweaver/channel.h"
-#include "callweaver/phone_no_utils.h"
-#include "callweaver/pbx.h"
-#include "callweaver/module.h"
-#include "callweaver/options.h"
-#include "callweaver/utils.h"
+#include "openpbx/lock.h"
+#include "openpbx/file.h"
+#include "openpbx/logger.h"
+#include "openpbx/channel.h"
+#include "openpbx/phone_no_utils.h"
+#include "openpbx/pbx.h"
+#include "openpbx/module.h"
+#include "openpbx/options.h"
+#include "openpbx/utils.h"
 
 /*
  * pbx_spool is similar in spirit to qcall, but with substantially enhanced functionality...
@@ -90,7 +90,7 @@ struct outgoing {
 	char cid_name[256];
 
 	/* Variables and Functions */
-	struct cw_variable *vars;
+	struct opbx_variable *vars;
 	
 	/* Maximum length of call */
 	int maxlen;
@@ -114,7 +114,7 @@ static int apply_outgoing(struct outgoing *o, char *fn, FILE *f)
 	char buf[256];
 	char *c, *c2;
 	int lineno = 0;
-	struct cw_variable *var;
+	struct opbx_variable *var;
 
 	while(fgets(buf, sizeof(buf), f)) {
 		lineno++;
@@ -139,9 +139,9 @@ static int apply_outgoing(struct outgoing *o, char *fn, FILE *f)
 		}
 
 		/* Trim trailing white space */
-		while(!cw_strlen_zero(buf) && buf[strlen(buf) - 1] < 33)
+		while(!opbx_strlen_zero(buf) && buf[strlen(buf) - 1] < 33)
 			buf[strlen(buf) - 1] = '\0';
-		if (!cw_strlen_zero(buf)) {
+		if (!opbx_strlen_zero(buf)) {
 			c = strchr(buf, ':');
 			if (c) {
 				*c = '\0';
@@ -158,18 +158,18 @@ static int apply_outgoing(struct outgoing *o, char *fn, FILE *f)
 						c2++;
 						strncpy(o->dest, c2, sizeof(o->dest) - 1);
 					} else {
-						cw_log(LOG_NOTICE, "Channel should be in form Tech/Dest at line %d of %s\n", lineno, fn);
+						opbx_log(LOG_NOTICE, "Channel should be in form Tech/Dest at line %d of %s\n", lineno, fn);
 						o->tech[0] = '\0';
 					}
 				} else if (!strcasecmp(buf, "callerid")) {
-					cw_callerid_split(c, o->cid_name, sizeof(o->cid_name), o->cid_num, sizeof(o->cid_num));
+					opbx_callerid_split(c, o->cid_name, sizeof(o->cid_name), o->cid_num, sizeof(o->cid_num));
 				} else if (!strcasecmp(buf, "application")) {
 					strncpy(o->app, c, sizeof(o->app) - 1);
 				} else if (!strcasecmp(buf, "data")) {
 					strncpy(o->data, c, sizeof(o->data) - 1);
 				} else if (!strcasecmp(buf, "maxretries")) {
 					if (sscanf(c, "%d", &o->maxretries) != 1) {
-						cw_log(LOG_WARNING, "Invalid max retries at line %d of %s\n", lineno, fn);
+						opbx_log(LOG_WARNING, "Invalid max retries at line %d of %s\n", lineno, fn);
 						o->maxretries = 0;
 					}
 				} else if (!strcasecmp(buf, "context")) {
@@ -178,24 +178,24 @@ static int apply_outgoing(struct outgoing *o, char *fn, FILE *f)
 					strncpy(o->exten, c, sizeof(o->exten) - 1);
 				} else if (!strcasecmp(buf, "priority")) {
 					if ((sscanf(c, "%d", &o->priority) != 1) || (o->priority < 1)) {
-						cw_log(LOG_WARNING, "Invalid priority at line %d of %s\n", lineno, fn);
+						opbx_log(LOG_WARNING, "Invalid priority at line %d of %s\n", lineno, fn);
 						o->priority = 1;
 					}
 				} else if (!strcasecmp(buf, "retrytime")) {
 					if ((sscanf(c, "%d", &o->retrytime) != 1) || (o->retrytime < 1)) {
-						cw_log(LOG_WARNING, "Invalid retrytime at line %d of %s\n", lineno, fn);
+						opbx_log(LOG_WARNING, "Invalid retrytime at line %d of %s\n", lineno, fn);
 						o->retrytime = 300;
 					}
 				} else if (!strcasecmp(buf, "waittime")) {
 					if ((sscanf(c, "%d", &o->waittime) != 1) || (o->waittime < 1)) {
-						cw_log(LOG_WARNING, "Invalid retrytime at line %d of %s\n", lineno, fn);
+						opbx_log(LOG_WARNING, "Invalid retrytime at line %d of %s\n", lineno, fn);
 						o->waittime = 45;
 					}
 				} else if (!strcasecmp(buf, "retry")) {
 					o->retries++;
 				} else if (!strcasecmp(buf, "startretry")) {
 					if (sscanf(c, "%d", &o->callingpid) != 1) {
-						cw_log(LOG_WARNING, "Unable to retrieve calling PID!\n");
+						opbx_log(LOG_WARNING, "Unable to retrieve calling PID!\n");
 						o->callingpid = 0;
 					}
 				} else if (!strcasecmp(buf, "endretry") || !strcasecmp(buf, "abortretry")) {
@@ -205,30 +205,27 @@ static int apply_outgoing(struct outgoing *o, char *fn, FILE *f)
 				} else if (!strcasecmp(buf, "setvar") || !strcasecmp(buf, "set")) {
 					c2 = c;
 					strsep(&c2, "=");
-					/* This is naughty. We silently ignore bad lines */
-					if (c2) {
-						var = cw_variable_new(c, c2);
-						if (var) {
-							var->next = o->vars;
-							o->vars = var;
-						}
+					var = opbx_variable_new(c, c2);
+					if (var) {
+						var->next = o->vars;
+						o->vars = var;
 					}
 				} else if (!strcasecmp(buf, "account")) {
-					var = cw_variable_new("CDR(accountcode|r)", c);
+					var = opbx_variable_new("CDR(accountcode|r)", c);
 					if (var) {	
 						var->next = o->vars;
 						o->vars = var;
 					}
 				} else {
-					cw_log(LOG_WARNING, "Unknown keyword '%s' at line %d of %s\n", buf, lineno, fn);
+					opbx_log(LOG_WARNING, "Unknown keyword '%s' at line %d of %s\n", buf, lineno, fn);
 				}
 			} else
-				cw_log(LOG_NOTICE, "Syntax error at line %d of %s\n", lineno, fn);
+				opbx_log(LOG_NOTICE, "Syntax error at line %d of %s\n", lineno, fn);
 		}
 	}
 	strncpy(o->fn, fn, sizeof(o->fn) - 1);
-	if (cw_strlen_zero(o->tech) || cw_strlen_zero(o->dest) || (cw_strlen_zero(o->app) && cw_strlen_zero(o->exten))) {
-		cw_log(LOG_WARNING, "At least one of app or extension must be specified, along with tech and dest in file %s\n", fn);
+	if (opbx_strlen_zero(o->tech) || opbx_strlen_zero(o->dest) || (opbx_strlen_zero(o->app) && opbx_strlen_zero(o->exten))) {
+		opbx_log(LOG_WARNING, "At least one of app or extension must be specified, along with tech and dest in file %s\n", fn);
 		return -1;
 	}
 	return 0;
@@ -243,7 +240,7 @@ static void safe_append(struct outgoing *o, time_t now, char *s)
 	if (fd > -1) {
 		f = fdopen(fd, "a");
 		if (f) {
-			fprintf(f, "%s: %ld %d (%ld)\n", s, (long)cw_mainpid, o->retries, (long) now);
+			fprintf(f, "%s: %ld %d (%ld)\n", s, (long)opbx_mainpid, o->retries, (long) now);
 			fclose(f);
 		} else
 			close(fd);
@@ -251,7 +248,7 @@ static void safe_append(struct outgoing *o, time_t now, char *s)
 		tbuf.actime = now;
 		tbuf.modtime = now + o->retrytime;
 		if (utime(o->fn, &tbuf))
-			cw_log(LOG_WARNING, "Unable to set utime on %s: %s\n", o->fn, strerror(errno));
+			opbx_log(LOG_WARNING, "Unable to set utime on %s: %s\n", o->fn, strerror(errno));
 	}
 }
 
@@ -259,28 +256,28 @@ static void *attempt_thread(void *data)
 {
 	struct outgoing *o = (struct outgoing *) data;
 	int res, reason;
-	if (!cw_strlen_zero(o->app)) {
+	if (!opbx_strlen_zero(o->app)) {
 		if (option_verbose > 2)
-			cw_verbose(VERBOSE_PREFIX_3 "Attempting call on %s/%s for application %s(%s) (Retry %d)\n", o->tech, o->dest, o->app, o->data, o->retries);
-		res = cw_pbx_outgoing_app(o->tech, CW_FORMAT_SLINEAR, o->dest, o->waittime * 1000, o->app, o->data, &reason, 2 /* wait to finish */, o->cid_num, o->cid_name, o->vars, NULL);
+			opbx_verbose(VERBOSE_PREFIX_3 "Attempting call on %s/%s for application %s(%s) (Retry %d)\n", o->tech, o->dest, o->app, o->data, o->retries);
+		res = opbx_pbx_outgoing_app(o->tech, OPBX_FORMAT_SLINEAR, o->dest, o->waittime * 1000, o->app, o->data, &reason, 2 /* wait to finish */, o->cid_num, o->cid_name, o->vars, NULL);
 	} else {
 		if (option_verbose > 2)
-			cw_verbose(VERBOSE_PREFIX_3 "Attempting call on %s/%s for %s@%s:%d (Retry %d)\n", o->tech, o->dest, o->exten, o->context,o->priority, o->retries);
-		res = cw_pbx_outgoing_exten(o->tech, CW_FORMAT_SLINEAR, o->dest, o->waittime * 1000, o->context, o->exten, o->priority, &reason, 2 /* wait to finish */, o->cid_num, o->cid_name, o->vars, NULL);
+			opbx_verbose(VERBOSE_PREFIX_3 "Attempting call on %s/%s for %s@%s:%d (Retry %d)\n", o->tech, o->dest, o->exten, o->context,o->priority, o->retries);
+		res = opbx_pbx_outgoing_exten(o->tech, OPBX_FORMAT_SLINEAR, o->dest, o->waittime * 1000, o->context, o->exten, o->priority, &reason, 2 /* wait to finish */, o->cid_num, o->cid_name, o->vars, NULL);
 	}
 	if (res) {
-		cw_log(LOG_NOTICE, "Call failed to go through, reason %d\n", reason);
+		opbx_log(LOG_NOTICE, "Call failed to go through, reason %d\n", reason);
 		if (o->retries >= o->maxretries + 1) {
 			/* Max retries exceeded */
-			cw_log(LOG_EVENT, "Queued call to %s/%s expired without completion after %d attempt%s\n", o->tech, o->dest, o->retries - 1, ((o->retries - 1) != 1) ? "s" : "");
+			opbx_log(LOG_EVENT, "Queued call to %s/%s expired without completion after %d attempt%s\n", o->tech, o->dest, o->retries - 1, ((o->retries - 1) != 1) ? "s" : "");
 			unlink(o->fn);
 		} else {
 			/* Notate that the call is still active */
 			safe_append(o, time(NULL), "EndRetry");
 		}
 	} else {
-		cw_log(LOG_NOTICE, "Call completed to %s/%s\n", o->tech, o->dest);
-		cw_log(LOG_EVENT, "Queued call to %s/%s completed\n", o->tech, o->dest);
+		opbx_log(LOG_NOTICE, "Call completed to %s/%s\n", o->tech, o->dest);
+		opbx_log(LOG_EVENT, "Queued call to %s/%s completed\n", o->tech, o->dest);
 		unlink(o->fn);
 	}
 	free_outgoing(o);
@@ -293,8 +290,8 @@ static void launch_service(struct outgoing *o)
 	pthread_attr_t attr;
 	pthread_attr_init(&attr);
  	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
-	if (cw_pthread_create(&t,&attr,attempt_thread, o) == -1) {
-		cw_log(LOG_WARNING, "Unable to create thread :(\n");
+	if (opbx_pthread_create(&t,&attr,attempt_thread, o) == -1) {
+		opbx_log(LOG_WARNING, "Unable to create thread :(\n");
 		free_outgoing(o);
 	}
 }
@@ -314,9 +311,9 @@ static int scan_service(char *fn, time_t now, time_t atime)
 #endif
 				fclose(f);
 				if (o->retries <= o->maxretries) {
-					if (o->callingpid && (o->callingpid == cw_mainpid)) {
+					if (o->callingpid && (o->callingpid == opbx_mainpid)) {
 						safe_append(o, time(NULL), "DelayedRetry");
-						cw_log(LOG_DEBUG, "Delaying retry since we're currently running '%s'\n", o->fn);
+						opbx_log(LOG_DEBUG, "Delaying retry since we're currently running '%s'\n", o->fn);
 					} else {
 						/* Increment retries */
 						o->retries++;
@@ -331,24 +328,24 @@ static int scan_service(char *fn, time_t now, time_t atime)
 					now += o->retrytime;
 					return now;
 				} else {
-					cw_log(LOG_EVENT, "Queued call to %s/%s expired without completion after %d attempt%s\n", o->tech, o->dest, o->retries - 1, ((o->retries - 1) != 1) ? "s" : "");
+					opbx_log(LOG_EVENT, "Queued call to %s/%s expired without completion after %d attempt%s\n", o->tech, o->dest, o->retries - 1, ((o->retries - 1) != 1) ? "s" : "");
 					free_outgoing(o);
 					unlink(fn);
 					return 0;
 				}
 			} else {
 				free_outgoing(o);
-				cw_log(LOG_WARNING, "Invalid file contents in %s, deleting\n", fn);
+				opbx_log(LOG_WARNING, "Invalid file contents in %s, deleting\n", fn);
 				fclose(f);
 				unlink(fn);
 			}
 		} else {
 			free_outgoing(o);
-			cw_log(LOG_WARNING, "Unable to open %s: %s, deleting\n", fn, strerror(errno));
+			opbx_log(LOG_WARNING, "Unable to open %s: %s, deleting\n", fn, strerror(errno));
 			unlink(fn);
 		}
 	} else
-		cw_log(LOG_WARNING, "Out of memory :(\n");
+		opbx_log(LOG_WARNING, "Out of memory :(\n");
 	return -1;
 }
 
@@ -386,7 +383,7 @@ static void *scan_thread(void *unused)
 											next = res;
 										}
 									} else if (res)
-										cw_log(LOG_WARNING, "Failed to scan service '%s'\n", fn);
+										opbx_log(LOG_WARNING, "Failed to scan service '%s'\n", fn);
 								} else {
 									/* Update "next" update if necessary */
 									if (!next || (st.st_mtime < next))
@@ -394,14 +391,14 @@ static void *scan_thread(void *unused)
 								}
 							}
 						} else
-							cw_log(LOG_WARNING, "Unable to stat %s: %s\n", fn, strerror(errno));
+							opbx_log(LOG_WARNING, "Unable to stat %s: %s\n", fn, strerror(errno));
 					}
 					closedir(dir);
 				} else
-					cw_log(LOG_WARNING, "Unable to open directory %s: %s\n", qdir, strerror(errno));
+					opbx_log(LOG_WARNING, "Unable to open directory %s: %s\n", qdir, strerror(errno));
 			}
 		} else
-			cw_log(LOG_WARNING, "Unable to stat %s\n", qdir);
+			opbx_log(LOG_WARNING, "Unable to stat %s\n", qdir);
 	}
 	return NULL;
 }
@@ -415,15 +412,15 @@ int load_module(void)
 {
 	pthread_t thread;
 	pthread_attr_t attr;
-	snprintf(qdir, sizeof(qdir), "%s/%s", cw_config_CW_SPOOL_DIR, "outgoing");
+	snprintf(qdir, sizeof(qdir), "%s/%s", opbx_config_OPBX_SPOOL_DIR, "outgoing");
 	if (mkdir(qdir, 0700) && (errno != EEXIST)) {
-		cw_log(LOG_WARNING, "Unable to create queue directory %s -- outgoing spool disabled\n", qdir);
+		opbx_log(LOG_WARNING, "Unable to create queue directory %s -- outgoing spool disabled\n", qdir);
 		return 0;
 	}
 	pthread_attr_init(&attr);
  	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
-	if (cw_pthread_create(&thread,&attr,scan_thread, NULL) == -1) {
-		cw_log(LOG_WARNING, "Unable to create thread :(\n");
+	if (opbx_pthread_create(&thread,&attr,scan_thread, NULL) == -1) {
+		opbx_log(LOG_WARNING, "Unable to create thread :(\n");
 		return -1;
 	}
 	return 0;

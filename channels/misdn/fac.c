@@ -69,7 +69,6 @@ enum {
 
 	/* not from document */
 	CALL_DEFLECT 			= 0x0d,
-	AOC 					= 0x22,
 } OPERATION_CODE;
 
 enum {
@@ -78,13 +77,13 @@ enum {
 
 #ifdef FACILITY_DEBUG
 #define FAC_DUMP(fac,len,bc) fac_dump(fac,len,bc)
-#include <ctype.h>
-static void fac_dump (__u8 *facility, unsigned int fac_len, struct misdn_bchannel *bc)
+static void fac_dump (unsigned char *facility, unsigned int fac_len, struct misdn_bchannel *bc)
 {
 	int i;
-	cb_log(0, bc->port, "    --- facility dump start. length:%d\n", fac_len);
+	cb_log(0, bc->port, "    --- facility dump start\n");
 	for (i = 0; i < fac_len; ++i)
-		if (isprint(facility[i]))
+		if ((facility[i] >= 'a' && facility[i] <= 'z') || (facility[i] >= 'A' && facility[i] <= 'Z') ||
+			(facility[i] >= '0' && facility[i] <= '9'))
 			cb_log(0, bc->port, "    --- %d: %04p (char:%c)\n", i, facility[i], facility[i]);
 		else
 			cb_log(0, bc->port, "    --- %d: %04p\n", i, facility[i]);
@@ -93,10 +92,6 @@ static void fac_dump (__u8 *facility, unsigned int fac_len, struct misdn_bchanne
 #else
 #define FAC_DUMP(fac,len,bc)
 #endif
-
-/*
-** Facility Encoding
-*/
 
 static int enc_fac_calldeflect (__u8 *dest, char *number, int pres)
 {
@@ -123,7 +118,7 @@ static int enc_fac_calldeflect (__u8 *dest, char *number, int pres)
 	return p - dest;
 }
 
-static void enc_ie_facility (__u8 **ntmode, msg_t *msg, __u8 *facility, int facility_len, struct misdn_bchannel *bc)
+static void enc_ie_facility (unsigned char **ntmode, msg_t *msg, unsigned char *facility, int facility_len, struct misdn_bchannel *bc)
 {
 	__u8 *ie_fac;
 	
@@ -134,7 +129,7 @@ static void enc_ie_facility (__u8 **ntmode, msg_t *msg, __u8 *facility, int faci
 		*ntmode = ie_fac + 1;
 	} else {
 		qi = (Q931_info_t *)(msg->data + mISDN_HEADER_LEN);
-		qi->QI_ELEMENT(facility) = ie_fac - (__u8 *)qi - sizeof(Q931_info_t);
+		qi->QI_ELEMENT(facility) = ie_fac - (unsigned char *)qi - sizeof(Q931_info_t);
 	}
 
 	ie_fac[0] = IE_FACILITY;
@@ -144,7 +139,7 @@ static void enc_ie_facility (__u8 **ntmode, msg_t *msg, __u8 *facility, int faci
 	FAC_DUMP(ie_fac, facility_len + 2, bc);
 }
 
-void fac_enc (__u8 **ntmsg, msg_t *msg, enum facility_type type,  union facility fac, struct misdn_bchannel *bc)
+void fac_enc (unsigned char **ntmsg, msg_t * msg, enum facility_type type,  union facility fac, struct misdn_bchannel *bc)
 {
 	__u8 facility[256];
 	int len;
@@ -160,108 +155,5 @@ void fac_enc (__u8 **ntmsg, msg_t *msg, enum facility_type type,  union facility
 	}
 }
 
-/*
-** Facility Decoding
-*/
-
-static int dec_fac_calldeflect (__u8 *p, int len, struct misdn_bchannel *bc)
-{
-	__u8 *end = p + len;
-	int offset,
-		pres;
-
-	if ((offset = dec_sequence(p, end)) < 0)
-		return -1;
-	p += offset;
-
-	if ((offset = dec_sequence(p, end)) < 0)
-		return -1;
-	p += offset;
-	
-	if ((offset = dec_num_string(p, end, bc->fac.calldeflect_nr)) < 0)
-		return -1;
-	p += offset;
-
-	if ((offset = dec_bool(p, end, &pres)) < 0)
-		return -1;
-
-	cb_log(0, 0, "CALLDEFLECT: dest:%s pres:%s (not implemented yet)\n", bc->fac.calldeflect_nr, pres ? "yes" : "no");
-	bc->fac_type = FACILITY_CALLDEFLECT;
-
-	return 0;
-}
-
-void fac_dec (__u8 *p, Q931_info_t *qi, enum facility_type *type,  union facility *fac, struct misdn_bchannel *bc)
-{
-	int len,
-		offset,
-		inner_len,
-		invoke_id,
-		op_tag,
-		op_val;
-	__u8 *end,
-				  *begin = p;
-
-	if (!bc->nt) {
-		if (qi->QI_ELEMENT(facility))
-			p = (__u8 *)qi + sizeof(Q931_info_t) + qi->QI_ELEMENT(facility) + 1;
-		else
-			p = NULL;
-	}
-	if (!p)
-		return;
-
-	offset = dec_len (p, &len);
-	if (offset < 0) {
-		cb_log(0, bc->port, "Could not decode FACILITY: dec_len failed!\n");
-		return;
-	}
-	p += offset;
-	end = p + len;
-
-	FAC_DUMP(p, len, bc);
-
-	if (len < 3 || p[0] != SUPPLEMENTARY_SERVICE || p[1] != INVOKE) {
-		cb_log(0, bc->port, "Could not decode FACILITY: invalid or not supported!\n");
-		return;
-	}
-	p += 2;
-
-	offset = dec_len (p, &inner_len);
-	if (offset < 0) {
-		cb_log(0, bc->port, "Could not decode FACILITY: failed parsing inner length!\n");
-		return;
-	}
-	p += offset;
-
-	offset = dec_int (p, end, &invoke_id);
-	if (offset < 0) {
-		cb_log(0, bc->port, "Could not decode FACILITY: failed parsing invoke identifier!\n");
-		return;
-	}
-	p += offset;
-
-	offset = _dec_int (p, end, &op_val, &op_tag);
-	if (offset < 0) {
-		cb_log(0, bc->port, "Could not decode FACILITY: failed parsing operation value!\n");
-		return;
-	}
-	p += offset;
-
-	if (op_tag != OPERATION_VALUE || offset != 3) {
-		cb_log(0, bc->port, "Could not decode FACILITY: operation value tag 0x%x unknown!\n", op_tag);
-		return;
-	}
-
-	switch (op_val) {
-	case CALL_DEFLECT:
-		cb_log(0, bc->port, "FACILITY: Call Deflect\n");
-		dec_fac_calldeflect(p, len - (p - begin) + 1, bc);
-		break;
-	case AOC:
-		cb_log(0, bc->port, "FACILITY: AOC\n");
-		break;
-	default:
-		cb_log(0, bc->port, "FACILITY unknown: operation value 0x%x, ignoring ...\n", op_val);
-	}
-}
+void fac_dec (unsigned char *p, Q931_info_t *qi, enum facility_type *type,  union facility *fac, struct misdn_bchannel *bc)
+{}

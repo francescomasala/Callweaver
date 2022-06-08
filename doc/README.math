@@ -5,7 +5,7 @@ Yeah, I thought it was a little insane too..
 
 adds:
 
-Sum, Multiply, Divide, Subtract, Modulus, GT, LT, GTE, LTE, EQ functions to CallWeaver
+Sum, Multiply, Divide, Subtract, Modulus, GT, LT, GTE, LTE, EQ functions to OpenPBX
 
 All functions follow the same basic pattern for parameters:
 

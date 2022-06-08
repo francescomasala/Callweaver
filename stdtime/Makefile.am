@@ -1,12 +1,10 @@
 AM_OPTIONS = gnu
 
-DEFS += -include $(top_builddir)/include/confdefs.h
-
 if FALSE
 noinst_PROGRAMS = test
 
 test_SOURCES = test.c
-test_LDADD = $(top_builddir)/corelib/libcallweaver.la
+test_LDADD = $(top_builddir)/corelib/libopenpbx.la
 endif FALSE
 
 noinst_LTLIBRARIES = libtime.la 

@@ -33,7 +33,7 @@ extern "C" {
 #endif
 
 #include "jitterbuf_stevek.h"
-#include "callweaver/generic_jb.h"
+#include "openpbx/generic_jb.h"
 
 /***********
  * The header file consists of four parts.
@@ -85,7 +85,7 @@ typedef struct speakup_jitterbuffer {
 	
 	int  hist_pointer;          /* points to index in history for next entry */
 	long last_adjustment;       /* the time of the last adjustment (growing or shrinking) */
-	long next_voice_time;	      /* the next ts is to be read from the jb (senders timestamp) */
+  long next_voice_time;	      /* the next ts is to be read from the jb (senders timestamp) */
 	long cnt_successive_interp; /* the count of consecutive interpolation frames */	
 	long silence_begin_ts;      /* the time of the last CNG frame, when in silence */
 	long min;		                /* the clock difference within current history interval */
@@ -97,7 +97,7 @@ typedef struct speakup_jitterbuffer {
 	jb_frame *voiceframes; 	 /* queued voiceframes */
 	jb_frame *controlframes; /* queued controlframes */
 	jb_speakup_settings settings;    /* the settings of the jitterbuffer */
-	cw_jb_info info;            /* the statistics of the jitterbuffer */
+	opbx_jb_info info;            /* the statistics of the jitterbuffer */
 } speakup_jitterbuffer;
 
 
@@ -105,7 +105,7 @@ typedef struct speakup_jitterbuffer {
  * Creates a new jitterbuffer and sets the default settings.
  * Always use this function for creating a new jitterbuffer. 
  */
-speakup_jitterbuffer *jb_speakup_new(void);
+speakup_jitterbuffer *jb_speakup_new();
 
 /*
  * The control frames and possible personal settings are kept. 
@@ -137,7 +137,7 @@ void jb_speakup_set_settings(speakup_jitterbuffer *jb, jb_speakup_settings *sett
  * Copying the statistics directly for the jitterbuffer won't work because
  * The statistics are only calculated when calling this function.
  */
-void jb_speakup_get_info(speakup_jitterbuffer *jb, cw_jb_info *stats);
+void jb_speakup_get_info(speakup_jitterbuffer *jb, opbx_jb_info *stats);
 
 /*
  * Get the current settings of the jitterbuffer.

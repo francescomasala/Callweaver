@@ -1,5 +1,5 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- A telephony toolkit for Linux.
  *
  * SQLite Resource
  * 
@@ -22,16 +22,16 @@
 #include <sqlite3.h>
 #include <sqliteInt.h>
 
-#include "callweaver/file.h"
-#include "callweaver/logger.h"
-#include "callweaver/options.h"
-#include "callweaver/channel.h"
-#include "callweaver/pbx.h"
-#include "callweaver/cli.h"
-#include "callweaver/module.h"
-#include "callweaver/utils.h"
-#include "callweaver/config.h"
-#include "callweaver.h"
+#include "openpbx/file.h"
+#include "openpbx/logger.h"
+#include "openpbx/options.h"
+#include "openpbx/channel.h"
+#include "openpbx/pbx.h"
+#include "openpbx/cli.h"
+#include "openpbx/module.h"
+#include "openpbx/utils.h"
+#include "openpbx/config.h"
+#include "openpbx.h"
 
 /* When you change the DATE_FORMAT, be sure to change the CHAR(19) below to something else */
 #define DATE_FORMAT "%Y-%m-%d %T"
@@ -48,7 +48,7 @@
 
 static char *create_dialplan_sql = "CREATE TABLE dialplan(context varchar(255), exten varchar(255), pri int, app varchar(255), data varchar(255));";
 static char *create_cdr_sql = 
-"CREATE TABLE cw_cdr (\n"
+"CREATE TABLE opbx_cdr (\n"
 "   acctid      INTEGER PRIMARY KEY,\n"
 "   clid        VARCHAR(80),\n"
 "   src     VARCHAR(80),\n"
@@ -72,7 +72,7 @@ static char *create_cdr_sql =
 
 
 static char *create_config_sql = 
-"create table cw_config (\n"
+"create table opbx_config (\n"
 "						 id integer primary key,\n"
 "						 cat_metric int not null default 0,\n"
 "						 var_metric int not null default 0,\n"
@@ -82,9 +82,9 @@ static char *create_config_sql =
 "						 var_name varchar(128) not null,\n"
 "						 var_val varchar(128) not null\n"
 "						 );\n\n"
-"CREATE INDEX cw_config_index_1 ON cw_config(filename);\n"
-"CREATE INDEX cw_config_index_2 ON cw_config(filename,category);\n"
-"CREATE INDEX cw_config_index_3 ON cw_config(filename,category,var_name);";
+"CREATE INDEX opbx_config_index_1 ON opbx_config(filename);\n"
+"CREATE INDEX opbx_config_index_2 ON opbx_config(filename,category);\n"
+"CREATE INDEX opbx_config_index_3 ON opbx_config(filename,category,var_name);";
 
 
 
@@ -128,20 +128,17 @@ struct switch_config {
 };
 
 static char *desc = "SQLite Resource Module";
-static char default_dbfile[ARRAY_SIZE] = {"/usr/local/callweaver/sqlite/callweaver.db"};
-static char clidb[ARRAY_SIZE] = {"/usr/local/callweaver/sqlite/callweaver.db"};
+static char default_dbfile[ARRAY_SIZE] = {"/usr/local/openpbx/sqlite/openpbx.db"};
+static char clidb[ARRAY_SIZE] = {"/usr/local/openpbx/sqlite/openpbx.db"};
 
 static Hash extens;
 
 
 
-static const char *tdesc = "SQLite SQL Interface";
-
-static void *app;
-static const char *name = "SQL";
-static const char *synopsis = "SQL(\"[sql statement]\"[, dbname])\n" 
+static char *tdesc = "SQLite SQL Interface";
+static char *app = "SQL";
+static char *synopsis = "SQL(\"[sql statement]\"|[dbname])\n" 
 "[if it's a select it will auto-vivify chan vars matching the selected column names.]\n";
-static const char *syntax = "SQL(\"[sql statement]\"[, dbname])";
 
 
 static void pick_path(char *dbname,char *buf, size_t size) {
@@ -151,7 +148,7 @@ static void pick_path(char *dbname,char *buf, size_t size) {
 		strncpy(buf,dbname,size);
 	}
 	else {
-		snprintf(buf,size,"%s/%s.db",cw_config_CW_DB_DIR,dbname);
+		snprintf(buf,size,"%s/%s.db",opbx_config_OPBX_DB_DIR,dbname);
 	}
 }
 
@@ -161,7 +158,7 @@ static sqlite3 *open_db(char *filename) {
 	
 	pick_path(filename,path,ARRAY_SIZE);
 	if (sqlite3_open(path,&db)) {
-		cw_log(LOG_WARNING,"SQL ERR [%s]\n",sqlite3_errmsg(db));
+		opbx_log(LOG_WARNING,"SQL ERR [%s]\n",sqlite3_errmsg(db));
 		sqlite3_close(db);
 		db=NULL;
 	}
@@ -179,7 +176,7 @@ LOCAL_USER_DECL;
 
 static int app_callback(void *pArg, int argc, char **argv, char **columnNames){
 	int x=0;
-	struct cw_channel *chan = pArg;
+	struct opbx_channel *chan = pArg;
 
 	if (chan) {
 		for(x=0;x<argc;x++)
@@ -188,19 +185,44 @@ static int app_callback(void *pArg, int argc, char **argv, char **columnNames){
 	return 0;
 }
 
-static int sqlite_execapp(struct cw_channel *chan, int argc,char **argv)
+static int sqlite_execapp(struct opbx_channel *chan, void *data)
 {
+	int res=0;
 	struct localuser *u;
 	char *errmsg;
 	sqlite3 *db;
-	int res=0;
+	char *filename=NULL;
+	char *buf=NULL;
+	char *sql=NULL;
+	char *p=NULL;
 
-	if (argc < 1 || !argv[0][0]) {
-		cw_log(LOG_WARNING, "sql requires an argument (sql)\n");
+	buf = opbx_strdupa((char *) data);
+	
+	sql = buf;
+	if (sql[0] == '"') {
+		sql++;
+		p=sql;
+		while (p && (p = strchr(p,'"'))) {
+			filename=p;
+			p++;
+		}
+		if (filename) {
+			*filename = '\0';
+			filename++;
+			if (filename && *filename == '|')
+				filename++;
+		}
+	}
+
+	if (!filename)
+		filename = default_dbfile;
+
+	if (!data) {
+		opbx_log(LOG_WARNING, "sql requires an argument (sql)\n");
 		return -1;
 	}
 
-	db = open_db(argc > 1 && argv[1][0] ? argv[1] : default_dbfile);
+	db = open_db(filename);
 	if (!db)
 		return -1;
 
@@ -210,14 +232,14 @@ static int sqlite_execapp(struct cw_channel *chan, int argc,char **argv)
 
 	sqlite3_exec(
 				db,
-				argv[0],
+				sql,
 				app_callback,
 				chan,
 				&errmsg
 				);
 
 	if (errmsg) {
-		cw_log(LOG_WARNING,"SQL ERR [%s]\n",errmsg);
+		opbx_log(LOG_WARNING,"SQL ERR [%s]\n",errmsg);
 		sqlite3_free(errmsg);
 		errmsg = NULL;
 	}
@@ -231,8 +253,8 @@ static int sqlite_execapp(struct cw_channel *chan, int argc,char **argv)
 
 
 
-CW_MUTEX_DEFINE_STATIC(switch_lock);
-CW_MUTEX_DEFINE_STATIC(cdr_lock);
+OPBX_MUTEX_DEFINE_STATIC(switch_lock);
+OPBX_MUTEX_DEFINE_STATIC(cdr_lock);
 
 
 static int cli_callback(void *pArg, int argc, char **argv, char **columnNames){
@@ -247,23 +269,23 @@ static int cli_callback(void *pArg, int argc, char **argv, char **columnNames){
 		return -1;
 
 	if (vh == 'v') {
-		cw_cli(fd,"\n");
+		opbx_cli(fd,"\n");
 		for(x=0;x<argc;x++)
-			cw_cli(fd,"%s=%s\n",columnNames[x],argv[x]);
-		cw_cli(fd,"\n");
+			opbx_cli(fd,"%s=%s\n",columnNames[x],argv[x]);
+		opbx_cli(fd,"\n");
 	}
 	else {
 		if (!config->seeheads) {
-			cw_cli(fd,",");
+			opbx_cli(fd,"|");
 			for(x=0;x<argc;x++)
-				cw_cli(fd,"%s,",columnNames[x]);
+				opbx_cli(fd,"%s|",columnNames[x]);
 			config->seeheads = 1;
-			cw_cli(fd,"\n");
+			opbx_cli(fd,"\n");
 		}
-		cw_cli(fd,",");
+		opbx_cli(fd,"|");
 		for(x=0;x<argc;x++)
-			cw_cli(fd,"%s,",argv[x]);
-		cw_cli(fd,"\n");
+			opbx_cli(fd,"%s|",argv[x]);
+		opbx_cli(fd,"\n");
 	}
 
 	return 0;
@@ -285,20 +307,20 @@ static int sqlite_cli(int fd, int argc, char *argv[]) {
 	if (has_switch) {
 		if (argv[1] && !strcmp(argv[1],"switchtable")) {
 			if (argv[2]) {
-				cw_mutex_lock(&switch_lock);
+				opbx_mutex_lock(&switch_lock);
 				strncpy(switch_table,argv[2],ARRAY_SIZE);
-				cw_mutex_unlock(&switch_lock);
+				opbx_mutex_unlock(&switch_lock);
 			}
-			cw_cli(fd,"\nswitch table is %s\n\n",switch_table);
+			opbx_cli(fd,"\nswitch table is %s\n\n",switch_table);
 			return 0;
 		}
 		else if (argv[1] && !strcmp(argv[1],"switchdb")) {
 			if (argv[2]) {
-				cw_mutex_lock(&switch_lock);
+				opbx_mutex_lock(&switch_lock);
 				pick_path(argv[2],switch_dbfile,ARRAY_SIZE);
-				cw_mutex_unlock(&switch_lock);
+				opbx_mutex_unlock(&switch_lock);
 			}
-			cw_cli(fd,"\nswitch db is %s\n\n",switch_dbfile);
+			opbx_cli(fd,"\nswitch db is %s\n\n",switch_dbfile);
 			return 0;
 		}
 	}
@@ -307,20 +329,20 @@ static int sqlite_cli(int fd, int argc, char *argv[]) {
 	if (has_cdr) {
 		if (argv[1] && !strcmp(argv[1],"cdrtable")) {
 			if (argv[2]) {
-				cw_mutex_lock(&cdr_lock);
+				opbx_mutex_lock(&cdr_lock);
 				strncpy(cdr_table,argv[2],ARRAY_SIZE);
-				cw_mutex_unlock(&cdr_lock);
+				opbx_mutex_unlock(&cdr_lock);
 			}
-			cw_cli(fd,"\ncdr table is %s\n\n",cdr_table);
+			opbx_cli(fd,"\ncdr table is %s\n\n",cdr_table);
 			return 0;
 		}
 		else if (argv[1] && !strcmp(argv[1],"cdrdb")) {
 			if (argv[2]) {
-				cw_mutex_lock(&cdr_lock);
+				opbx_mutex_lock(&cdr_lock);
 				pick_path(argv[2],cdr_dbfile,ARRAY_SIZE);
-				cw_mutex_unlock(&cdr_lock);
+				opbx_mutex_unlock(&cdr_lock);
 			}
-			cw_cli(fd,"\ncdr db is %s\n\n",cdr_dbfile);
+			opbx_cli(fd,"\ncdr db is %s\n\n",cdr_dbfile);
 			return 0;
 		}
 	}
@@ -347,7 +369,7 @@ static int sqlite_cli(int fd, int argc, char *argv[]) {
 							 &errmsg
 							 );
 				if (errmsg) {
-					cw_log(LOG_WARNING,"SQL ERR [%s]\n",errmsg);
+					opbx_log(LOG_WARNING,"SQL ERR [%s]\n",errmsg);
 					sqlite3_free(errmsg);
 					errmsg = NULL;
 				}
@@ -356,56 +378,56 @@ static int sqlite_cli(int fd, int argc, char *argv[]) {
 				sql = NULL;
 
 			} else {
-				cw_cli(fd,"\nmalloc failed, good luck\n");
+				opbx_cli(fd,"\nmalloc failed, good luck\n");
 			}
 			sqlite3_close(db);
 			return 0;
 		}
 		else if (argv[1] && (!strcmp(argv[1],"use") || !strcmp(argv[1],"db"))) {
 			if (argv[2]) {
-				cw_mutex_lock(&switch_lock);
+				opbx_mutex_lock(&switch_lock);
 				pick_path(argv[2],path,ARRAY_SIZE);
 				strncpy(clidb,path,ARRAY_SIZE);
-				cw_mutex_unlock(&switch_lock);
+				opbx_mutex_unlock(&switch_lock);
 			}
-			cw_cli(fd,"\nnow using %s\n\n",clidb);
+			opbx_cli(fd,"\nnow using %s\n\n",clidb);
 			return 0;
 		}
 		else if (argv[1] && !strcmp(argv[1],"cachetimeout")) {
 			if (argv[2]) {
-				cw_mutex_lock(&switch_lock);
+				opbx_mutex_lock(&switch_lock);
 				default_timeout = atoi(argv[2]);
 				if (!default_timeout)
 					default_timeout = 300;
-				cw_mutex_unlock(&switch_lock);
+				opbx_mutex_unlock(&switch_lock);
 			}
-			cw_cli(fd,"\ncachetimeout is %d\n\n",default_timeout);
+			opbx_cli(fd,"\ncachetimeout is %d\n\n",default_timeout);
 			return 0;
 		}
 		else if (argv[1] && !strcmp(argv[1],"vh")) {
 			if (argv[2]) {
-				cw_mutex_lock(&switch_lock);
+				opbx_mutex_lock(&switch_lock);
 				vh = argv[2][0] == 'v' ? 'v' : 'h';
-				cw_mutex_unlock(&switch_lock);
+				opbx_mutex_unlock(&switch_lock);
 			}
-			cw_cli(fd,"\nvh is %c\n\n",vh);
+			opbx_cli(fd,"\nvh is %c\n\n",vh);
 			return 0;
 		}
 		else if (argv[1] && !strcmp(argv[1],"clearcache")) {
-			cw_mutex_lock(&switch_lock);
+			opbx_mutex_lock(&switch_lock);
 			elem = extens.first;
 			while ( elem ){
 				HashElem *next_elem = elem->next;
 				cache = elem->data;
-				cw_cli(fd,"OK Erasing %s@%s\n",cache->exten,cache->context);
+				opbx_cli(fd,"OK Erasing %s@%s\n",cache->exten,cache->context);
 				free(cache);
 				cache = NULL;
 				elem = next_elem;
 			}
 			sqlite3HashClear(&extens);
 			sqlite3HashInit(&extens,SQLITE_HASH_STRING,COPY_KEYS);
-			cw_mutex_unlock(&switch_lock);
-			cw_cli(fd,"\nOK. Cache Clear!\n\n");
+			opbx_mutex_unlock(&switch_lock);
+			opbx_cli(fd,"\nOK. Cache Clear!\n\n");
 			return 0;
 		}
 
@@ -419,8 +441,8 @@ static int sqlite_cli(int fd, int argc, char *argv[]) {
 		}
 		config.fd = fd;
 		config.seeheads = 0;
-		cw_cli(fd,"\n\n");
-		cw_mutex_lock(&switch_lock);
+		opbx_cli(fd,"\n\n");
+		opbx_mutex_lock(&switch_lock);
 		if ((db = open_db(clidb))) {
 			sqlite3_exec(
 						 db,
@@ -429,23 +451,23 @@ static int sqlite_cli(int fd, int argc, char *argv[]) {
 						 &config,
 						 &errmsg
 						 );
-			cw_mutex_unlock(&switch_lock);
+			opbx_mutex_unlock(&switch_lock);
 			if (errmsg) {
-				cw_cli(fd,"ERROR: '%s'\n[%s]\n",errmsg,sqlbuf);
+				opbx_cli(fd,"ERROR: '%s'\n[%s]\n",errmsg,sqlbuf);
 				sqlite3_free(errmsg);
 				errmsg = NULL;
 			}
 			sqlite3_close(db);
 		} else {
-			cw_cli(fd,"ERROR OPEINING DB.\n");
+			opbx_cli(fd,"ERROR OPEINING DB.\n");
 			return -1;
 		}
 
 	} else {
-		cw_cli(fd,"ERROR! NO SQL?\n");
+		opbx_cli(fd,"ERROR! NO SQL?\n");
 		return -1;
 	}
-	cw_cli(fd,"\n\n");
+	opbx_cli(fd,"\n\n");
 
 	return 0;
 }
@@ -472,7 +494,7 @@ static int exist_callback(void *pArg, int argc, char **argv, char **columnNames)
 
 	context = argv[5] ? argv[5] : argv[0];
 	if (!strcmp(context,"_any_")) {
-		cw_verbose(VERBOSE_PREFIX_2 "SQLiteSwitch: magic extension: %s not cached\n",argv[1]);
+		opbx_verbose(VERBOSE_PREFIX_2 "SQLiteSwitch: magic extension: %s not cached\n",argv[1]);
 		return 0;
 	}
 
@@ -496,7 +518,7 @@ static int exist_callback(void *pArg, int argc, char **argv, char **columnNames)
 	cache->expires = now + timeout;
 
 	if (config && ! config->seeheads) {
-		cw_verbose(VERBOSE_PREFIX_2 "SQLiteSwitch: extension %s@%s will expire in %d seconds\n",argv[1],context,timeout);
+		opbx_verbose(VERBOSE_PREFIX_2 "SQLiteSwitch: extension %s@%s will expire in %d seconds\n",argv[1],context,timeout);
 		config->seeheads = 1;
 	}
 
@@ -512,7 +534,7 @@ static int exist_callback(void *pArg, int argc, char **argv, char **columnNames)
 
 
 
-static int SQLiteSwitch_exists(struct cw_channel *chan, const char *context, const char *exten, int priority, const char *callerid, const char *data)
+static int SQLiteSwitch_exists(struct opbx_channel *chan, const char *context, const char *exten, int priority, const char *callerid, const char *data)
 {
 	int res = 0; 
 	char key[ARRAY_SIZE];
@@ -552,13 +574,13 @@ static int SQLiteSwitch_exists(struct cw_channel *chan, const char *context, con
 		filename = switch_dbfile;
 
 
-	//cw_log(LOG_NOTICE, "SQLiteSwitch_exists %d: con: %s, exten: %s, pri: %d, cid: %s, data: %s\n", res, context, exten, priority, callerid ? callerid : "<unknown>", data);
+	//opbx_log(LOG_NOTICE, "SQLiteSwitch_exists %d: con: %s, exten: %s, pri: %d, cid: %s, data: %s\n", res, context, exten, priority, callerid ? callerid : "<unknown>", data);
 	time(&now);
 	snprintf(key, ARRAY_SIZE, "%s.%s", exten, context);
 
-	cw_verbose(VERBOSE_PREFIX_2 "SQLiteSwitch_exists lookup [%s]: ",key);
+	opbx_verbose(VERBOSE_PREFIX_2 "SQLiteSwitch_exists lookup [%s]: ",key);
 	cache = (extension_cache *) sqlite3HashFind(&extens,key,strlen(key));
-	cw_verbose("%s\n",cache ? "match" : "fail");
+	opbx_verbose("%s\n",cache ? "match" : "fail");
 
 
 
@@ -580,12 +602,12 @@ static int SQLiteSwitch_exists(struct cw_channel *chan, const char *context, con
 							 &errmsg
 							 );
 				if (errmsg) {
-					cw_log(LOG_WARNING,"SQL ERR [%s]\n",errmsg);
+					opbx_log(LOG_WARNING,"SQL ERR [%s]\n",errmsg);
 					sqlite3_free(errmsg);
 					errmsg = NULL;
 				}
 			} else {
-				cw_log(LOG_WARNING,"malloc failed, good luck!\n");
+				opbx_log(LOG_WARNING,"malloc failed, good luck!\n");
 			}
 			sqlite3_close(db);
 			if (sql) {
@@ -594,27 +616,27 @@ static int SQLiteSwitch_exists(struct cw_channel *chan, const char *context, con
 			}
 			cache = (extension_cache *) sqlite3HashFind(&extens,key,strlen(key));
 		}  else {
-			cw_log(LOG_WARNING,"ERROR OPEINING DB.\n");
+			opbx_log(LOG_WARNING,"ERROR OPEINING DB.\n");
 			return -1;
 		}
 
 	}
 	
 	if (cache) {
-		cw_verbose(VERBOSE_PREFIX_2 "SQLiteSwitch_exists lookup [%s,%d]: ",key,priority);
+		opbx_verbose(VERBOSE_PREFIX_2 "SQLiteSwitch_exists lookup [%s,%d]: ",key,priority);
 		res = strlen(cache->app_name[priority]) ? 1 : 0;
-		cw_verbose("%s\n",res ? "match" : "fail");
+		opbx_verbose("%s\n",res ? "match" : "fail");
 	}
 
 	return res;
 }
 
-static int SQLiteSwitch_canmatch(struct cw_channel *chan, const char *context, const char *exten, int priority, const char *callerid, const char *data)
+static int SQLiteSwitch_canmatch(struct opbx_channel *chan, const char *context, const char *exten, int priority, const char *callerid, const char *data)
 {
 
 	int res = 1; 
 
-	//cw_log(LOG_NOTICE, "SQLiteSwitch_canmatch %d: con: %s, exten: %s, pri: %d, cid: %s, data: %s\n", res, context, exten, priority, callerid ? callerid : "<unknown>", data);
+	//opbx_log(LOG_NOTICE, "SQLiteSwitch_canmatch %d: con: %s, exten: %s, pri: %d, cid: %s, data: %s\n", res, context, exten, priority, callerid ? callerid : "<unknown>", data);
 
 
 	return res;
@@ -622,9 +644,9 @@ static int SQLiteSwitch_canmatch(struct cw_channel *chan, const char *context, c
 }
 
 
-static int SQLiteSwitch_exec(struct cw_channel *chan, const char *context, const char *exten, int priority, const char *callerid, const char *data)
+static int SQLiteSwitch_exec(struct opbx_channel *chan, const char *context, const char *exten, int priority, const char *callerid, int newstack, const char *data)
 {
-	struct cw_app *app;
+	struct opbx_app *app;
 	int res = 0;
 	extension_cache *cache;
 	char key[ARRAY_SIZE];
@@ -633,23 +655,24 @@ static int SQLiteSwitch_exec(struct cw_channel *chan, const char *context, const
 	
 
 	time(&now);
-	//cw_log(LOG_NOTICE, "SQLiteSwitch_exec: con: %s, exten: %s, pri: %d, cid: %s, data: %s\n", context, exten, priority, callerid ? callerid : "<unknown>", data);
+	//opbx_log(LOG_NOTICE, "SQLiteSwitch_exec: con: %s, exten: %s, pri: %d, cid: %s, data: %s\n", context, exten, priority, callerid ? callerid : "<unknown>", data);
 
 	snprintf(key, ARRAY_SIZE, "%s.%s", exten, context);
+	memset(&app_data,0,sizeof(app_data) - 1);
 
-	cw_verbose(VERBOSE_PREFIX_2 "SQLiteSwitch_exec lookup [%s]: ",key);
+	opbx_verbose(VERBOSE_PREFIX_2 "SQLiteSwitch_exec lookup [%s]: ",key);
 	cache = (extension_cache *) sqlite3HashFind(&extens,key,strlen(key));
-	cw_verbose("%s\n",cache ? "match" : "fail");
+	opbx_verbose("%s\n",cache ? "match" : "fail");
 
 	if (cache) {
 		app = pbx_findapp(cache->app_name[priority]);
 		if (app) {
-			pbx_substitute_variables_helper(chan, cache->app_data[priority], app_data, sizeof(app_data));
-			cw_verbose(VERBOSE_PREFIX_2 "SQLiteSwitch_exec: call app %s(%s)\n",cache->app_name[priority],app_data);
-			res = pbx_exec(chan, app, app_data);
+			pbx_substitute_variables_helper(chan, cache->app_data[priority], app_data, sizeof(app_data) - 1);
+			opbx_verbose(VERBOSE_PREFIX_2 "SQLiteSwitch_exec: call app %s(%s)\n",cache->app_name[priority],app_data);
+			res = pbx_exec(chan, app,app_data,1);
 		}
 		else {
-			cw_log(LOG_WARNING, "application %s not registered\n",cache->app_name[priority]);
+			opbx_log(LOG_WARNING, "application %s not registered\n",cache->app_name[priority]);
 			res = -1;
 		}
 	}
@@ -658,19 +681,19 @@ static int SQLiteSwitch_exec(struct cw_channel *chan, const char *context, const
 }
 
 
-static int SQLiteSwitch_matchmore(struct cw_channel *chan, const char *context, const char *exten, int priority, const char *callerid, const char *data)
+static int SQLiteSwitch_matchmore(struct opbx_channel *chan, const char *context, const char *exten, int priority, const char *callerid, const char *data)
 {
 
 	int res = 0; 
 
-	//cw_log(LOG_NOTICE, "SQLiteSwitch_matchmore %d: con: %s, exten: %s, pri: %d, cid: %s, data: %s\n", res, context, exten, priority, callerid ? callerid : "<unknown>", data);
+	//opbx_log(LOG_NOTICE, "SQLiteSwitch_matchmore %d: con: %s, exten: %s, pri: %d, cid: %s, data: %s\n", res, context, exten, priority, callerid ? callerid : "<unknown>", data);
 
 	return res;
 
 }
 
 
-static struct cw_switch sqlite_switch = 
+static struct opbx_switch sqlite_switch = 
 	{
 		name:			"SQLite",
 		description:	"Read The Dialplan From The SQLite Database",
@@ -691,41 +714,41 @@ static char shelp[] = "\n\nsql [sql statement]\n"
 "[select][insert][update][delete][begin][rollback][create][drop] <...>\n";
 
 
-static struct cw_cli_entry	 cli_sqlite1 = { { "select", NULL }, sqlite_cli, scmd, shelp};
-static struct cw_cli_entry	 cli_sqlite2 = { { "insert", NULL }, sqlite_cli, scmd, shelp};
-static struct cw_cli_entry	 cli_sqlite3 = { { "update", NULL }, sqlite_cli, scmd, shelp};
-static struct cw_cli_entry	 cli_sqlite4 = { { "delete", NULL }, sqlite_cli, scmd, shelp};
-static struct cw_cli_entry	 cli_sqlite5 = { { "begin", NULL }, sqlite_cli, scmd, shelp};
-static struct cw_cli_entry	 cli_sqlite6 = { { "rollback", NULL }, sqlite_cli, scmd, shelp};
-static struct cw_cli_entry	 cli_sqlite7 = { { "sql", NULL }, sqlite_cli, scmd, shelp};
-static struct cw_cli_entry	 cli_sqlite8 = { { "create", NULL }, sqlite_cli, scmd, shelp};
-static struct cw_cli_entry	 cli_sqlite9 = { { "drop", NULL }, sqlite_cli, scmd, shelp};
+static struct opbx_cli_entry	 cli_sqlite1 = { { "select", NULL }, sqlite_cli, scmd, shelp};
+static struct opbx_cli_entry	 cli_sqlite2 = { { "insert", NULL }, sqlite_cli, scmd, shelp};
+static struct opbx_cli_entry	 cli_sqlite3 = { { "update", NULL }, sqlite_cli, scmd, shelp};
+static struct opbx_cli_entry	 cli_sqlite4 = { { "delete", NULL }, sqlite_cli, scmd, shelp};
+static struct opbx_cli_entry	 cli_sqlite5 = { { "begin", NULL }, sqlite_cli, scmd, shelp};
+static struct opbx_cli_entry	 cli_sqlite6 = { { "rollback", NULL }, sqlite_cli, scmd, shelp};
+static struct opbx_cli_entry	 cli_sqlite7 = { { "sql", NULL }, sqlite_cli, scmd, shelp};
+static struct opbx_cli_entry	 cli_sqlite8 = { { "create", NULL }, sqlite_cli, scmd, shelp};
+static struct opbx_cli_entry	 cli_sqlite9 = { { "drop", NULL }, sqlite_cli, scmd, shelp};
 
-static struct cw_config *config_sqlite(const char *database, const char *table, const char *file, struct cw_config *cfg)
+static struct opbx_config *config_sqlite(const char *database, const char *table, const char *file, struct opbx_config *cfg)
 {
-	struct cw_variable *new_v, *v;
-	struct cw_category *cur_cat;
+	struct opbx_variable *new_v, *v;
+	struct opbx_category *cur_cat;
 	char ttable[ARRAY_SIZE];
 	int configured = 0, res = 0;
 	sqlite3_stmt *stmt = NULL;;
-	int cat_metric=0, last_cat_metric=0;
+	int cat_metric=0, lopbx_cat_metric=0;
 	char sql[ARRAY_SIZE];
 	char last[ARRAY_SIZE] = "";
 	char path[ARRAY_SIZE];
 	sqlite3 *db;
 	int running=0;
 	int i=0;
-	struct cw_config *config;
+	struct opbx_config *config;
 
 
 	/* if the data was not passed from extconfig.conf then get it from sqlite.conf */
-	if(!database || cw_strlen_zero(database)) {
+	if(!database || opbx_strlen_zero(database)) {
 		if (!file || !strcmp (file, "res_sqlite.conf"))
 			return NULL; // cant configure myself with myself !
 
-		config = cw_config_load ("res_sqlite.conf");
+		config = opbx_config_load ("res_sqlite.conf");
 		if (config) {
-			for (v = cw_variable_browse (config, "config"); v; v = v->next) {
+			for (v = opbx_variable_browse (config, "config"); v; v = v->next) {
 				if (!strcmp (v->name, "table")) {
 					strncpy (ttable, v->value, sizeof (ttable));
 					configured++;
@@ -734,7 +757,7 @@ static struct cw_config *config_sqlite(const char *database, const char *table, 
 					configured++;
 				}
 			}
-			cw_config_destroy (config);
+			opbx_config_destroy (config);
 		}
 	} else {
 		pick_path((char *)database,path,ARRAY_SIZE);
@@ -754,11 +777,11 @@ static struct cw_config *config_sqlite(const char *database, const char *table, 
 	res = sqlite3_prepare(db,sql,0,&stmt,0);
 
 	if (res) {
-		cw_log (LOG_WARNING, "SQL select error [%s]!\n[%s]\n\n",sqlite3_errmsg(db), sql);
+		opbx_log (LOG_WARNING, "SQL select error [%s]!\n[%s]\n\n",sqlite3_errmsg(db), sql);
 		return NULL;
 	}
 
-	cur_cat = cw_config_get_current_category(cfg);
+	cur_cat = opbx_config_get_current_category(cfg);
 
 	/*
 	  0 id int
@@ -792,31 +815,31 @@ static struct cw_config *config_sqlite(const char *database, const char *table, 
 
 		if(option_verbose > 4)
 			for(i=0;i<8;i++){
-				cw_verbose(VERBOSE_PREFIX_3"SQLite Config: %d=%s\n",i,sqlite3_column_text(stmt,i));
+				opbx_verbose(VERBOSE_PREFIX_3"SQLite Config: %d=%s\n",i,sqlite3_column_text(stmt,i));
 			}
 		
-		if (strcmp (last, sqlite3_column_text(stmt,5)) || last_cat_metric != cat_metric) {
-			cur_cat = cw_category_new((char *)sqlite3_column_text(stmt,5));
+		if (strcmp (last, sqlite3_column_text(stmt,5)) || lopbx_cat_metric != cat_metric) {
+			cur_cat = opbx_category_new((char *)sqlite3_column_text(stmt,5));
 			if (!cur_cat) {
-				cw_log(LOG_WARNING, "Out of memory!\n");
+				opbx_log(LOG_WARNING, "Out of memory!\n");
 				break;
 			}
 			strcpy (last, sqlite3_column_text(stmt,5));
-			last_cat_metric	= cat_metric;
-			cw_category_append(cfg, cur_cat);
+			lopbx_cat_metric	= cat_metric;
+			opbx_category_append(cfg, cur_cat);
 		}
-		new_v = cw_variable_new ((char *)sqlite3_column_text(stmt,6), (char *)sqlite3_column_text(stmt,7));
-		cw_variable_append(cur_cat, new_v);
+		new_v = opbx_variable_new ((char *)sqlite3_column_text(stmt,6), (char *)sqlite3_column_text(stmt,7));
+		opbx_variable_append(cur_cat, new_v);
 	}
 	
 	if ((sqlite3_finalize(stmt))) 
-		cw_log(LOG_ERROR,"ERROR: %s\n",sqlite3_errmsg(db));
+		opbx_log(LOG_ERROR,"ERROR: %s\n",sqlite3_errmsg(db));
 
 	return cfg;
 }
 
 
-static int sqlite_log(struct cw_cdr *cdr)
+static int sqlite_log(struct opbx_cdr *cdr)
 {
 	int res = 0;
 	char *zErr = 0;
@@ -890,7 +913,7 @@ static int sqlite_log(struct cw_cdr *cdr)
 							   &zErr
 							   );
 		} else {
-			cw_log(LOG_ERROR, "malloc failed, good luck!\n");
+			opbx_log(LOG_ERROR, "malloc failed, good luck!\n");
 			break;
 		}
 
@@ -904,9 +927,9 @@ static int sqlite_log(struct cw_cdr *cdr)
 		sql = NULL;
 	}
 	if (zErr) {
-		cw_log(LOG_ERROR, "cdr_sqlite: %s\n", zErr);
+		opbx_log(LOG_ERROR, "cdr_sqlite: %s\n", zErr);
 
-		cw_log(LOG_ERROR,
+		opbx_log(LOG_ERROR,
 				"INSERT INTO %s ("
 				"clid,src,dst,dcontext,"
 				"channel,dstchannel,lastapp,lastdata, "
@@ -931,7 +954,7 @@ static int sqlite_log(struct cw_cdr *cdr)
 #ifdef LOG_USERFIELD
 				",'%s'"
 #endif
-				")\n",cdr_table,
+				")",cdr_table,
 				cdr->clid, cdr->src, cdr->dst, cdr->dcontext,
 				cdr->channel, cdr->dstchannel, cdr->lastapp, cdr->lastdata,
 				startstr, answerstr, endstr,
@@ -969,7 +992,7 @@ static void check_table_exists(char *dbfile, char *test_sql, char *create_sql) {
 						 );
 
 			if (errmsg) {
-				cw_log(LOG_WARNING,"SQL ERR [%s]\n[%s]\nAuto Repairing!\n",errmsg,test_sql);
+				opbx_log(LOG_WARNING,"SQL ERR [%s]\n[%s]\nAuto Repairing!\n",errmsg,test_sql);
 				sqlite3_free(errmsg);
 				errmsg = NULL;
 				sqlite3_exec(
@@ -980,7 +1003,7 @@ static void check_table_exists(char *dbfile, char *test_sql, char *create_sql) {
 							 &errmsg
 							 );
 				if (errmsg) {
-					cw_log(LOG_WARNING,"SQL ERR [%s]\n[%s]\n",errmsg,create_sql);
+					opbx_log(LOG_WARNING,"SQL ERR [%s]\n[%s]\n",errmsg,create_sql);
 					sqlite3_free(errmsg);
 					errmsg = NULL;
 				}
@@ -993,32 +1016,32 @@ static void check_table_exists(char *dbfile, char *test_sql, char *create_sql) {
 
 static int load_config(int hard) {
 
-	struct cw_config *config;
-	struct cw_variable *v;
+	struct opbx_config *config;
+	struct opbx_variable *v;
 	char *sql;
 	
 
-	config = cw_config_load ("res_sqlite.conf");
+	config = opbx_config_load ("res_sqlite.conf");
 	if (config) {
-		for (v = cw_variable_browse (config, "general"); v; v = v->next) {
+		for (v = opbx_variable_browse (config, "general"); v; v = v->next) {
 			if (!strcmp (v->name, "reload")) {
-				do_reload = cw_true(v->value);
+				do_reload = opbx_true(v->value);
 			}
 		}
 		if (!hard)
 			if (!do_reload) {
-				cw_verbose(VERBOSE_PREFIX_2 "RES SQLite Skipping Reload set reload => yes in [general]\n");
+				opbx_verbose(VERBOSE_PREFIX_2 "RES SQLite Skipping Reload set reload => yes in [general]\n");
 				return 0;
 			}
 		
-		cw_verbose(VERBOSE_PREFIX_2 "RES SQLite Loading Defaults\n");
+		opbx_verbose(VERBOSE_PREFIX_2 "RES SQLite Loading Defaults\n");
 		has_cdr=-1;
 		has_switch=-1;
 		has_config=-1;
 		has_cli=0;
 		
 		
-		for (v = cw_variable_browse (config, "cdr"); v; v = v->next) {
+		for (v = opbx_variable_browse (config, "cdr"); v; v = v->next) {
 			if (!strcmp (v->name, "table")) {
 				strncpy (cdr_table, v->value, sizeof (cdr_table));
 				has_cdr++;
@@ -1028,7 +1051,7 @@ static int load_config(int hard) {
 			}
 		}
 
-		for (v = cw_variable_browse (config, "config"); v; v = v->next) {
+		for (v = opbx_variable_browse (config, "config"); v; v = v->next) {
 			if (!strcmp (v->name, "table")) {
 				strncpy (config_table, v->value, sizeof (cdr_table));
 				has_config++;
@@ -1038,7 +1061,7 @@ static int load_config(int hard) {
 			}
 		}
 
-		for (v = cw_variable_browse (config, "switch"); v; v = v->next) {
+		for (v = opbx_variable_browse (config, "switch"); v; v = v->next) {
 			if (!strcmp (v->name, "table")) {
 				strncpy (switch_table, v->value, sizeof (cdr_table));
 				has_switch++;
@@ -1048,21 +1071,21 @@ static int load_config(int hard) {
 			}
 		}
 
-		for (v = cw_variable_browse (config, "cli"); v; v = v->next) {
+		for (v = opbx_variable_browse (config, "cli"); v; v = v->next) {
 			if (!strcmp (v->name, "dbfile")) {
 				pick_path(v->value,clidb,ARRAY_SIZE);
 				has_cli++;
 			}
 		}
 		
-		for (v = cw_variable_browse (config, "default"); v; v = v->next) {
+		for (v = opbx_variable_browse (config, "default"); v; v = v->next) {
 			if (!strcmp (v->name, "dbfile")) {
 				pick_path(v->value,default_dbfile,ARRAY_SIZE);
 				has_cli++;
 			}
 		}
 
-		cw_config_destroy (config);
+		opbx_config_destroy (config);
 	}
 
 
@@ -1100,7 +1123,7 @@ int reload(void) {
 	return load_config(0);
 }
 
-static struct cw_config_engine sqlite_engine = {
+static struct opbx_config_engine sqlite_engine = {
 	.name = "sqlite",
 	.load_func = config_sqlite
 
@@ -1114,47 +1137,47 @@ int load_module(void)
 	load_config(1);
 	do_reload = 0;
 
-	cw_config_engine_register(&sqlite_engine);
-	cw_verbose(VERBOSE_PREFIX_2 "SQLite Config Handler Registered.\n");
+	opbx_config_engine_register(&sqlite_engine);
+	opbx_verbose(VERBOSE_PREFIX_2 "SQLite Config Handler Registered.\n");
 
 
 	if (has_cdr) {
-		cw_verbose(VERBOSE_PREFIX_2 "Loading SQLite CDR\n");
-		res = cw_cdr_register(cdr_name, "RES SQLite CDR", sqlite_log);
+		opbx_verbose(VERBOSE_PREFIX_2 "Loading SQLite CDR\n");
+		res = opbx_cdr_register(cdr_name, "RES SQLite CDR", sqlite_log);
 	}
 	else 
-		cw_verbose(VERBOSE_PREFIX_2 "SQLite CDR Disabled\n");
+		opbx_verbose(VERBOSE_PREFIX_2 "SQLite CDR Disabled\n");
 
 
 
-	app = cw_register_application(name, sqlite_execapp, synopsis, syntax, tdesc);
+	opbx_register_application(app, sqlite_execapp, synopsis, tdesc);
 
 
 	if (has_switch) {
-		if (cw_register_switch(&sqlite_switch))
-			cw_log(LOG_ERROR, "Unable to register SQLite Switch\n");
+		if (opbx_register_switch(&sqlite_switch))
+			opbx_log(LOG_ERROR, "Unable to register SQLite Switch\n");
 		else {
 			sqlite3HashInit(&extens,SQLITE_HASH_STRING,COPY_KEYS);
-			cw_verbose(VERBOSE_PREFIX_2 "Registered SQLite Switch\n");
+			opbx_verbose(VERBOSE_PREFIX_2 "Registered SQLite Switch\n");
 		}
 	}
 	else 
-		cw_verbose(VERBOSE_PREFIX_2 "Sqlite Switch Disabled\n");
+		opbx_verbose(VERBOSE_PREFIX_2 "Sqlite Switch Disabled\n");
 
 	if (has_cli) {
-		cw_verbose(VERBOSE_PREFIX_2 "Activating SQLite CLI Command Set.\n");
-		cw_cli_register(&cli_sqlite1); 
-		cw_cli_register(&cli_sqlite2);	 
-		cw_cli_register(&cli_sqlite3);	 
-		cw_cli_register(&cli_sqlite4);	 
-		cw_cli_register(&cli_sqlite5);	 
-		cw_cli_register(&cli_sqlite6);
-		cw_cli_register(&cli_sqlite7);
-		cw_cli_register(&cli_sqlite8);
-		cw_cli_register(&cli_sqlite9);
+		opbx_verbose(VERBOSE_PREFIX_2 "Activating SQLite CLI Command Set.\n");
+		opbx_cli_register(&cli_sqlite1); 
+		opbx_cli_register(&cli_sqlite2);	 
+		opbx_cli_register(&cli_sqlite3);	 
+		opbx_cli_register(&cli_sqlite4);	 
+		opbx_cli_register(&cli_sqlite5);	 
+		opbx_cli_register(&cli_sqlite6);
+		opbx_cli_register(&cli_sqlite7);
+		opbx_cli_register(&cli_sqlite8);
+		opbx_cli_register(&cli_sqlite9);
 	}
 	else 
-		cw_verbose(VERBOSE_PREFIX_2 "SQLite CLI Command Set Not Configured.\n");
+		opbx_verbose(VERBOSE_PREFIX_2 "SQLite CLI Command Set Not Configured.\n");
 
 	return res;
 }
@@ -1166,33 +1189,33 @@ int unload_module(void)
 	int res = 0;
 	do_reload = 1;
 
-	cw_config_engine_deregister(&sqlite_engine);
+	opbx_config_engine_deregister(&sqlite_engine);
 	if (has_cdr) {
-		cw_cdr_unregister(cdr_name);
-		cw_verbose(VERBOSE_PREFIX_2 "SQLite CDR Disabled\n");
+		opbx_cdr_unregister(cdr_name);
+		opbx_verbose(VERBOSE_PREFIX_2 "SQLite CDR Disabled\n");
 	}
 
 	if (has_cli) {
-		cw_verbose(VERBOSE_PREFIX_2 "SQLite CLI Disabled\n");
-		cw_cli_unregister(&cli_sqlite1);  
-		cw_cli_unregister(&cli_sqlite2);
-		cw_cli_unregister(&cli_sqlite3);  
-		cw_cli_unregister(&cli_sqlite4);  
-		cw_cli_unregister(&cli_sqlite5);  
-		cw_cli_unregister(&cli_sqlite6);  
-		cw_cli_unregister(&cli_sqlite7);  
-		cw_cli_unregister(&cli_sqlite8);  
-		cw_cli_unregister(&cli_sqlite9);  
+		opbx_verbose(VERBOSE_PREFIX_2 "SQLite CLI Disabled\n");
+		opbx_cli_unregister(&cli_sqlite1);  
+		opbx_cli_unregister(&cli_sqlite2);
+		opbx_cli_unregister(&cli_sqlite3);  
+		opbx_cli_unregister(&cli_sqlite4);  
+		opbx_cli_unregister(&cli_sqlite5);  
+		opbx_cli_unregister(&cli_sqlite6);  
+		opbx_cli_unregister(&cli_sqlite7);  
+		opbx_cli_unregister(&cli_sqlite8);  
+		opbx_cli_unregister(&cli_sqlite9);  
 	}
 		
-	cw_unregister_application(app);
+	opbx_unregister_application(app);
 
 
 
 
 	if (has_switch) {
-		cw_verbose(VERBOSE_PREFIX_2 "SQLite Switch Disabled\n");
-		cw_unregister_switch(&sqlite_switch);
+		opbx_verbose(VERBOSE_PREFIX_2 "SQLite Switch Disabled\n");
+		opbx_unregister_switch(&sqlite_switch);
 		sqlite3HashClear(&extens);
 	}
 	

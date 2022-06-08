@@ -73,7 +73,7 @@ autokill=yes
 [mappings]
 ;
 ; The "mappings" section maps DUNDi contexts
-; to contexts on the local callweaver system.  Remember
+; to contexts on the local openpbx system.  Remember
 ; that numbers that are made available under the e164 
 ; DUNDi context are regulated by the DUNDi General Peering 
 ; Agreement (GPA) if you are a member of the DUNDi E.164

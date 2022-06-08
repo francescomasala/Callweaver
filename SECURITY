@@ -1,7 +1,7 @@
-==== Security Notes with CallWeaver ====
+==== Security Notes with OpenPBX.org ====
 
 PLEASE READ THE FOLLOWING IMPORTANT SECURITY RELATED INFORMATION.  
-IMPROPER CONFIGURATION OF CALLWEAVER COULD ALLOW UNAUTHORIZED USE OF YOUR
+IMPROPER CONFIGURATION OF OPENPBX COULD ALLOW UNAUTHORIZED USE OF YOUR
 FACILITIES, POTENTIALLY INCURRING SUBSTANTIAL CHARGES.
 
 First and foremost remember this:
@@ -38,4 +38,4 @@ exten => 6123,Dial(Zap/1)
 
 DON'T FORGET TO TAKE THE DEMO CONTEXT OUT OF YOUR DEFAULT CONTEXT.  There
 isn't really a security reason, it just will keep people from wanting to 
-play with your callweaver setup remotely.
+play with your openpbx setup remotely.

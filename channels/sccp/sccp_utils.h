@@ -12,7 +12,7 @@ sccp_channel_t * sccp_channel_find_bycallstate_on_line(sccp_line_t * l, uint8_t 
 sccp_channel_t * sccp_channel_find_bystate_on_device(sccp_device_t * d, uint8_t state);
 sccp_channel_t * sccp_channel_find_byid_on_device(sccp_device_t * d, uint32_t id);
 
-void sccp_cw_setstate(sccp_channel_t * c, int state);
+void sccp_opbx_setstate(sccp_channel_t * c, int state);
 
 void sccp_dev_dbput(sccp_device_t * d);
 void sccp_dev_dbget(sccp_device_t * d);

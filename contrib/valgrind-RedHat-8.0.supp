@@ -1,8 +1,8 @@
 #This valgrind suppresion file is supposed to be working with
 #Red Hat Linux release 8.0 (Psyche)
 #You can use it by calling valgrind this way:
-#cd /usr/src/callweaver
-#valgrind --gdb-attach=yes --suppressions=valgrind-RedHat-8.0.supp callweaver -vvv
+#cd /usr/src/openpbx
+#valgrind --gdb-attach=yes --suppressions=valgrind-RedHat-8.0.supp openpbx -vvv
 
 {
 	library_1

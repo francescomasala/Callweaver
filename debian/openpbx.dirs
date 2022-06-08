@@ -1,0 +1,16 @@
+usr/share/openpbx.org/ogi
+var/lib/openpbx.org
+var/lib/openpbx.org/keys
+var/lib/openpbx.org/firmware
+var/lib/openpbx.org/firmware/iax
+var/lib/openpbx.org/moh
+var/log/openpbx.org/cdr-csv
+var/log/openpbx.org/cdr-custom
+var/run/openpbx.org
+var/spool/openpbx.org/meetme
+var/spool/openpbx.org/outgoing
+var/spool/openpbx.org/voicemail
+var/spool/openpbx.org/voicemail/default
+var/spool/openpbx.org/system
+var/spool/openpbx.org/tmp
+var/spool/openpbx.org/moh

@@ -10,7 +10,7 @@
 # License
 #
 
-OUTPUT=$HOME/callweaversupportinfo
+OUTPUT=$HOME/openpbxsupportinfo
 
 if [ $UID -ne  0 ]; then
 
@@ -89,14 +89,14 @@ if [ "$ans" = "y" ]; then
   echo "------------------" >> $OUTPUT;
   echo "ZAPATA CONFIG" >> $OUTPUT;
   echo "------------------" >> $OUTPUT;
-  grep -v '^;' /etc/callweaver/zapata.conf >> $OUTPUT;
+  grep -v '^;' /etc/openpbx/zapata.conf >> $OUTPUT;
   echo >> $OUTPUT;
   echo >> $OUTPUT;
 
   echo "------------------" >> $OUTPUT;
   echo "EXTENSIONS CONFIG" >> $OUTPUT;
   echo "------------------" >> $OUTPUT;
-  grep -v '^;' /etc/callweaver/extensions.conf >> $OUTPUT;
+  grep -v '^;' /etc/openpbx/extensions.conf >> $OUTPUT;
   echo >> $OUTPUT;
   echo >> $OUTPUT;
 

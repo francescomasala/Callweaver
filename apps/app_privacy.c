@@ -1,12 +1,12 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  *
  * Copyright (C) 1999 - 2005, Digium, Inc.
  *
  * Mark Spencer <markster@digium.com>
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -29,39 +29,41 @@
 #include <string.h>
 #include <stdlib.h>
 
-#include "callweaver.h"
+#include "openpbx.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/apps/app_privacy.c $", "$Revision: 4723 $")
+OPENPBX_FILE_VERSION("$HeadURL$", "$Revision$")
 
-#include "callweaver/lock.h"
-#include "callweaver/file.h"
-#include "callweaver/utils.h"
-#include "callweaver/logger.h"
-#include "callweaver/options.h"
-#include "callweaver/channel.h"
-#include "callweaver/pbx.h"
-#include "callweaver/module.h"
-#include "callweaver/translate.h"
-#include "callweaver/image.h"
-#include "callweaver/phone_no_utils.h"
-#include "callweaver/app.h"
-#include "callweaver/config.h"
+#include "openpbx/lock.h"
+#include "openpbx/file.h"
+#include "openpbx/utils.h"
+#include "openpbx/logger.h"
+#include "openpbx/options.h"
+#include "openpbx/channel.h"
+#include "openpbx/pbx.h"
+#include "openpbx/module.h"
+#include "openpbx/translate.h"
+#include "openpbx/image.h"
+#include "openpbx/phone_no_utils.h"
+#include "openpbx/app.h"
+#include "openpbx/config.h"
 
 #define PRIV_CONFIG "privacy.conf"
 
 static char *tdesc = "Require phone number to be entered, if no CallerID sent";
 
-static void *privacy_app;
-static char *privacy_name = "PrivacyManager";
-static char *privacy_synopsis = "Require phone number to be entered, if no CallerID sent";
-static char *privacy_syntax = "PrivacyManager()";
-static char *privacy_descrip =
-  "If no Caller*ID was received, PrivacyManager answers the\n"
+static char *app = "PrivacyManager";
+
+static char *synopsis = "Require phone number to be entered, if no CallerID sent";
+
+static char *descrip =
+  "  PrivacyManager: If no Caller*ID is sent, PrivacyManager answers the\n"
   "channel and asks the caller to enter their phone number.\n"
-  "The caller is given the configured attempts.  If after the attempts, they do not enter\n"
-  "at least a configured count of digits of a number, PRIVACYMGRSTATUS is set to FAIL.\n"
-  "Otherwise, SUCCESS is flagged by PRIVACYMGRSTATUS.\n"
-  "Always returns 0.\n"
+  "The caller is given 3 attempts.  If after 3 attempts, they do not enter\n"
+  "at least a 10 digit phone number, and if there exists a priority n + 101,\n"
+  "where 'n' is the priority of the current instance, then  the\n"
+  "channel  will  be  setup  to continue at that priority level.\n"
+  "Otherwise, it returns 0.  Does nothing if Caller*ID was received on the\n"
+  "channel.\n"
   "  Configuration file privacy.conf contains two variables:\n"
   "   maxretries  default 3  -maximum number of attempts the caller is allowed to input a callerid.\n"
   "   minlength   default 10 -minimum allowable digits in the input callerid number.\n"
@@ -73,93 +75,95 @@ LOCAL_USER_DECL;
 
 
 
-static int privacy_exec (struct cw_channel *chan, int argc, char **argv)
+static int
+privacy_exec (struct opbx_channel *chan, void *data)
 {
-	char phone[30];
-	struct localuser *u;
-	struct cw_config *cfg;
-	char *s;
 	int res=0;
 	int retries;
 	int maxretries = 3;
 	int minlength = 10;
 	int x;
+	char *s;
+	char phone[30];
+	struct localuser *u;
+	struct opbx_config *cfg;
 
 	LOCAL_USER_ADD (u);
-
-	if (!cw_strlen_zero(chan->cid.cid_num)) {
+	if (!opbx_strlen_zero(chan->cid.cid_num)) {
 		if (option_verbose > 2)
-			cw_verbose (VERBOSE_PREFIX_3 "CallerID Present: Skipping\n");
-		pbx_builtin_setvar_helper(chan, "PRIVACYMGRSTATUS", "SUCCESS");
+			opbx_verbose (VERBOSE_PREFIX_3 "CallerID Present: Skipping\n");
 	} else {
 		/*Answer the channel if it is not already*/
-		if (chan->_state != CW_STATE_UP) {
-			res = cw_answer(chan);
+		if (chan->_state != OPBX_STATE_UP) {
+			res = opbx_answer(chan);
 			if (res) {
-				pbx_builtin_setvar_helper(chan, "PRIVACYMGRSTATUS", "FAIL");
 				LOCAL_USER_REMOVE(u);
-				return 0;
+				return -1;
 			}
 		}
 		/*Read in the config file*/
-		cfg = cw_config_load(PRIV_CONFIG);
+		cfg = opbx_config_load(PRIV_CONFIG);
 		
 		
 		/*Play unidentified call*/
-		res = cw_safe_sleep(chan, 1000);
+		res = opbx_safe_sleep(chan, 1000);
 		if (!res)
-			res = cw_streamfile(chan, "privacy-unident", chan->language);
+			res = opbx_streamfile(chan, "privacy-unident", chan->language);
 		if (!res)
-			res = cw_waitstream(chan, "");
+			res = opbx_waitstream(chan, "");
 
-        if (cfg && (s = cw_variable_retrieve(cfg, "general", "maxretries"))) {
+        if (cfg && (s = opbx_variable_retrieve(cfg, "general", "maxretries"))) {
                 if (sscanf(s, "%d", &x) == 1) {
                         maxretries = x;
                 } else {
-                        cw_log(LOG_WARNING, "Invalid max retries argument\n");
+                        opbx_log(LOG_WARNING, "Invalid max retries argument\n");
                 }
         }
-        if (cfg && (s = cw_variable_retrieve(cfg, "general", "minlength"))) {
+        if (cfg && (s = opbx_variable_retrieve(cfg, "general", "minlength"))) {
                 if (sscanf(s, "%d", &x) == 1) {
                         minlength = x;
                 } else {
-                        cw_log(LOG_WARNING, "Invalid min length argument\n");
+                        opbx_log(LOG_WARNING, "Invalid min length argument\n");
                 }
         }
 			
 		/*Ask for 10 digit number, give 3 attempts*/
 		for (retries = 0; retries < maxretries; retries++) {
+			if (!res)
+				res = opbx_streamfile(chan, "privacy-prompt", chan->language);
+			if (!res)
+				res = opbx_waitstream(chan, "");
+
 			if (!res ) 
-				res = cw_app_getdata(chan, "privacy-prompt", phone, sizeof(phone), 0);
+				res = opbx_readstring(chan, phone, sizeof(phone) - 1, /* digit timeout ms */ 3200, /* first digit timeout */ 5000, "#");
 
 			if (res < 0)
 				break;
 
-			/*Make sure we get at least our minimum of digits*/
+			/*Make sure we get at least digits*/
 			if (strlen(phone) >= minlength ) 
 				break;
 			else {
-				res = cw_streamfile(chan, "privacy-incorrect", chan->language);
+				res = opbx_streamfile(chan, "privacy-incorrect", chan->language);
 				if (!res)
-					res = cw_waitstream(chan, "");
+					res = opbx_waitstream(chan, "");
 			}
 		}
 		
 		/*Got a number, play sounds and send them on their way*/
 		if ((retries < maxretries) && res == 1 ) {
-			res = cw_streamfile(chan, "privacy-thankyou", chan->language);
+			res = opbx_streamfile(chan, "privacy-thankyou", chan->language);
 			if (!res)
-				res = cw_waitstream(chan, "");
-			cw_set_callerid (chan, phone, "Privacy Manager", NULL);
+				res = opbx_waitstream(chan, "");
+			opbx_set_callerid (chan, phone, "Privacy Manager", NULL);
 			if (option_verbose > 2)
-				cw_verbose (VERBOSE_PREFIX_3 "Changed Caller*ID to %s\n",phone);
-			pbx_builtin_setvar_helper(chan, "PRIVACYMGRSTATUS", "SUCCESS");
+				opbx_verbose (VERBOSE_PREFIX_3 "Changed Caller*ID to %s\n",phone);
 		} else {
-			/* Flag Failure  */
-			pbx_builtin_setvar_helper(chan, "PRIVACYMGRSTATUS", "FAIL");
+			/* Send the call to n+101 priority, where n is the current priority  */
+			opbx_goto_if_exists(chan, chan->context, chan->exten, chan->priority + 101);
 		}
 		if (cfg) 
-			cw_config_destroy(cfg);
+			opbx_config_destroy(cfg);
 	}
 
   LOCAL_USER_REMOVE (u);
@@ -169,17 +173,15 @@ static int privacy_exec (struct cw_channel *chan, int argc, char **argv)
 int
 unload_module (void)
 {
-  int res = 0;
   STANDARD_HANGUP_LOCALUSERS;
-  res |= cw_unregister_application (privacy_app);
-  return res;
+  return opbx_unregister_application (app);
 }
 
 int
 load_module (void)
 {
-	privacy_app = cw_register_application(privacy_name, privacy_exec, privacy_synopsis, privacy_syntax, privacy_descrip);
-	return 0;
+  return opbx_register_application (app, privacy_exec, synopsis,
+				   descrip);
 }
 
 char *

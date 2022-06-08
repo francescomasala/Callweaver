@@ -28,7 +28,7 @@ INTRODUCTION
 
 This document describes the Intelligent Call Distribution application. The
 goal of this application is to provide a flexible, thread-safe infrastructure
-to the CallWeaver for distributing calls.
+to the OpenPBX for distributing calls.
 
 There are two major components to this system, the application itself and the 
 infrastructure pieces that support the functionality of the application.
@@ -39,7 +39,7 @@ following set of modules.
 
 Application Modules:
 
-  app_icd: interface between callweaver and icd
+  app_icd: interface between openpbx and icd
 
   icd_distributor: strategy linking one or more agents to one or more customers
 
@@ -69,8 +69,8 @@ The descriptions of the modules and their functions follows.
 
 ICD APPLICATION MODULES
 
-The ICD application interfaces to callweaver using the app_icd module. This
-module registers itself with callweaver, loads and parses a configuration file, 
+The ICD application interfaces to openpbx using the app_icd module. This
+module registers itself with openpbx, loads and parses a configuration file, 
 and builds the distributors specified. It then starts each distributor
 running.
 
@@ -109,7 +109,7 @@ other the task of bridging the call. It then continues distributing.
 
 Agent and customer are both types of callers, so we can speak more generally
 about callers. When the distributor so instructs, the caller that is
-responsible for bridging the call ensures that both sides have an callweaver
+responsible for bridging the call ensures that both sides have an openpbx
 channel, possibly by ringing one or more extensions. It then bridges the
 call. The caller that is being bridged (the bridgee) lets any other callers
 that it is linked to know that it has been bridged. So in the Ringall 
@@ -126,8 +126,8 @@ define your own custom behaviour.
 
 APP_ICD
 
-The app_icd module provides the glue between callweaver and the ICD system.
-It registers ICD with callweaver and provides the callweaver CLI with access
+The app_icd module provides the glue between openpbx and the ICD system.
+It registers ICD with openpbx and provides the openpbx CLI with access
 to display the internals of ICD. It is also responsible for creating the 
 distributors, configuring them, and starting them going.
 
@@ -377,7 +377,7 @@ The functions of icd_caller are:
   icd_status icd_caller__clear(icd_caller *that);
 
   /* Actions */
-  icd_status icd_caller__assign_channel(icd_caller *that, cw_channelx *chan, void *extra);
+  icd_status icd_caller__assign_channel(icd_caller *that, opbx_channelx *chan, void *extra);
   icd_status icd_caller__link_to_caller(icd_caller *that, icd_caller *associate);
   icd_status icd_caller__bridge(icd_caller *that);
   icd_status icd_caller__authenticate(icd_caller *that, void *extra);
@@ -401,8 +401,8 @@ The functions of icd_caller are:
   int icd_caller__get_state(icd_caller *that);
   icd_status icd_caller__set_owner(icd_caller *that, int);
   int icd_caller__get_owner(icd_caller *that);
-  icd_status icd_caller__set_channel(icd_caller *that, char *cw_channelx);
-  cw_channelx *icd_caller_get_channel(icd_caller *that);
+  icd_status icd_caller__set_channel(icd_caller *that, char *opbx_channelx);
+  opbx_channelx *icd_caller_get_channel(icd_caller *that);
   icd_status icd_caller__set_id(icd_caller *that, int);
   int icd_caller__get_id(icd_caller *that);
   icd_status icd_caller__set_timeout(icd_caller *that, int);
@@ -423,7 +423,7 @@ The functions of icd_caller are:
   /* Callback Setters */
   icd_status icd_caller__set_authenticate_fn(icd_caller *that, int (*auth_fn)(icd_caller *, void *));
   icd_status icd_caller__set_state_change_notify_fn(icd_caller *that, int (*state_fn)(icd_caller *, int, int));
-  icd_status icd_caller__set_channel_assigned_notify_fn(icd_caller *that, int (*chan_fn)(icd_caller *, cw_channelx *));
+  icd_status icd_caller__set_channel_assigned_notify_fn(icd_caller *that, int (*chan_fn)(icd_caller *, opbx_channelx *));
   icd_status icd_caller__set_added_to_list_notify_fn(icd_caller *that, int (*added_fn)(icd_caller *, icd_caller_list *));
   icd_status icd_caller__set_linked_notify_fn(icd_caller *that, int (*link_fn)(icd_caller *, icd_caller *));
   icd_status icd_caller__set_bridged_notify_fn(icd_caller *that, int (*bridge_fn)(icd_caller *, icd_caller *));
@@ -440,7 +440,7 @@ The functions of icd_caller are:
   /* Predefined Pluggable Actions */
   int icd_caller__authenticate_always_succeeds(icd_caller *, void *);
   int icd_caller__dummy_state_notify_hook(icd_caller *, int, int);
-  int icd_caller__dummy_channel_notify_hook(icd_caller *, cw_channelx *);
+  int icd_caller__dummy_channel_notify_hook(icd_caller *, opbx_channelx *);
   int icd_caller__dummy_caller_notify_hook(icd_caller *, icd_caller *);
   int icd_caller__dummy_auth_notify_hook(icd_caller *, int);
 
@@ -521,7 +521,7 @@ The functions of icd_caller_list are:
 
   /* Callback Setters */
   icd_status icd_caller_list__set_state_change_notify_fn(icd_caller_list *that, int (*state_fn)(icd_caller *, int, int));
-  icd_status icd_caller_list__set_channel_attached_notify_fn(icd_caller_list *that, int (*chan_fn)(icd_caller *, cw_channelx *));
+  icd_status icd_caller_list__set_channel_attached_notify_fn(icd_caller_list *that, int (*chan_fn)(icd_caller *, opbx_channelx *));
   icd_status icd_caller_list__set_linked_notify_fn(icd_caller_list *that, int (*link_fn)(icd_caller *, icd_caller *));
   icd_status icd_caller_list__set_bridged_notify_fn(icd_caller_list *that, int (*bridge_fn)(icd_caller *, icd_caller *));
   icd_status icd_caller_list__set_authenticate_notify_fn(icd_caller_list *that, int (*authn_fn)(icd_caller *, int));
@@ -641,7 +641,7 @@ Event Flow
    into a separate function so it can be reused. Such a function will
    call the event notify callback as well as icd_listeners__notify().
 
-Note that we probably want the callweaver manager interface to be aware of all
+Note that we probably want the openpbx manager interface to be aware of all
 events, so it would make sense to have icd_listeners__notify() call the
 manager_event(). On second thought, let's use the ICD_EVENT module for that.
 
@@ -654,7 +654,7 @@ a structure which can generate events, and so can have listeners added and
 removed. There will be a default event generator for the ICD modules to use,
 but you can define your own as well. You can register listeners on the event
 generator, which allows you to selectively perform actions for every event.
-So you could call a function in the callweaver manager interface on every event,
+So you could call a function in the openpbx manager interface on every event,
 or send out an email when a call is bridged, or write to a socket when a 
 customer call comes in.
 

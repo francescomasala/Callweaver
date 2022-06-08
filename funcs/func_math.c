@@ -1,12 +1,12 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  *
  * Copyright (C) 2004 - 2005, Andy Powell 
  *
  * Updated by Mark Spencer <markster@digium.com>
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -30,34 +30,17 @@
 #include <string.h>
 #include <sys/types.h>
 
-#include "callweaver.h"
+#include "openpbx.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/funcs/func_math.c $", "$Revision: 4723 $")
+OPENPBX_FILE_VERSION("$HeadURL$", "$Revision$")
 
-#include "callweaver/module.h"
-#include "callweaver/channel.h"
-#include "callweaver/pbx.h"
-#include "callweaver/logger.h"
-#include "callweaver/utils.h"
-#include "callweaver/app.h"
-#include "callweaver/config.h"
-
-
-static void *math_function;
-static const char *math_func_name = "MATH";
-static const char *math_func_synopsis = "Performs Mathematical Functions";
-static const char *math_func_syntax = "MATH(number1 op number2[, type_of_result])";
-static const char *math_func_desc =
-	"Perform calculation on number 1 to number 2. Valid ops are: \n"
-        "    +,-,/,*,%,<,>,>=,<=,==\n"
-	"and behave as their C equivalents.\n"
-	"<type_of_result> - wanted type of result:\n"
-	"	f, float - float(default)\n"
-	"	i, int - integer,\n"
-	"	h, hex - hex,\n"
-	"	c, char - char\n"
-	"Example: Set(i=${MATH(123 % 16, int)}) - sets var i=11";
-
+#include "openpbx/module.h"
+#include "openpbx/channel.h"
+#include "openpbx/pbx.h"
+#include "openpbx/logger.h"
+#include "openpbx/utils.h"
+#include "openpbx/app.h"
+#include "openpbx/config.h"
 
 enum TypeOfFunctions
 {
@@ -83,11 +66,14 @@ enum TypeOfResult
 };
 
 
-static char *builtin_function_math(struct cw_channel *chan, int argc, char **argv, char *buf, size_t len) 
+static char *builtin_function_math(struct opbx_channel *chan, char *cmd, char *data, char *buf, size_t len) 
 {
-	double fnum1;
-	double fnum2;
-	double ftmp = 0;
+	int argc;
+	char *argv[2];
+	char *args;
+	float fnum1;
+	float fnum2;
+	float ftmp = 0;
 	char *op;
 	int iaction=-1;
 	int type_of_result=FLOAT_RESULT;
@@ -96,9 +82,17 @@ static char *builtin_function_math(struct cw_channel *chan, int argc, char **arg
 	char user_result[30];
 
 	char *mvalue1, *mvalue2=NULL, *mtype_of_result;
+		
+	if (!data || opbx_strlen_zero(data)) {
+		opbx_log(LOG_WARNING, "Syntax: Math(<number1><op><number 2>[,<type_of_result>]) - missing argument!\n");
+		return NULL;
+	}
 
-	if (argc != 2 || !argv[0][0] || !argv[1][0]) {
-		cw_log(LOG_ERROR, "Syntax: %s\n", math_func_syntax);
+	args = opbx_strdupa(data);	
+	argc = opbx_separate_app_args(args, '|', argv, sizeof(argv) / sizeof(argv[0]));
+
+	if (argc < 1) {
+		opbx_log(LOG_WARNING, "Syntax: Math(<number1><op><number 2>[,<type_of_result>]) - missing argument!\n");
 		return NULL;
 	}
 
@@ -160,23 +154,23 @@ static char *builtin_function_math(struct cw_channel *chan, int argc, char **arg
 			type_of_result=CHAR_RESULT;
 		else
 		{
-			cw_log(LOG_WARNING, "Unknown type of result requested '%s'.\n", mtype_of_result);
+			opbx_log(LOG_WARNING, "Unknown type of result requested '%s'.\n", mtype_of_result);
 			return NULL;
 		}
 	}
 	
 	if (!mvalue1 || !mvalue2) {
-		cw_log(LOG_WARNING, "Supply all the parameters - just this once, please\n");
+		opbx_log(LOG_WARNING, "Supply all the parameters - just this once, please\n");
 		return NULL;
 	}
 
-	if (sscanf(mvalue1, "%lf", &fnum1) != 1) {
-		cw_log(LOG_WARNING, "'%s' is not a valid number\n", mvalue1);
+	if (sscanf(mvalue1, "%f", &fnum1) != 1) {
+		opbx_log(LOG_WARNING, "'%s' is not a valid number\n", mvalue1);
 		return NULL;
 	}
 
-	if (sscanf(mvalue2, "%lf", &fnum2) != 1) {
-		cw_log(LOG_WARNING, "'%s' is not a valid number\n", mvalue2);
+	if (sscanf(mvalue2, "%f", &fnum2) != 1) {
+		opbx_log(LOG_WARNING, "'%s' is not a valid number\n", mvalue2);
 		return NULL;
 	}
 
@@ -186,7 +180,7 @@ static char *builtin_function_math(struct cw_channel *chan, int argc, char **arg
 		break;
 	case DIVIDEFUNCTION :
 		if (fnum2 <= 0)
-			ftmp = 0.0L; /* can't do a divide by 0 */
+			ftmp = 0; /* can't do a divide by 0 */
 		else
 			ftmp = (fnum1 / fnum2);
 		break;
@@ -206,28 +200,28 @@ static char *builtin_function_math(struct cw_channel *chan, int argc, char **arg
 		break;
 	}
 	case GTFUNCTION :
-		cw_copy_string (user_result, (fnum1 > fnum2)?"TRUE":"FALSE", sizeof (user_result));
+		opbx_copy_string (user_result, (fnum1 > fnum2)?"TRUE":"FALSE", sizeof (user_result));
 		break;
 	case LTFUNCTION :
-		cw_copy_string (user_result, (fnum1 < fnum2)?"TRUE":"FALSE", sizeof (user_result));
+		opbx_copy_string (user_result, (fnum1 < fnum2)?"TRUE":"FALSE", sizeof (user_result));
 		break;
 	case GTEFUNCTION :
-		cw_copy_string (user_result, (fnum1 >= fnum2)?"TRUE":"FALSE", sizeof (user_result));
+		opbx_copy_string (user_result, (fnum1 >= fnum2)?"TRUE":"FALSE", sizeof (user_result));
 		break;
 	case LTEFUNCTION :
-		cw_copy_string (user_result, (fnum1 <= fnum2)?"TRUE":"FALSE", sizeof (user_result));
+		opbx_copy_string (user_result, (fnum1 <= fnum2)?"TRUE":"FALSE", sizeof (user_result));
 		break;					
 	case EQFUNCTION :
-		cw_copy_string (user_result, (fnum1 == fnum2)?"TRUE":"FALSE", sizeof (user_result));
+		opbx_copy_string (user_result, (fnum1 == fnum2)?"TRUE":"FALSE", sizeof (user_result));
 		break;
 	default :
-		cw_log(LOG_WARNING, "Something happened that neither of us should be proud of %d\n", iaction);
+		opbx_log(LOG_WARNING, "Something happened that neither of us should be proud of %d\n", iaction);
 		return NULL;
 	}
 
 	if (iaction < GTFUNCTION || iaction > EQFUNCTION) {
 	    if (type_of_result == FLOAT_RESULT)
-		    snprintf(user_result, sizeof(user_result), "%lf", ftmp);
+		    snprintf(user_result, sizeof(user_result), "%f", ftmp);
 	    else if (type_of_result == INT_RESULT)
 		    snprintf(user_result, sizeof(user_result), "%i", (int) ftmp);
 	    else if (type_of_result == HEX_RESULT)
@@ -236,23 +230,37 @@ static char *builtin_function_math(struct cw_channel *chan, int argc, char **arg
 		snprintf(user_result, sizeof(user_result), "%c", (unsigned char) ftmp);
 	}
 		
-	cw_copy_string(buf, user_result, len);
+	opbx_copy_string(buf, user_result, len);
 	
 	return buf;
 }
 
+static struct opbx_custom_function math_function = {
+	.name = "MATH",
+	.synopsis = "Performs Mathematical Functions",
+	.syntax = "MATH(<number1><op><number 2>[,<type_of_result>])",
+	.desc = "Perform calculation on number 1 to number 2. Valid ops are: \n"
+    	    "    +,-,/,*,%,<,>,>=,<=,==\n"
+		"and behave as their C equivalents.\n"
+		"<type_of_result> - wanted type of result:\n"
+		"	f, float - float(default)\n"
+		"	i, int - integer,\n"
+		"	h, hex - hex,\n"
+		"	c, char - char\n"
+		"Example: Set(i=${MATH(123%16,int)}) - sets var i=11",
+	.read = builtin_function_math
+};
 
 static char *tdesc = "math functions";
 
 int unload_module(void)
 {
-        return cw_unregister_function(math_function);
+        return opbx_custom_function_unregister(&math_function);
 }
 
 int load_module(void)
 {
-        math_function = cw_register_function(math_func_name, builtin_function_math, NULL, math_func_synopsis, math_func_syntax, math_func_desc);
-	return 0;
+        return opbx_custom_function_register(&math_function);
 }
 
 char *description(void)

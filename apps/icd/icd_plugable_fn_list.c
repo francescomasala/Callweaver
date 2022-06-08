@@ -6,17 +6,17 @@
  * Written by Anthony Minessale II <anthmct at yahoo dot com>
  * Written by Bruce Atherton <bruce at callenish dot com>
  * Additions, Changes and Support by Tim R. Clark <tclark at shaw dot ca>
- * Changed to adopt to jabber interaction and adjusted for CallWeaver.org by
+ * Changed to adopt to jabber interaction and adjusted for OpenPBX.org by
  * Halo Kwadrat Sp. z o.o., Piotr Figurny and Michal Bielicki
  * 
  * This application is a part of:
  * 
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  * Copyright (C) 1999 - 2005, Digium, Inc.
  * Mark Spencer <markster@digium.com>
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -36,11 +36,11 @@
 #endif 
 
 #include <assert.h>
-#include "callweaver/icd/icd_common.h"
-#include "callweaver/icd/icd_plugable_fn.h"
-#include "callweaver/icd/icd_plugable_fn_list.h"
-#include "callweaver/icd/icd_list.h"
-#include "callweaver/icd/icd_list_private.h"
+#include "openpbx/icd/icd_common.h"
+#include "openpbx/icd/icd_plugable_fn.h"
+#include "openpbx/icd/icd_plugable_fn_list.h"
+#include "openpbx/icd/icd_list.h"
+#include "openpbx/icd/icd_list_private.h"
 
 static icd_module module_id = ICD_PLUGABLE_FN_LIST;
 
@@ -66,7 +66,7 @@ icd_plugable_fn_list *create_icd_plugable_fn_list(char *name, icd_config * data)
     ICD_MALLOC(list, sizeof(icd_plugable_fn_list));
 
     if (list == NULL) {
-        cw_log(LOG_ERROR, "No memory available to create a new ICD plugable_fn_list \n");
+        opbx_log(LOG_ERROR, "No memory available to create a new ICD plugable_fn_list \n");
         return NULL;
     }
 
@@ -252,7 +252,7 @@ static int icd_plugable_fn_list__identify_name(void *key, void *payload)
     plugable_fns = (icd_plugable_fn *) payload;
     name = icd_plugable__get_name(plugable_fns);
     /*
-       cw_log(LOG_NOTICE, "Find Funcs By Name/Key[%s, %s], readyfunc=%p\n",
+       opbx_log(LOG_NOTICE, "Find Funcs By Name/Key[%s, %s], readyfunc=%p\n",
        name,(char *)key,  plugable_fns->state_ready_fn );
      */
     return (strcmp(name, key) == 0);

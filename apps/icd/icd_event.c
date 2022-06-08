@@ -6,17 +6,17 @@
  * Written by Anthony Minessale II <anthmct at yahoo dot com>
  * Written by Bruce Atherton <bruce at callenish dot com>
  * Additions, Changes and Support by Tim R. Clark <tclark at shaw dot ca>
- * Changed to adopt to jabber interaction and adjusted for CallWeaver.org by
+ * Changed to adopt to jabber interaction and adjusted for OpenPBX.org by
  * Halo Kwadrat Sp. z o.o., Piotr Figurny and Michal Bielicki
  * 
  * This application is a part of:
  * 
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  * Copyright (C) 1999 - 2005, Digium, Inc.
  * Mark Spencer <markster@digium.com>
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -101,9 +101,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "callweaver/icd/icd_common.h"
-#include "callweaver/icd/icd_listeners.h"
-#include "callweaver/icd/icd_event.h"
+#include "openpbx/icd/icd_common.h"
+#include "openpbx/icd/icd_listeners.h"
+#include "openpbx/icd/icd_event.h"
 
 /*===== Private types and APIs =====*/
 
@@ -174,7 +174,7 @@ icd_event_factory *create_icd_event_factory(char *name)
 
     ICD_MALLOC(factory, sizeof(icd_event_factory));
     if (factory == NULL) {
-        cw_log(LOG_ERROR, "No memory available to create a new ICD Event Factory\n");
+        opbx_log(LOG_ERROR, "No memory available to create a new ICD Event Factory\n");
         return NULL;
     }
     factory->allocated = 1;
@@ -274,7 +274,7 @@ icd_event *icd_event_factory__make(icd_event_factory * that, void *src, char *sr
 
     ICD_MALLOC(event, sizeof(icd_event));
     if (event == NULL) {
-        cw_log(LOG_ERROR, "No memory available to create a new ICD Event\n");
+        opbx_log(LOG_ERROR, "No memory available to create a new ICD Event\n");
         return NULL;
     }
     event->allocated = 1;
@@ -445,12 +445,12 @@ icd_status icd_event__clear(icd_event * that)
 
 /***** Actions *****/
 /*
-for (mod = APP_ICD; mod < ICD_MODULE_L CW_STANDARD; ++mod) {
+for (mod = APP_ICD; mod < ICD_MODULE_L OPBX_STANDARD; ++mod) {
         snprintf(tmp, sizeof(tmp), "%d",mod);
         icd_fieldset__strncpy(modules,tmp,icd_module_strings[mod], 10);
     };
 
-    for (event = ICD_EVENT_TEST; event < ICD_EVENT_L CW_STANDARD; ++event) {
+    for (event = ICD_EVENT_TEST; event < ICD_EVENT_L OPBX_STANDARD; ++event) {
         snprintf(tmp, sizeof(tmp), "%d",event);
         icd_fieldset__strncpy(events,tmp,icd_event_strings[event], 10);
     };

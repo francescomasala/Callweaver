@@ -1,5 +1,5 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  *
  * Copyright (c) 2004 - 2005, Tilghman Lesher.  All rights reserved.
  *
@@ -7,8 +7,8 @@
  *
  * This code is released by the author with no restrictions on usage.
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -30,28 +30,29 @@
 #include <unistd.h>
 #include <string.h>
 
-#include "callweaver.h"
+#include "openpbx.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/apps/app_eval.c $", "$Revision: 4723 $")
+OPENPBX_FILE_VERSION("$HeadURL$", "$Revision$")
 
-#include "callweaver/file.h"
-#include "callweaver/logger.h"
-#include "callweaver/options.h"
-#include "callweaver/channel.h"
-#include "callweaver/pbx.h"
-#include "callweaver/module.h"
+#include "openpbx/file.h"
+#include "openpbx/logger.h"
+#include "openpbx/options.h"
+#include "openpbx/channel.h"
+#include "openpbx/pbx.h"
+#include "openpbx/module.h"
 
 /* Maximum length of any variable */
 #define MAXRESULT	1024
 
 static char *tdesc = "Reevaluates strings";
 
-static void *eval_app;
-static char *eval_name = "Eval";
+static char *app_eval = "Eval";
+
 static char *eval_synopsis = "Evaluates a string";
-static char *eval_syntax = "Eval(newvar=somestring)";
+
 static char *eval_descrip =
-"Normally CallWeaver evaluates variables inline.  But what if you want to\n"
+"Usage: Eval(newvar=somestring)\n"
+"  Normally OpenPBX evaluates variables inline.  But what if you want to\n"
 "store variable offsets in a database, to be evaluated later?  Eval is\n"
 "the answer, by allowing a string to be evaluated twice in the dialplan,\n"
 "the first time as part of the normal dialplan, and the second using Eval.\n";
@@ -60,27 +61,33 @@ STANDARD_LOCAL_USER;
 
 LOCAL_USER_DECL;
 
-static int eval_exec(struct cw_channel *chan, int argc, char **argv)
+static int eval_exec(struct opbx_channel *chan, void *data)
 {
-	static int dep_warning = 0;
-	char tmp[MAXRESULT];
+	int res=0;
 	struct localuser *u;
-	char *newvar = NULL;
-	int res = 0;
-
-	if (!dep_warning) {
-		cw_log(LOG_WARNING, "This application has been deprecated in favor of the dialplan function, EVAL\n");
-		dep_warning = 1;
-	}
+	char *s, *newvar=NULL, tmp[MAXRESULT];
+	static int dep_warning = 0;
 
 	LOCAL_USER_ADD(u);
 	
+	if (!dep_warning) {
+		opbx_log(LOG_WARNING, "This application has been deprecated in favor of the dialplan function, EVAL\n");
+		dep_warning = 1;
+	}
+
 	/* Check and parse arguments */
-	if (argv[0]) {
-		newvar = strsep(&argv[0], "=");
-		if (newvar && (newvar[0] != '\0')) {
-			pbx_substitute_variables_helper(chan, argv[0], tmp, sizeof(tmp));
-			pbx_builtin_setvar_helper(chan, newvar, tmp);
+	if (data) {
+		s = opbx_strdupa((char *)data);
+		if (s) {
+			newvar = strsep(&s, "=");
+			if (newvar && (newvar[0] != '\0')) {
+				memset(tmp, 0, MAXRESULT);
+				pbx_substitute_variables_helper(chan, s, tmp, MAXRESULT - 1);
+				pbx_builtin_setvar_helper(chan, newvar, tmp);
+			}
+		} else {
+			opbx_log(LOG_ERROR, "Out of memory\n");
+			res = -1;
 		}
 	}
 
@@ -90,16 +97,13 @@ static int eval_exec(struct cw_channel *chan, int argc, char **argv)
 
 int unload_module(void)
 {
-	int res = 0;
 	STANDARD_HANGUP_LOCALUSERS;
-	res |= cw_unregister_application(eval_app);
-	return res;
+	return opbx_unregister_application(app_eval);
 }
 
 int load_module(void)
 {
-	eval_app = cw_register_application(eval_name, eval_exec, eval_synopsis, eval_syntax, eval_descrip);
-	return 0;
+	return opbx_register_application(app_eval, eval_exec, eval_synopsis, eval_descrip);
 }
 
 char *description(void)

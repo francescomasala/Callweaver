@@ -1,12 +1,12 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  *
  * Copyright (C) 1999 - 2005, Digium, Inc.
  *
  * Mark Spencer <markster@digium.com>
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -32,12 +32,12 @@
 #include <string.h> /* for memset */
 #include <sys/ioctl.h>
 
-#include "callweaver.h"
+#include "openpbx.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/corelib/io.c $", "$Revision: 4723 $")
+OPENPBX_FILE_VERSION("$HeadURL$", "$Revision$")
 
-#include "callweaver/io.h"
-#include "callweaver/logger.h"
+#include "openpbx/io.h"
+#include "openpbx/logger.h"
 
 #ifdef DEBUG_IO
 #define DEBUG_LOG(a) DEBUG_M(a)
@@ -49,7 +49,7 @@ CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branche
  * Kept for each file descriptor
  */
 struct io_rec {
-	cw_io_cb callback;		/* What is to be called */
+	opbx_io_cb callback;		/* What is to be called */
 	void *data; 				/* Data to be passed */
 	int *id; 					/* ID number */
 };
@@ -126,7 +126,7 @@ static int io_grow(struct io_context *ioc)
 	 * -1 on failure
 	 */
 	void *tmp;
-	DEBUG_LOG(cw_log(LOG_DEBUG, "io_grow()\n"));
+	DEBUG_LOG(opbx_log(LOG_DEBUG, "io_grow()\n"));
 	ioc->maxfdcnt += GROW_SHRINK_SIZE;
 	tmp = realloc(ioc->ior, (ioc->maxfdcnt + 1) * sizeof(struct io_rec));
 	if (tmp) {
@@ -154,7 +154,7 @@ static int io_grow(struct io_context *ioc)
 	return 0;
 }
 
-int *cw_io_add(struct io_context *ioc, int fd, cw_io_cb callback, short events, void *data)
+int *opbx_io_add(struct io_context *ioc, int fd, opbx_io_cb callback, short events, void *data)
 {
 	/*
 	 * Add a new I/O entry for this file descriptor
@@ -162,7 +162,7 @@ int *cw_io_add(struct io_context *ioc, int fd, cw_io_cb callback, short events, 
 	 * data as an argument.  Returns NULL on failure.
 	 */
 	int *ret;
-	DEBUG_LOG(cw_log(LOG_DEBUG, "cw_io_add()\n"));
+	DEBUG_LOG(opbx_log(LOG_DEBUG, "opbx_io_add()\n"));
 	if (ioc->fdcnt >= ioc->maxfdcnt) {
 		/* 
 		 * We don't have enough space for this entry.  We need to
@@ -192,7 +192,7 @@ int *cw_io_add(struct io_context *ioc, int fd, cw_io_cb callback, short events, 
 	return ret;
 }
 
-int *cw_io_change(struct io_context *ioc, int *id, int fd, cw_io_cb callback, short events, void *data)
+int *opbx_io_change(struct io_context *ioc, int *id, int fd, opbx_io_cb callback, short events, void *data)
 {
 	if (*id < ioc->fdcnt) {
 		if (fd > -1)
@@ -235,11 +235,11 @@ static int io_shrink(struct io_context *ioc)
 	return 0;
 }
 
-int cw_io_remove(struct io_context *ioc, int *_id)
+int opbx_io_remove(struct io_context *ioc, int *_id)
 {
 	int x;
 	if (!_id) {
-		cw_log(LOG_WARNING, "Asked to remove NULL?\n");
+		opbx_log(LOG_WARNING, "Asked to remove NULL?\n");
 		return -1;
 	}
 	for (x = 0; x < ioc->fdcnt; x++) {
@@ -256,11 +256,11 @@ int cw_io_remove(struct io_context *ioc, int *_id)
 		}
 	}
 	
-	cw_log(LOG_NOTICE, "Unable to remove unknown id %p\n", _id);
+	opbx_log(LOG_NOTICE, "Unable to remove unknown id %p\n", _id);
 	return -1;
 }
 
-int cw_io_wait(struct io_context *ioc, int howlong)
+int opbx_io_wait(struct io_context *ioc, int howlong)
 {
 	/*
 	 * Make the poll call, and call
@@ -270,7 +270,7 @@ int cw_io_wait(struct io_context *ioc, int howlong)
 	int res;
 	int x;
 	int origcnt;
-	DEBUG_LOG(cw_log(LOG_DEBUG, "cw_io_wait()\n"));
+	DEBUG_LOG(opbx_log(LOG_DEBUG, "opbx_io_wait()\n"));
 	res = poll(ioc->fds, ioc->fdcnt, howlong);
 	if (res > 0) {
 		/*
@@ -286,7 +286,7 @@ int cw_io_wait(struct io_context *ioc, int howlong)
 				if (ioc->ior[x].callback) {
 					if (!ioc->ior[x].callback(ioc->ior[x].id, ioc->fds[x].fd, ioc->fds[x].revents, ioc->ior[x].data)) {
 						/* Time to delete them since they returned a 0 */
-						cw_io_remove(ioc, ioc->ior[x].id);
+						opbx_io_remove(ioc, ioc->ior[x].id);
 					}
 				}
 				ioc->current_ioc = -1;
@@ -298,31 +298,31 @@ int cw_io_wait(struct io_context *ioc, int howlong)
 	return res;
 }
 
-void cw_io_dump(struct io_context *ioc)
+void opbx_io_dump(struct io_context *ioc)
 {
 	/*
 	 * Print some debugging information via
 	 * the logger interface
 	 */
 	int x;
-	cw_log(LOG_DEBUG, "CallWeaver IO Dump: %d entries, %d max entries\n", ioc->fdcnt, ioc->maxfdcnt);
-	cw_log(LOG_DEBUG, "================================================\n");
-	cw_log(LOG_DEBUG, "| ID    FD     Callback    Data        Events  |\n");
-	cw_log(LOG_DEBUG, "+------+------+-----------+-----------+--------+\n");
+	opbx_log(LOG_DEBUG, "OpenPBX IO Dump: %d entries, %d max entries\n", ioc->fdcnt, ioc->maxfdcnt);
+	opbx_log(LOG_DEBUG, "================================================\n");
+	opbx_log(LOG_DEBUG, "| ID    FD     Callback    Data        Events  |\n");
+	opbx_log(LOG_DEBUG, "+------+------+-----------+-----------+--------+\n");
 	for (x = 0; x < ioc->fdcnt; x++) {
-		cw_log(LOG_DEBUG, "| %.4d | %.4d | %p | %p | %.6x |\n", 
+		opbx_log(LOG_DEBUG, "| %.4d | %.4d | %p | %p | %.6x |\n", 
 				*ioc->ior[x].id,
 				ioc->fds[x].fd,
 				ioc->ior[x].callback,
 				ioc->ior[x].data,
 				ioc->fds[x].events);
 	}
-	cw_log(LOG_DEBUG, "================================================\n");
+	opbx_log(LOG_DEBUG, "================================================\n");
 }
 
 /* Unrelated I/O functions */
 
-int cw_hide_password(int fd)
+int opbx_hide_password(int fd)
 {
 	struct termios tios;
 	int res;
@@ -341,7 +341,7 @@ int cw_hide_password(int fd)
 	return old;
 }
 
-int cw_restore_tty(int fd, int oldstate)
+int opbx_restore_tty(int fd, int oldstate)
 {
 	int res;
 	struct termios tios;
@@ -358,7 +358,7 @@ int cw_restore_tty(int fd, int oldstate)
 	return 0;
 }
 
-int cw_get_termcols(int fd)
+int opbx_get_termcols(int fd)
 {
 	struct winsize win;
 	int cols = 0;

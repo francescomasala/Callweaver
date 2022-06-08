@@ -40,7 +40,7 @@ country=us		; default location
 ;      out of service")
 ; 'name' = tonelist
 ;      Every other variable will be available as a shortcut for the "PlayList" command
-;      but will not be used automatically by CallWeaver.
+;      but will not be used automatically by OpenPBX.
 ;
 ;
 ; The tonelist itself is defined by a comma-separated sequence of elements.
@@ -507,7 +507,7 @@ description = United Kingdom
 ringcadence = 400,200,400,2000
 ; These are the official tones taken from BT SIN350. The actual tones
 ; used by BT include some volume differences so sound slightly different
-; from CallWeaver-generated ones.
+; from OpenPBX-generated ones.
 dial = 350+440
 ; Special dial is the intermittent dial tone heard when, for example,
 ; you have a divert active on the line

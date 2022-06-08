@@ -1,12 +1,12 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  *
  * Copyright (C) 2003-2005, Digium, Inc.
  *
  * Brian K. West <brian@bkw.org>
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -49,16 +49,16 @@
 #include <w32api/sqltypes.h>
 #endif
 
-#include "callweaver.h"
+#include "openpbx.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/cdr/cdr_odbc.c $", "$Revision: 4723 $")
+OPENPBX_FILE_VERSION("$HeadURL$", "$Revision$")
 
-#include "callweaver/config.h"
-#include "callweaver/options.h"
-#include "callweaver/channel.h"
-#include "callweaver/cdr.h"
-#include "callweaver/module.h"
-#include "callweaver/logger.h"
+#include "openpbx/config.h"
+#include "openpbx/options.h"
+#include "openpbx/channel.h"
+#include "openpbx/cdr.h"
+#include "openpbx/module.h"
+#include "openpbx/logger.h"
 
 #define DATE_FORMAT "%Y-%m-%d %T"
 
@@ -71,7 +71,7 @@ static int usegmtime = 0;
 static int dispositionstring = 0;
 static int connected = 0;
 
-CW_MUTEX_DEFINE_STATIC(odbc_lock);
+OPBX_MUTEX_DEFINE_STATIC(odbc_lock);
 
 static int odbc_do_query(void);
 static int odbc_init(void);
@@ -80,14 +80,13 @@ static SQLHENV	ODBC_env = SQL_NULL_HANDLE;	/* global ODBC Environment */
 static SQLHDBC	ODBC_con;			/* global ODBC Connection Handle */
 static SQLHSTMT	ODBC_stmt;			/* global ODBC Statement Handle */
 
-static int odbc_log(struct cw_cdr *cdr)
+static int odbc_log(struct opbx_cdr *cdr)
 {
 	SQLINTEGER ODBC_err;
 	short int ODBC_mlen;
 	int ODBC_res;
-	unsigned char ODBC_msg[200], ODBC_stat[10];
-	unsigned char sqlcmd[2048] = "";
-	char timestr[128];
+	char ODBC_msg[200], ODBC_stat[10];
+	char sqlcmd[2048] = "", timestr[128];
 	int res = 0;
 	struct tm tm;
 
@@ -96,16 +95,16 @@ static int odbc_log(struct cw_cdr *cdr)
 	else
 		localtime_r(&cdr->start.tv_sec,&tm);
 
-	cw_mutex_lock(&odbc_lock);
+	opbx_mutex_lock(&odbc_lock);
 	strftime(timestr, sizeof(timestr), DATE_FORMAT, &tm);
 	memset(sqlcmd,0,2048);
 	if (loguniqueid) {
-		snprintf((char *) sqlcmd,sizeof(sqlcmd),"INSERT INTO %s "
+		snprintf(sqlcmd,sizeof(sqlcmd),"INSERT INTO %s "
 		"(calldate,clid,src,dst,dcontext,channel,dstchannel,lastapp,"
 		"lastdata,duration,billsec,disposition,amaflags,accountcode,uniqueid,userfield) "
 		"VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", table);
 	} else {
-		snprintf((char *) sqlcmd,sizeof(sqlcmd),"INSERT INTO %s "
+		snprintf(sqlcmd,sizeof(sqlcmd),"INSERT INTO %s "
 		"(calldate,clid,src,dst,dcontext,channel,dstchannel,lastapp,lastdata,"
 		"duration,billsec,disposition,amaflags,accountcode) "
 		"VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)", table);
@@ -115,7 +114,7 @@ static int odbc_log(struct cw_cdr *cdr)
 		res = odbc_init();
 		if (res < 0) {
 			connected = 0;
-			cw_mutex_unlock(&odbc_lock);
+			opbx_mutex_unlock(&odbc_lock);
 			return 0;
 		}				
 	}
@@ -124,11 +123,11 @@ static int odbc_log(struct cw_cdr *cdr)
 
 	if ((ODBC_res != SQL_SUCCESS) && (ODBC_res != SQL_SUCCESS_WITH_INFO)) {
 		if (option_verbose > 10)
-			cw_verbose( VERBOSE_PREFIX_4 "cdr_odbc: Failure in AllocStatement %d\n", ODBC_res);
+			opbx_verbose( VERBOSE_PREFIX_4 "cdr_odbc: Failure in AllocStatement %d\n", ODBC_res);
 		SQLGetDiagRec(SQL_HANDLE_DBC, ODBC_con, 1, ODBC_stat, &ODBC_err, ODBC_msg, 100, &ODBC_mlen);
 		SQLFreeHandle(SQL_HANDLE_STMT, ODBC_stmt);	
 		connected = 0;
-		cw_mutex_unlock(&odbc_lock);
+		opbx_mutex_unlock(&odbc_lock);
 		return 0;
 	}
 
@@ -140,11 +139,11 @@ static int odbc_log(struct cw_cdr *cdr)
 	
 	if ((ODBC_res != SQL_SUCCESS) && (ODBC_res != SQL_SUCCESS_WITH_INFO)) {
 		if (option_verbose > 10)
-			cw_verbose( VERBOSE_PREFIX_4 "cdr_odbc: Error in PREPARE %d\n", ODBC_res);
+			opbx_verbose( VERBOSE_PREFIX_4 "cdr_odbc: Error in PREPARE %d\n", ODBC_res);
 		SQLGetDiagRec(SQL_HANDLE_DBC, ODBC_con, 1, ODBC_stat, &ODBC_err, ODBC_msg, 100, &ODBC_mlen);
 		SQLFreeHandle(SQL_HANDLE_STMT, ODBC_stmt);
 		connected = 0;
-		cw_mutex_unlock(&odbc_lock);
+		opbx_mutex_unlock(&odbc_lock);
 		return 0;
 	}
 
@@ -160,7 +159,7 @@ static int odbc_log(struct cw_cdr *cdr)
 	SQLBindParameter(ODBC_stmt, 10, SQL_PARAM_INPUT, SQL_C_SLONG, SQL_INTEGER, 0, 0, &cdr->duration, 0, NULL);
 	SQLBindParameter(ODBC_stmt, 11, SQL_PARAM_INPUT, SQL_C_SLONG, SQL_INTEGER, 0, 0, &cdr->billsec, 0, NULL);
 	if (dispositionstring)
-		SQLBindParameter(ODBC_stmt, 12, SQL_PARAM_INPUT, SQL_C_CHAR, SQL_CHAR, strlen(cw_cdr_disp2str(cdr->disposition)) + 1, 0, cw_cdr_disp2str(cdr->disposition), 0, NULL);
+		SQLBindParameter(ODBC_stmt, 12, SQL_PARAM_INPUT, SQL_C_CHAR, SQL_CHAR, strlen(opbx_cdr_disp2str(cdr->disposition)) + 1, 0, opbx_cdr_disp2str(cdr->disposition), 0, NULL);
 	else
 		SQLBindParameter(ODBC_stmt, 12, SQL_PARAM_INPUT, SQL_C_SLONG, SQL_INTEGER, 0, 0, &cdr->disposition, 0, NULL);
 	SQLBindParameter(ODBC_stmt, 13, SQL_PARAM_INPUT, SQL_C_SLONG, SQL_INTEGER, 0, 0, &cdr->amaflags, 0, NULL);
@@ -175,30 +174,30 @@ static int odbc_log(struct cw_cdr *cdr)
 		res = odbc_do_query();
 		if (res < 0) {
 			if (option_verbose > 10)		
-				cw_verbose( VERBOSE_PREFIX_4 "cdr_odbc: Query FAILED Call not logged!\n");
+				opbx_verbose( VERBOSE_PREFIX_4 "cdr_odbc: Query FAILED Call not logged!\n");
 			res = odbc_init();
 			if (option_verbose > 10)
-				cw_verbose( VERBOSE_PREFIX_4 "cdr_odbc: Reconnecting to dsn %s\n", dsn);
+				opbx_verbose( VERBOSE_PREFIX_4 "cdr_odbc: Reconnecting to dsn %s\n", dsn);
 			if (res < 0) {
 				if (option_verbose > 10)
-					cw_verbose( VERBOSE_PREFIX_4 "cdr_odbc: %s has gone away!\n", dsn);
+					opbx_verbose( VERBOSE_PREFIX_4 "cdr_odbc: %s has gone away!\n", dsn);
 				connected = 0;
 			} else {
 				if (option_verbose > 10)
-					cw_verbose( VERBOSE_PREFIX_4 "cdr_odbc: Trying Query again!\n");
+					opbx_verbose( VERBOSE_PREFIX_4 "cdr_odbc: Trying Query again!\n");
 				res = odbc_do_query();
 				if (res < 0) {
 					if (option_verbose > 10)
-						cw_verbose( VERBOSE_PREFIX_4 "cdr_odbc: Query FAILED Call not logged!\n");
+						opbx_verbose( VERBOSE_PREFIX_4 "cdr_odbc: Query FAILED Call not logged!\n");
 				}
 			}
 		}
 	} else {
 		if (option_verbose > 10)
-			cw_verbose( VERBOSE_PREFIX_4 "cdr_odbc: Query FAILED Call not logged!\n");
+			opbx_verbose( VERBOSE_PREFIX_4 "cdr_odbc: Query FAILED Call not logged!\n");
 	}
 	SQLFreeHandle(SQL_HANDLE_STMT, ODBC_stmt);
-	cw_mutex_unlock(&odbc_lock);
+	opbx_mutex_unlock(&odbc_lock);
 	return 0;
 }
 
@@ -209,10 +208,10 @@ char *description(void)
 
 static int odbc_unload_module(void)
 {
-	cw_mutex_lock(&odbc_lock);
+	opbx_mutex_lock(&odbc_lock);
 	if (connected) {
 		if (option_verbose > 10)
-			cw_verbose( VERBOSE_PREFIX_4 "cdr_odbc: Disconnecting from %s\n", dsn);
+			opbx_verbose( VERBOSE_PREFIX_4 "cdr_odbc: Disconnecting from %s\n", dsn);
 		SQLFreeHandle(SQL_HANDLE_STMT, ODBC_stmt);
 		SQLDisconnect(ODBC_con);
 		SQLFreeHandle(SQL_HANDLE_DBC, ODBC_con);
@@ -221,154 +220,154 @@ static int odbc_unload_module(void)
 	}
 	if (dsn) {
 		if (option_verbose > 10)
-			cw_verbose( VERBOSE_PREFIX_4 "cdr_odbc: free dsn\n");
+			opbx_verbose( VERBOSE_PREFIX_4 "cdr_odbc: free dsn\n");
 		free(dsn);
 	}
 	if (username) {
 		if (option_verbose > 10)
-			cw_verbose( VERBOSE_PREFIX_4 "cdr_odbc: free username\n");
+			opbx_verbose( VERBOSE_PREFIX_4 "cdr_odbc: free username\n");
 		free(username);
 	}
 	if (password) {
 		if (option_verbose > 10)
-			cw_verbose( VERBOSE_PREFIX_4 "cdr_odbc: free password\n");
+			opbx_verbose( VERBOSE_PREFIX_4 "cdr_odbc: free password\n");
 		free(password);
 	}
 	if (table) {
 		if (option_verbose > 10)
-			cw_verbose( VERBOSE_PREFIX_4 "cdr_odbc: free table\n");
+			opbx_verbose( VERBOSE_PREFIX_4 "cdr_odbc: free table\n");
 		free(table);
 	}
 
-	cw_cdr_unregister(name);
-	cw_mutex_unlock(&odbc_lock);
+	opbx_cdr_unregister(name);
+	opbx_mutex_unlock(&odbc_lock);
 	return 0;
 }
 
 static int odbc_load_module(void)
 {
 	int res = 0;
-	struct cw_config *cfg;
-	struct cw_variable *var;
+	struct opbx_config *cfg;
+	struct opbx_variable *var;
 	char *tmp;
 
-	cw_mutex_lock(&odbc_lock);
+	opbx_mutex_lock(&odbc_lock);
 
-	cfg = cw_config_load(config);
+	cfg = opbx_config_load(config);
 	if (!cfg) {
-		cw_log(LOG_WARNING, "cdr_odbc: Unable to load config for ODBC CDR's: %s\n", config);
+		opbx_log(LOG_WARNING, "cdr_odbc: Unable to load config for ODBC CDR's: %s\n", config);
 		goto out;
 	}
 	
-	var = cw_variable_browse(cfg, "global");
+	var = opbx_variable_browse(cfg, "global");
 	if (!var) {
 		/* nothing configured */
 		goto out;
 	}
 
-	tmp = cw_variable_retrieve(cfg,"global","dsn");
+	tmp = opbx_variable_retrieve(cfg,"global","dsn");
 	if (tmp == NULL) {
-		cw_log(LOG_WARNING,"cdr_odbc: dsn not specified.  Assuming callweaverdb\n");
-		tmp = "callweaverdb";
+		opbx_log(LOG_WARNING,"cdr_odbc: dsn not specified.  Assuming openpbxdb\n");
+		tmp = "openpbxdb";
 	}
 	dsn = strdup(tmp);
 	if (dsn == NULL) {
-		cw_log(LOG_ERROR,"cdr_odbc: Out of memory error.\n");
+		opbx_log(LOG_ERROR,"cdr_odbc: Out of memory error.\n");
 		res = -1;
 		goto out;
 	}
 
-	tmp = cw_variable_retrieve(cfg,"global","dispositionstring");
+	tmp = opbx_variable_retrieve(cfg,"global","dispositionstring");
 	if (tmp) {
-		dispositionstring = cw_true(tmp);
+		dispositionstring = opbx_true(tmp);
 	} else {
 		dispositionstring = 0;
 	}
 		
-	tmp = cw_variable_retrieve(cfg,"global","username");
+	tmp = opbx_variable_retrieve(cfg,"global","username");
 	if (tmp) {
 		username = strdup(tmp);
 		if (username == NULL) {
-			cw_log(LOG_ERROR,"cdr_odbc: Out of memory error.\n");
+			opbx_log(LOG_ERROR,"cdr_odbc: Out of memory error.\n");
 			res = -1;
 			goto out;
 		}
 	}
 
-	tmp = cw_variable_retrieve(cfg,"global","password");
+	tmp = opbx_variable_retrieve(cfg,"global","password");
 	if (tmp) {
 		password = strdup(tmp);
 		if (password == NULL) {
-			cw_log(LOG_ERROR,"cdr_odbc: Out of memory error.\n");
+			opbx_log(LOG_ERROR,"cdr_odbc: Out of memory error.\n");
 			res = -1;
 			goto out;
 		}
 	}
 
-	tmp = cw_variable_retrieve(cfg,"global","loguniqueid");
+	tmp = opbx_variable_retrieve(cfg,"global","loguniqueid");
 	if (tmp) {
-		loguniqueid = cw_true(tmp);
+		loguniqueid = opbx_true(tmp);
 		if (loguniqueid) {
-			cw_log(LOG_DEBUG,"cdr_odbc: Logging uniqueid\n");
+			opbx_log(LOG_DEBUG,"cdr_odbc: Logging uniqueid\n");
 		} else {
-			cw_log(LOG_DEBUG,"cdr_odbc: Not logging uniqueid\n");
+			opbx_log(LOG_DEBUG,"cdr_odbc: Not logging uniqueid\n");
 		}
 	} else {
-		cw_log(LOG_DEBUG,"cdr_odbc: Not logging uniqueid\n");
+		opbx_log(LOG_DEBUG,"cdr_odbc: Not logging uniqueid\n");
 		loguniqueid = 0;
 	}
 
-	tmp = cw_variable_retrieve(cfg,"global","usegmtime");
+	tmp = opbx_variable_retrieve(cfg,"global","usegmtime");
 	if (tmp) {
-		usegmtime = cw_true(tmp);
+		usegmtime = opbx_true(tmp);
 		if (usegmtime) {
-			cw_log(LOG_DEBUG,"cdr_odbc: Logging in GMT\n");
+			opbx_log(LOG_DEBUG,"cdr_odbc: Logging in GMT\n");
 		} else {
-			cw_log(LOG_DEBUG,"cdr_odbc: Not logging in GMT\n");
+			opbx_log(LOG_DEBUG,"cdr_odbc: Not logging in GMT\n");
 		}
 	} else {
-		cw_log(LOG_DEBUG,"cdr_odbc: Not logging in GMT\n");
+		opbx_log(LOG_DEBUG,"cdr_odbc: Not logging in GMT\n");
 		usegmtime = 0;
 	}
 
-	tmp = cw_variable_retrieve(cfg,"global","table");
+	tmp = opbx_variable_retrieve(cfg,"global","table");
 	if (tmp == NULL) {
-		cw_log(LOG_WARNING,"cdr_odbc: table not specified.  Assuming cdr\n");
+		opbx_log(LOG_WARNING,"cdr_odbc: table not specified.  Assuming cdr\n");
 		tmp = "cdr";
 	}
 	table = strdup(tmp);
 	if (table == NULL) {
-		cw_log(LOG_ERROR,"cdr_odbc: Out of memory error.\n");
+		opbx_log(LOG_ERROR,"cdr_odbc: Out of memory error.\n");
 		res = -1;
 		goto out;
 	}
 
-	cw_config_destroy(cfg);
+	opbx_config_destroy(cfg);
 	if (option_verbose > 2) {
-		cw_verbose( VERBOSE_PREFIX_3 "cdr_odbc: dsn is %s\n",dsn);
+		opbx_verbose( VERBOSE_PREFIX_3 "cdr_odbc: dsn is %s\n",dsn);
 		if (username)
 		{
-			cw_verbose( VERBOSE_PREFIX_3 "cdr_odbc: username is %s\n",username);
-			cw_verbose( VERBOSE_PREFIX_3 "cdr_odbc: password is [secret]\n");
+			opbx_verbose( VERBOSE_PREFIX_3 "cdr_odbc: username is %s\n",username);
+			opbx_verbose( VERBOSE_PREFIX_3 "cdr_odbc: password is [secret]\n");
 		}
 		else
-			cw_verbose( VERBOSE_PREFIX_3 "cdr_odbc: retreiving username and password from odbc config\n");
-		cw_verbose( VERBOSE_PREFIX_3 "cdr_odbc: table is %s\n",table);
+			opbx_verbose( VERBOSE_PREFIX_3 "cdr_odbc: retreiving username and password from odbc config\n");
+		opbx_verbose( VERBOSE_PREFIX_3 "cdr_odbc: table is %s\n",table);
 	}
 	
 	res = odbc_init();
 	if (res < 0) {
-		cw_log(LOG_ERROR, "cdr_odbc: Unable to connect to datasource: %s\n", dsn);
+		opbx_log(LOG_ERROR, "cdr_odbc: Unable to connect to datasource: %s\n", dsn);
 		if (option_verbose > 2) {
-			cw_verbose( VERBOSE_PREFIX_3 "cdr_odbc: Unable to connect to datasource: %s\n", dsn);
+			opbx_verbose( VERBOSE_PREFIX_3 "cdr_odbc: Unable to connect to datasource: %s\n", dsn);
 		}
 	}
-	res = cw_cdr_register(name, desc, odbc_log);
+	res = opbx_cdr_register(name, desc, odbc_log);
 	if (res) {
-		cw_log(LOG_ERROR, "cdr_odbc: Unable to register ODBC CDR handling\n");
+		opbx_log(LOG_ERROR, "cdr_odbc: Unable to register ODBC CDR handling\n");
 	}
 out:
-	cw_mutex_unlock(&odbc_lock);
+	opbx_mutex_unlock(&odbc_lock);
 	return res;
 }
 
@@ -377,20 +376,20 @@ static int odbc_do_query(void)
 	SQLINTEGER ODBC_err;
 	int ODBC_res;
 	short int ODBC_mlen;
-	unsigned char ODBC_msg[200], ODBC_stat[10];
+	char ODBC_msg[200], ODBC_stat[10];
 	
 	ODBC_res = SQLExecute(ODBC_stmt);
 	
 	if ((ODBC_res != SQL_SUCCESS) && (ODBC_res != SQL_SUCCESS_WITH_INFO)) {
 		if (option_verbose > 10)
-			cw_verbose( VERBOSE_PREFIX_4 "cdr_odbc: Error in Query %d\n", ODBC_res);
+			opbx_verbose( VERBOSE_PREFIX_4 "cdr_odbc: Error in Query %d\n", ODBC_res);
 		SQLGetDiagRec(SQL_HANDLE_DBC, ODBC_con, 1, ODBC_stat, &ODBC_err, ODBC_msg, 100, &ODBC_mlen);
 		SQLFreeHandle(SQL_HANDLE_STMT, ODBC_stmt);
 		connected = 0;
 		return -1;
 	} else {
 		if (option_verbose > 10)
-			cw_verbose( VERBOSE_PREFIX_4 "cdr_odbc: Query Successful!\n");
+			opbx_verbose( VERBOSE_PREFIX_4 "cdr_odbc: Query Successful!\n");
 		connected = 1;
 	}
 	return 0;
@@ -401,13 +400,13 @@ static int odbc_init(void)
 	SQLINTEGER ODBC_err;
 	short int ODBC_mlen;
 	int ODBC_res;
-	unsigned char ODBC_msg[200], ODBC_stat[10];
+	char ODBC_msg[200], ODBC_stat[10];
 
 	if (ODBC_env == SQL_NULL_HANDLE || connected == 0) {
 		ODBC_res = SQLAllocHandle(SQL_HANDLE_ENV, SQL_NULL_HANDLE, &ODBC_env);
 		if ((ODBC_res != SQL_SUCCESS) && (ODBC_res != SQL_SUCCESS_WITH_INFO)) {
 			if (option_verbose > 10)
-				cw_verbose( VERBOSE_PREFIX_4 "cdr_odbc: Error AllocHandle\n");
+				opbx_verbose( VERBOSE_PREFIX_4 "cdr_odbc: Error AllocHandle\n");
 			connected = 0;
 			return -1;
 		}
@@ -416,7 +415,7 @@ static int odbc_init(void)
 
 		if ((ODBC_res != SQL_SUCCESS) && (ODBC_res != SQL_SUCCESS_WITH_INFO)) {
 			if (option_verbose > 10)
-				cw_verbose( VERBOSE_PREFIX_4 "cdr_odbc: Error SetEnv\n");
+				opbx_verbose( VERBOSE_PREFIX_4 "cdr_odbc: Error SetEnv\n");
 			SQLFreeHandle(SQL_HANDLE_ENV, ODBC_env);
 			connected = 0;
 			return -1;
@@ -426,7 +425,7 @@ static int odbc_init(void)
 
 		if ((ODBC_res != SQL_SUCCESS) && (ODBC_res != SQL_SUCCESS_WITH_INFO)) {
 			if (option_verbose > 10)
-				cw_verbose( VERBOSE_PREFIX_4 "cdr_odbc: Error AllocHDB %d\n", ODBC_res);
+				opbx_verbose( VERBOSE_PREFIX_4 "cdr_odbc: Error AllocHDB %d\n", ODBC_res);
 			SQLFreeHandle(SQL_HANDLE_ENV, ODBC_env);
 			connected = 0;
 			return -1;
@@ -440,14 +439,14 @@ static int odbc_init(void)
 
 	if ((ODBC_res != SQL_SUCCESS) && (ODBC_res != SQL_SUCCESS_WITH_INFO)) {
 		if (option_verbose > 10)
-			cw_verbose( VERBOSE_PREFIX_4 "cdr_odbc: Error SQLConnect %d\n", ODBC_res);
+			opbx_verbose( VERBOSE_PREFIX_4 "cdr_odbc: Error SQLConnect %d\n", ODBC_res);
 		SQLGetDiagRec(SQL_HANDLE_DBC, ODBC_con, 1, ODBC_stat, &ODBC_err, ODBC_msg, 100, &ODBC_mlen);
 		SQLFreeHandle(SQL_HANDLE_ENV, ODBC_env);
 		connected = 0;
 		return -1;
 	} else {
 		if (option_verbose > 10)
-			cw_verbose( VERBOSE_PREFIX_4 "cdr_odbc: Connected to %s\n", dsn);
+			opbx_verbose( VERBOSE_PREFIX_4 "cdr_odbc: Connected to %s\n", dsn);
 		connected = 1;
 	}
 	return 0;
@@ -472,10 +471,10 @@ int reload(void)
 int usecount(void)
 {
 	/* Simplistic use count */
-	if (cw_mutex_trylock(&odbc_lock)) {
+	if (opbx_mutex_trylock(&odbc_lock)) {
 		return 1;
 	} else {
-		cw_mutex_unlock(&odbc_lock);
+		opbx_mutex_unlock(&odbc_lock);
 		return 0;
 	}
 }

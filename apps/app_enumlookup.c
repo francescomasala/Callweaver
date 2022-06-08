@@ -1,12 +1,12 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  *
  * Copyright (C) 1999 - 2005, Digium, Inc.
  *
  * Mark Spencer <markster@digium.com>
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -32,29 +32,29 @@
 #include <stdlib.h>
 #include <ctype.h>
 
-#include "callweaver.h"
+#include "openpbx.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/apps/app_enumlookup.c $", "$Revision: 4723 $")
+OPENPBX_FILE_VERSION("$HeadURL$", "$Revision$")
 
-#include "callweaver/lock.h"
-#include "callweaver/file.h"
-#include "callweaver/logger.h"
-#include "callweaver/channel.h"
-#include "callweaver/pbx.h"
-#include "callweaver/options.h"
-#include "callweaver/config.h"
-#include "callweaver/module.h"
-#include "callweaver/enum.h"
-#include "callweaver/utils.h"
+#include "openpbx/lock.h"
+#include "openpbx/file.h"
+#include "openpbx/logger.h"
+#include "openpbx/channel.h"
+#include "openpbx/pbx.h"
+#include "openpbx/options.h"
+#include "openpbx/config.h"
+#include "openpbx/module.h"
+#include "openpbx/enum.h"
+#include "openpbx/utils.h"
 
 static char *tdesc = "ENUM Lookup";
 
-static void *enumlookup_app;
-static char *enumlookup_name = "EnumLookup";
-static char *enumlookup_synopsis = "Lookup number in ENUM";
-static char *enumlookup_syntax = "EnumLookup(exten)";
-static char *enumlookup_descrip =
-"Looks up an extension via ENUM and sets\n"
+static char *app = "EnumLookup";
+
+static char *synopsis = "Lookup number in ENUM";
+
+static char *descrip =
+"  EnumLookup(exten):  Looks up an extension via ENUM and sets\n"
 "the variable 'ENUM'. For VoIP URIs this variable will \n"
 "look like 'TECHNOLOGY/URI' with the appropriate technology.\n"
 "Returns -1 on hangup, or 0 on completion\n"
@@ -62,7 +62,12 @@ static char *enumlookup_descrip =
 "\nReturns status in the ENUMSTATUS channel variable:\n"
 "    ERROR	Failed to do a lookup\n"
 "    <tech>	Technology of the successful lookup: SIP, H323, IAX, IAX2 or TEL\n"
-"    BADURI	Got URI CallWeaver does not understand.\n";
+"    BADURI	Got URI OpenPBX does not understand.\n"
+"\nOld, depreciated, behaviour:\n"
+"\nA SIP, H323, IAX or IAX2 entry will result in normal priority handling, \n"
+"whereas a TEL entry will increase the priority by 51 (if existing).\n"
+"If the lookup was *not* successful and there exists a priority n + 101,\n"
+"then that priority will be taken next.\n" ;
 
 #define ENUM_CONFIG "enum.conf"
 
@@ -74,34 +79,35 @@ STANDARD_LOCAL_USER;
 LOCAL_USER_DECL;
 
 /*--- enumlookup_exec: Look up number in ENUM and return result */
-static int enumlookup_exec(struct cw_channel *chan, int argc, char **argv)
+static int enumlookup_exec(struct opbx_channel *chan, void *data)
 {
-	static int dep_warning = 0;
+	int res=0;
 	char tech[80];
 	char dest[80];
 	char tmp[256];
+	char *c,*t;
+	static int dep_warning=0;
 	struct localuser *u;
-	char *c, *t;
-	int res = 0;
 
-	if (!dep_warning) {
-		cw_log(LOG_WARNING, "The application EnumLookup is deprecated.  Please use the ENUMLOOKUP() function instead.\n");
-		dep_warning = 1;
-	}
-
-	if (argc != 1) {
-		cw_log(LOG_ERROR, "Syntax: %s\n", enumlookup_syntax);
+	if (opbx_strlen_zero(data)) {
+		opbx_log(LOG_WARNING, "EnumLookup requires an argument (extension)\n");
 		return -1;
 	}
 		
+	if (!dep_warning) {
+		opbx_log(LOG_WARNING, "The application EnumLookup is deprecated.  Please use the ENUMLOOKUP() function instead.\n");
+		dep_warning = 1;
+	}
+
 	LOCAL_USER_ADD(u);
 
 	tech[0] = '\0';
 
-	res = cw_get_enum(chan, argv[0], dest, sizeof(dest), tech, sizeof(tech), NULL, NULL);
+	res = opbx_get_enum(chan, data, dest, sizeof(dest), tech, sizeof(tech), NULL, NULL);
 	
 	if (!res) {	/* Failed to do a lookup */
 		/* Look for a "busy" place */
+		opbx_goto_if_exists(chan, chan->context, chan->exten, chan->priority + 101);
 		pbx_builtin_setvar_helper(chan, "ENUMSTATUS", "ERROR");
 		LOCAL_USER_REMOVE(u);
 		return 0;
@@ -143,7 +149,7 @@ static int enumlookup_exec(struct cw_channel *chan, int argc, char **argv)
 				c += 4;
 
 			if (c[0] != '+') {
-				cw_log(LOG_NOTICE, "tel: uri must start with a \"+\" (got '%s')\n", c);
+				opbx_log(LOG_NOTICE, "tel: uri must start with a \"+\" (got '%s')\n", c);
 				res = 0;
 			} else {
 /* now copy over the number, skipping all non-digits and stop at ; or NULL */
@@ -155,10 +161,12 @@ static int enumlookup_exec(struct cw_channel *chan, int argc, char **argv)
 				}
 				*t = 0;
 				pbx_builtin_setvar_helper(chan, "ENUM", tmp);
-				cw_log(LOG_NOTICE, "tel: ENUM set to \"%s\"\n", tmp);
+				opbx_log(LOG_NOTICE, "tel: ENUM set to \"%s\"\n", tmp);
+				if (opbx_goto_if_exists(chan, chan->context, chan->exten, chan->priority + 51))
+					res = 0;
 			}
-		} else if (!cw_strlen_zero(tech)) {
-			cw_log(LOG_NOTICE, "Don't know how to handle technology '%s'\n", tech);
+		} else if (!opbx_strlen_zero(tech)) {
+			opbx_log(LOG_NOTICE, "Don't know how to handle technology '%s'\n", tech);
 			pbx_builtin_setvar_helper(chan, "ENUMSTATUS", "BADURI");
 			res = 0;
 		}
@@ -172,20 +180,20 @@ static int enumlookup_exec(struct cw_channel *chan, int argc, char **argv)
 /*--- load_config: Load enum.conf and find out how to handle H.323 */
 static int load_config(void)
 {
-	struct cw_config *cfg;
+	struct opbx_config *cfg;
 	char *s;
 
-	cfg = cw_config_load(ENUM_CONFIG);
+	cfg = opbx_config_load(ENUM_CONFIG);
 	if (cfg) {
-		if (!(s=cw_variable_retrieve(cfg, "general", "h323driver"))) {
+		if (!(s=opbx_variable_retrieve(cfg, "general", "h323driver"))) {
 			strncpy(h323driver, H323DRIVERDEFAULT, sizeof(h323driver) - 1);
 		} else {
 			strncpy(h323driver, s, sizeof(h323driver) - 1);
 		}
-		cw_config_destroy(cfg);
+		opbx_config_destroy(cfg);
 		return 0;
 	}
-	cw_log(LOG_NOTICE, "No ENUM Config file, using defaults\n");
+	opbx_log(LOG_NOTICE, "No ENUM Config file, using defaults\n");
 	return 0;
 }
 
@@ -193,17 +201,21 @@ static int load_config(void)
 /*--- unload_module: Unload this application from PBX */
 int unload_module(void)
 {
-	int res = 0;
 	STANDARD_HANGUP_LOCALUSERS;
-	res |= cw_unregister_application(enumlookup_app);
-	return res;
+	return opbx_unregister_application(app);
 }
 
 /*--- load_module: Load this application into PBX */
 int load_module(void)
 {
-	enumlookup_app = cw_register_application(enumlookup_name, enumlookup_exec, enumlookup_synopsis, enumlookup_syntax, enumlookup_descrip);
-	return 0;
+	int res;
+	res = opbx_register_application(app, enumlookup_exec, synopsis, descrip);
+	if (res)
+		return(res);
+	if ((res=load_config())) {
+		return(res);
+	}
+	return(0);
 }
 
 /*--- reload: Reload configuration file */

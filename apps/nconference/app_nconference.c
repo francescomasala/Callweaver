@@ -2,7 +2,7 @@
  * app_nconference
  *
  * NConference
- * A channel independent conference application for CallWeaver
+ * A channel independent conference application for Openpbx
  *
  * Copyright (C) 2002, 2003 Navynet SRL
  * http://www.navynet.it
@@ -25,7 +25,7 @@
 #include "member.h"
 #include "cli.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/apps/nconference/app_nconference.c $", "$Revision: 4723 $");
+OPENPBX_FILE_VERSION( __FILE__, "$Revision: 2308 $");
 
 
 /************************************************************
@@ -34,11 +34,12 @@ CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branche
 
 static char *tdesc = "Navynet Channel Independent Conference Application" ;
 
-static void *conference_app;
-static const char *conference_name = APP_CONFERENCE_NAME ;
-static const char *conference_synopsis = "Navynet Channel Independent Conference" ;
-static const char *conference_syntax = APP_CONFERENCE_NAME "(confno/options/pin)";
-static const char *conference_description =
+static char *app = APP_CONFERENCE_NAME ;
+
+static char *synopsis = "Navynet Channel Independent Conference" ;
+
+static char *descrip = APP_CONFERENCE_NAME "(confno/options/pin):\n"
+"\n"
 "The options string may contain zero or more of the following:\n"
 "   'M': Caller is Moderator (can do everything).\n"
 "   'S': Caller is Speaker.\n"
@@ -66,20 +67,17 @@ STANDARD_LOCAL_USER ;
 LOCAL_USER_DECL;
 
 int unload_module( void ) {
-	int res = 0;
-	cw_log( LOG_NOTICE, "unloading " APP_CONFERENCE_NAME " module\n" );
+	opbx_log( LOG_NOTICE, "unloading " APP_CONFERENCE_NAME " module\n" );
 	STANDARD_HANGUP_LOCALUSERS;
 	unregister_conference_cli();
-	res |= cw_unregister_application( conference_app ) ;
-	return res;
+	return opbx_unregister_application( app ) ;
 }
 
 int load_module( void ) {
-	cw_log( LOG_NOTICE, "Loading " APP_CONFERENCE_NAME " module\n" );
+	opbx_log( LOG_NOTICE, "Loading " APP_CONFERENCE_NAME " module\n" );
 	init_conference() ;
 	register_conference_cli();
-	conference_app = cw_register_application( conference_name, app_conference_main, conference_synopsis, conference_syntax, conference_description ) ;
-	return 0;
+	return opbx_register_application( app, app_conference_main, synopsis, descrip ) ;
 }
 
 char *description( void ) {
@@ -97,11 +95,11 @@ int usecount( void ) {
  *        Main Conference function
  ***********************************************************/
 
-int app_conference_main( struct cw_channel* chan, int argc, char **argv ) {
+int app_conference_main( struct opbx_channel* chan, void* data ) {
 	int res = 0 ;
 	struct localuser *u ;
 	LOCAL_USER_ADD( u ) ; 
-	res = member_exec( chan, argc, argv ) ;
+	res = member_exec( chan, data ) ;
 	LOCAL_USER_REMOVE( u ) ;	
 	return res ;
 }

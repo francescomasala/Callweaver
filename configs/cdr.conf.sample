@@ -1,5 +1,5 @@
 ;
-; CallWeaver Call Detail Record engine configuration
+; OpenPBX Call Detail Record engine configuration
 ;
 ; CDR is Call Detail Record, which provides logging services via a variety of
 ; pluggable backend modules.  Detailed call information can be recorded to
@@ -15,10 +15,10 @@
 
 ; Define the CDR batch mode, where instead of posting the CDR at the end of
 ; every call, the data will be stored in a buffer to help alleviate load on the
-; callweaver server.  Default is "no".
+; openpbx server.  Default is "no".
 ;
 ; WARNING WARNING WARNING
-; Use of batch mode may result in data loss after unsafe callweaver termination
+; Use of batch mode may result in data loss after unsafe openpbx termination
 ; ie. software crash, power failure, kill -9, etc.
 ; WARNING WARNING WARNING
 ;
@@ -34,7 +34,7 @@
 ; 'yes'.  Note that time is in seconds.  Default is 300 (5 minutes).
 ;time=300
 
-; The CDR engine uses the internal callweaver scheduler to determine when to post
+; The CDR engine uses the internal openpbx scheduler to determine when to post
 ; records.  Posting can either occur inside the scheduler thread, or a new
 ; thread can be spawned for the submission of every batch.  For small batches,
 ; it might be acceptable to just use the scheduler thread, so set this to "yes".
@@ -42,12 +42,10 @@
 ; set this to "no".  Default is "no".
 ;scheduleronly=no
 
-; When shutting down callweaver, you can block until the CDRs are submitted.  If
+; When shutting down openpbx, you can block until the CDRs are submitted.  If
 ; you don't, then data will likely be lost.  You can always check the size of
 ; the CDR batch buffer with the CLI "cdr status" command.  To enable blocking on
-; submission of CDR data during callweaver shutdown, set this to "yes".  Default
+; submission of CDR data during openpbx shutdown, set this to "yes".  Default
 ; is "yes".
 ;safeshutdown=yes
 
-; End CDR before h extension
-;endbeforehexten=yes

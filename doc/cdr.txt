@@ -1,12 +1,12 @@
 Call data records can be stored in many different databases or even CSV text.
 
-MSSQL:		CallWeaver can currently store CDRs into an MSSQL database in
+MSSQL:		OpenPBX can currently store CDRs into an MSSQL database in
 		two different ways:  cdr_odbc.c or cdr_tds.c
 		
 		Call Data Records can be stored using unixODBC (which requires
 		the FreeTDS package) [cdr_odbc.c] or directly by using just the
 		FreeTDS package [cdr_tds.c]  The following provide some
-		examples known to get callweaver working with mssql.
+		examples known to get openpbx working with mssql.
 		NOTE:  Only choose one db connector.
 
 	ODBC [cdr_odbc.c]:
@@ -25,7 +25,7 @@ MSSQL:		CallWeaver can currently store CDRs into an MSSQL database in
 		   make &&
 		   make install
 
-		Compile, or recompile, callweaver so that it will now add support
+		Compile, or recompile, openpbx so that it will now add support
 		for cdr_odbc.c
 
 		   make clean &&
@@ -45,8 +45,8 @@ MSSQL:		CallWeaver can currently store CDRs into an MSSQL database in
 		   FileUsage      = 1
 
 		/etc/odbc.ini
-		   [MSSQL-callweaver]
-		   description         = CallWeaver ODBC for MSSQL
+		   [MSSQL-openpbx]
+		   description         = OpenPBX ODBC for MSSQL
 		   driver              = FreeTDS
 		   server              = 192.168.1.25
 		   port                = 1433
@@ -54,22 +54,22 @@ MSSQL:		CallWeaver can currently store CDRs into an MSSQL database in
 		   tds_version         = 7.0
 		   language            = us_english
 
-		Only install one database connector.  Do not confuse callweaver
+		Only install one database connector.  Do not confuse openpbx
 		by using both ODBC (cdr_odbc.c) and FreeTDS (cdr_tds.c).
 		This command will erase the contents of cdr_tds.conf 
 
-		[ -f /etc/callweaver/cdr_tds.conf ] > /etc/callweaver/cdr_tds.conf
+		[ -f /etc/openpbx/cdr_tds.conf ] > /etc/openpbx/cdr_tds.conf
 
-		NOTE:  unixODBC requires the freeTDS package, but callweaver does
+		NOTE:  unixODBC requires the freeTDS package, but openpbx does
 		not call freeTDS directly.
 
 		Setup cdr_odbc configuration files.  These are working samples
 		from my system.  You will need to modify for your setup. Define
 		your usernames and passwords here, secure file as well.
 
-		/etc/callweaver/cdr_odbc.conf
+		/etc/openpbx/cdr_odbc.conf
 		   [global]
-		   dsn=MSSQL-callweaver
+		   dsn=MSSQL-openpbx
 		   username=voipdbuser
 		   password=voipdbpass
 		   loguniqueid=yes
@@ -95,7 +95,7 @@ MSSQL:		CallWeaver can currently store CDRs into an MSSQL database in
 		        [userfield]     [varchar] (255)         NOT NULL
 		)
 
-		Start callweaver in verbose mode, you should see that callweaver
+		Start openpbx in verbose mode, you should see that openpbx
 		logs a connection to the database and will now record every
 		call to the database when it's complete.
 
@@ -107,25 +107,25 @@ MSSQL:		CallWeaver can currently store CDRs into an MSSQL database in
 		   make &&
 		   make install
 
-                Compile, or recompile, callweaver so that it will now add support
-                for cdr_tds.c  (Currently only callweaver CVS supports cdr_tds.c)
+                Compile, or recompile, openpbx so that it will now add support
+                for cdr_tds.c  (Currently only openpbx CVS supports cdr_tds.c)
 
                    make clean &&
                    make update &&
                    make &&
                    make install
 
-                Only install one database connector.  Do not confuse callweaver
+                Only install one database connector.  Do not confuse openpbx
                 by using both ODBC (cdr_odbc.c) and FreeTDS (cdr_tds.c).
                 This command will erase the contents of cdr_odbc.conf
 
-		[ -f /etc/callweaver/cdr_odbc.conf ] > /etc/callweaver/cdr_odbc.conf
+		[ -f /etc/openpbx/cdr_odbc.conf ] > /etc/openpbx/cdr_odbc.conf
 
                 Setup cdr_tds configuration files.  These are working samples
                 from my system.  You will need to modify for your setup. Define
                 your usernames and passwords here, secure file as well.
 
-                /etc/callweaver/cdr_tds.conf
+                /etc/openpbx/cdr_tds.conf
 		   [global]
 		   hostname=192.168.1.25
 		   port=1433
@@ -156,7 +156,7 @@ MSSQL:		CallWeaver can currently store CDRs into an MSSQL database in
 		        [uniqueid]      [varchar] (32)          NULL
 		)
 
-                Start callweaver in verbose mode, you should see that callweaver
+                Start openpbx in verbose mode, you should see that openpbx
                 logs a connection to the database and will now record every
                 call to the database when it's complete.
 

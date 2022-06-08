@@ -1,12 +1,12 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  *
  * Copyright (C) 1999 - 2005, Digium, Inc.
  *
  * Mark Spencer <markster@digium.com>
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -31,92 +31,90 @@
 #include <string.h>
 #include <stdlib.h>
 #include <sys/types.h>
-#include <ctype.h>
 
-#include "callweaver.h"
+#include "openpbx.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/apps/app_waitforring.c $", "$Revision: 4723 $")
+OPENPBX_FILE_VERSION("$HeadURL$", "$Revision$")
 
-#include "callweaver/file.h"
-#include "callweaver/logger.h"
-#include "callweaver/channel.h"
-#include "callweaver/pbx.h"
-#include "callweaver/module.h"
-#include "callweaver/options.h"
-#include "callweaver/lock.h"
+#include "openpbx/file.h"
+#include "openpbx/logger.h"
+#include "openpbx/channel.h"
+#include "openpbx/pbx.h"
+#include "openpbx/module.h"
+#include "openpbx/options.h"
+#include "openpbx/lock.h"
+
+static char *synopsis = "Wait for Ring Application";
 
 static char *tdesc = "Waits until first ring after time";
 
-static void *waitforring_app;
-static const char *waitforring_name = "WaitForRing";
-static const char *waitforring_synopsis = "Wait for Ring Application";
-static const char *waitforring_syntax = "WaitForRing(timeout)";
-static const char *waitforring_descrip =
+static char *desc = "  WaitForRing(timeout)\n"
 "Returns 0 after waiting at least timeout seconds. and\n"
 "only after the next ring has completed.  Returns 0 on\n"
 "success or -1 on hangup\n";
 
+static char *app = "WaitForRing";
 
 STANDARD_LOCAL_USER;
 
 LOCAL_USER_DECL;
 
-static int waitforring_exec(struct cw_channel *chan, int argc, char **argv)
+static int waitforring_exec(struct opbx_channel *chan, void *data)
 {
 	struct localuser *u;
-	struct cw_frame *f;
+	struct opbx_frame *f;
 	int res = 0;
 	int ms;
 
-	if (argc != 1 || !isdigit(argv[0][0])) {
-                cw_log(LOG_ERROR, "Syntax: %s\n", waitforring_syntax);
+	if (!data || (sscanf(data, "%d", &ms) != 1)) {
+                opbx_log(LOG_WARNING, "WaitForRing requires an argument (minimum seconds)\n");
 		return 0;
 	}
 
 	LOCAL_USER_ADD(u);
 
-	ms = atoi(argv[0]) * 1000;
-	while (ms > 0) {
-		ms = cw_waitfor(chan, ms);
+	ms *= 1000;
+	while(ms > 0) {
+		ms = opbx_waitfor(chan, ms);
 		if (ms < 0) {
 			res = ms;
 			break;
 		}
 		if (ms > 0) {
-			f = cw_read(chan);
+			f = opbx_read(chan);
 			if (!f) {
 				res = -1;
 				break;
 			}
-			if ((f->frametype == CW_FRAME_CONTROL) && (f->subclass == CW_CONTROL_RING)) {
+			if ((f->frametype == OPBX_FRAME_CONTROL) && (f->subclass == OPBX_CONTROL_RING)) {
 				if (option_verbose > 2)
-					cw_verbose(VERBOSE_PREFIX_3 "Got a ring but still waiting for timeout\n");
+					opbx_verbose(VERBOSE_PREFIX_3 "Got a ring but still waiting for timeout\n");
 			}
-			cw_fr_free(f);
+			opbx_frfree(f);
 		}
 	}
 	/* Now we're really ready for the ring */
 	if (!res) {
 		ms = 99999999;
 		while(ms > 0) {
-			ms = cw_waitfor(chan, ms);
+			ms = opbx_waitfor(chan, ms);
 			if (ms < 0) {
 				res = ms;
 				break;
 			}
 			if (ms > 0) {
-				f = cw_read(chan);
+				f = opbx_read(chan);
 				if (!f) {
 					res = -1;
 					break;
 				}
-				if ((f->frametype == CW_FRAME_CONTROL) && (f->subclass == CW_CONTROL_RING)) {
+				if ((f->frametype == OPBX_FRAME_CONTROL) && (f->subclass == OPBX_CONTROL_RING)) {
 					if (option_verbose > 2)
-						cw_verbose(VERBOSE_PREFIX_3 "Got a ring after the timeout\n");
-					cw_fr_free(f);
+						opbx_verbose(VERBOSE_PREFIX_3 "Got a ring after the timeout\n");
+					opbx_frfree(f);
 					break;
 				}
-				cw_fr_free(f);
+				opbx_frfree(f);
 			}
 		}
 	}
@@ -127,16 +125,13 @@ static int waitforring_exec(struct cw_channel *chan, int argc, char **argv)
 
 int unload_module(void)
 {
-	int res = 0;
 	STANDARD_HANGUP_LOCALUSERS;
-	res |= cw_unregister_application(waitforring_app);
-	return res;
+	return opbx_unregister_application(app);
 }
 
 int load_module(void)
 {
-	waitforring_app = cw_register_application(waitforring_name, waitforring_exec, waitforring_synopsis, waitforring_syntax, waitforring_descrip);
-	return 0;
+	return opbx_register_application(app, waitforring_exec, synopsis, desc);
 }
 
 char *description(void)

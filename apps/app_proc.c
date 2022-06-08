@@ -1,12 +1,12 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  *
  * Copyright (C) 1999 - 2005, Digium, Inc.
  *
  * Mark Spencer <markster@digium.com>
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -30,35 +30,30 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
-#include <ctype.h>
 
-#include "callweaver.h"
+#include "openpbx.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/apps/app_proc.c $", "$Revision: 4723 $")
+OPENPBX_FILE_VERSION("$HeadURL: svn://ctrix@svn.openpbx.org/openpbx/trunk/apps/app_proc.c $", "$Revision: 1055 $")
 
-#include "callweaver/file.h"
-#include "callweaver/logger.h"
-#include "callweaver/channel.h"
-#include "callweaver/pbx.h"
-#include "callweaver/module.h"
-#include "callweaver/options.h"
-#include "callweaver/config.h"
-#include "callweaver/utils.h"
-#include "callweaver/lock.h"
+#include "openpbx/file.h"
+#include "openpbx/logger.h"
+#include "openpbx/channel.h"
+#include "openpbx/pbx.h"
+#include "openpbx/module.h"
+#include "openpbx/options.h"
+#include "openpbx/config.h"
+#include "openpbx/utils.h"
+#include "openpbx/lock.h"
 
 #define MAX_ARGS 80
 
 /* special result value used to force proc exit */
-#define PROC_EXIT_RESULT 1024
+#define MACRO_EXIT_RESULT 1024
 
 static char *tdesc = "Extension Procs";
 
-static void *proc_app;
-static const char *proc_name = "Proc";
-static const char *proc_synopsis = "Proc Implementation";
-static const char *proc_syntax = "Proc(procname, arg1, arg2 ...)";
-static const char *proc_descrip =
-"Executes a procedure using the context\n"
+static char *descrip =
+"  Proc(procname|arg1|arg2...): Executes a procedure using the context\n"
 "'proc-<procname>', jumping to the 's' extension of that context and\n"
 "executing each step, then returning when the steps end. \n"
 "The calling extension, context, and priority are stored in ${PROC_EXTEN}, \n"
@@ -70,59 +65,58 @@ static const char *proc_descrip =
 "If ${PROC_OFFSET} is set at termination, Proc will attempt to continue\n"
 "at priority PROC_OFFSET + N + 1 if such a step exists, and N + 1 otherwise.\n";
 
-static void *if_app;
-static const char *if_name = "ProcIf";
-static const char *if_synopsis = "Conditional Proc Implementation";
-static const char *if_syntax = "ProcIf(expr ? procname_a[, arg ...] [: procname_b[, arg ...]])";
-static const char *if_descrip =
+static char *if_descrip =
+"  ProcIf(<expr>?procname_a[|arg1][:procname_b[|arg1]])\n"
 "Executes proc defined in <procname_a> if <expr> is true\n"
 "(otherwise <procname_b> if provided)\n"
 "Arguments and return values as in application proc()\n";
 
-static void *exit_app;
-static const char *exit_name = "ProcExit";
-static const char *exit_synopsis = "Exit From Proc";
-static const char *exit_syntax = "ProcExit()";
-static const char *exit_descrip =
+static char *exit_descrip =
+"  ProcExit():\n"
 "Causes the currently running proc to exit as if it had\n"
 "ended normally by running out of priorities to execute.\n"
 "If used outside a proc, will likely cause unexpected\n"
 "behavior.\n";
 
+static char *app = "Proc";
+static char *if_app = "ProcIf";
+static char *exit_app = "ProcExit";
+
+static char *synopsis = "Proc Implementation";
+static char *if_synopsis = "Conditional Proc Implementation";
+static char *exit_synopsis = "Exit From Proc";
 
 STANDARD_LOCAL_USER;
 
 LOCAL_USER_DECL;
 
-static int proc_exec(struct cw_channel *chan, int argc, char **argv)
+static int proc_exec(struct opbx_channel *chan, void *data)
 {
 	char *tmp;
-	char *proc;
-	char fullproc[80];
+	char *cur, *rest;
+	char *macro;
+	char fullmacro[80];
 	char varname[80];
 	char *oldargs[MAX_ARGS + 1] = { NULL, };
-	int x;
+	int argc, x;
 	int res=0;
 	char oldexten[256]="";
 	int oldpriority;
 	char pc[80], depthc[12];
-	char oldcontext[CW_MAX_CONTEXT] = "";
+	char oldcontext[OPBX_MAX_CONTEXT] = "";
 	char *offsets;
 	int offset, depth;
-	int setproccontext=0;
+	int setmacrocontext=0;
 	int autoloopflag;
-	int inhangup = 0;
   
-	char *save_proc_exten;
-	char *save_proc_context;
-	char *save_proc_priority;
-	char *save_proc_offset;
+	char *save_macro_exten;
+	char *save_macro_context;
+	char *save_macro_priority;
+	char *save_macro_offset;
 	struct localuser *u;
-
-	char *inhangupc;
  
-	if (argc < 1) {
-		cw_log(LOG_ERROR, "Syntax: %s\n", proc_syntax);
+	if (opbx_strlen_zero(data)) {
+		opbx_log(LOG_WARNING, "Proc() requires arguments. See \"show application Proc\" for help.\n");
 		return -1;
 	}
 
@@ -137,148 +131,131 @@ static int proc_exec(struct cw_channel *chan, int argc, char **argv)
 	}
 
 	if (depth >= 7) {
-		cw_log(LOG_ERROR, "Proc():  possible infinite loop detected.  Returning early.\n");
+		opbx_log(LOG_ERROR, "Proc():  possible infinite loop detected.  Returning early.\n");
 		LOCAL_USER_REMOVE(u);
 		return 0;
 	}
 	snprintf(depthc, sizeof(depthc), "%d", depth + 1);
 	pbx_builtin_setvar_helper(chan, "PROC_DEPTH", depthc);
 
-	/* Used for detecting whether to return when a Macro is called from another Macro after hangup */
-	if (strcmp(chan->exten, "h") == 0)
-		pbx_builtin_setvar_helper(chan, "PROC_IN_HANGUP", "1");
-	inhangupc = pbx_builtin_getvar_helper(chan, "PROC_IN_HANGUP");
-	if (!cw_strlen_zero(inhangupc))
-		sscanf(inhangupc, "%d", &inhangup);
-
-	proc = argv[0];
-	if (cw_strlen_zero(proc)) {
-		cw_log(LOG_WARNING, "Invalid proc name specified\n");
+	tmp = opbx_strdupa(data);
+	rest = tmp;
+	macro = strsep(&rest, "|");
+	if (opbx_strlen_zero(macro)) {
+		opbx_log(LOG_WARNING, "Invalid proc name specified\n");
 		LOCAL_USER_REMOVE(u);
 		return 0;
 	}
-	snprintf(fullproc, sizeof(fullproc), "proc-%s", proc);
-	if (!cw_exists_extension(chan, fullproc, "s", 1, chan->cid.cid_num)) {
-  		if (!cw_context_find(fullproc)) 
-			cw_log(LOG_WARNING, "No such context '%s' for proc '%s'\n", fullproc, proc);
+	snprintf(fullmacro, sizeof(fullmacro), "proc-%s", macro);
+	if (!opbx_exists_extension(chan, fullmacro, "s", 1, chan->cid.cid_num)) {
+  		if (!opbx_context_find(fullmacro)) 
+			opbx_log(LOG_WARNING, "No such context '%s' for proc '%s'\n", fullmacro, macro);
 		else
-	  		cw_log(LOG_WARNING, "Context '%s' for proc '%s' lacks 's' extension, priority 1\n", fullproc, proc);
+	  		opbx_log(LOG_WARNING, "Context '%s' for proc '%s' lacks 's' extension, priority 1\n", fullmacro, macro);
 		LOCAL_USER_REMOVE(u);
 		return 0;
 	}
 	
 	/* Save old info */
 	oldpriority = chan->priority;
-	cw_copy_string(oldexten, chan->exten, sizeof(oldexten));
-	cw_copy_string(oldcontext, chan->context, sizeof(oldcontext));
-	if (cw_strlen_zero(chan->proc_context)) {
-		cw_copy_string(chan->proc_context, chan->context, sizeof(chan->proc_context));
-		cw_copy_string(chan->proc_exten, chan->exten, sizeof(chan->proc_exten));
-		chan->proc_priority = chan->priority;
-		setproccontext=1;
+	opbx_copy_string(oldexten, chan->exten, sizeof(oldexten));
+	opbx_copy_string(oldcontext, chan->context, sizeof(oldcontext));
+	if (opbx_strlen_zero(chan->macrocontext)) {
+		opbx_copy_string(chan->macrocontext, chan->context, sizeof(chan->macrocontext));
+		opbx_copy_string(chan->macroexten, chan->exten, sizeof(chan->macroexten));
+		chan->macropriority = chan->priority;
+		setmacrocontext=1;
 	}
-	/* Save old proc variables */
-	save_proc_exten = pbx_builtin_getvar_helper(chan, "PROC_EXTEN");
-	if (save_proc_exten) 
-		save_proc_exten = strdup(save_proc_exten);
+	argc = 1;
+	/* Save old macro variables */
+	save_macro_exten = pbx_builtin_getvar_helper(chan, "PROC_EXTEN");
+	if (save_macro_exten) 
+		save_macro_exten = strdup(save_macro_exten);
 	pbx_builtin_setvar_helper(chan, "PROC_EXTEN", oldexten);
 
-	save_proc_context = pbx_builtin_getvar_helper(chan, "PROC_CONTEXT");
-	if (save_proc_context)
-		save_proc_context = strdup(save_proc_context);
+	save_macro_context = pbx_builtin_getvar_helper(chan, "PROC_CONTEXT");
+	if (save_macro_context)
+		save_macro_context = strdup(save_macro_context);
 	pbx_builtin_setvar_helper(chan, "PROC_CONTEXT", oldcontext);
 
-	save_proc_priority = pbx_builtin_getvar_helper(chan, "PROC_PRIORITY");
-	if (save_proc_priority) 
-		save_proc_priority = strdup(save_proc_priority);
+	save_macro_priority = pbx_builtin_getvar_helper(chan, "PROC_PRIORITY");
+	if (save_macro_priority) 
+		save_macro_priority = strdup(save_macro_priority);
 	snprintf(pc, sizeof(pc), "%d", oldpriority);
 	pbx_builtin_setvar_helper(chan, "PROC_PRIORITY", pc);
   
-	save_proc_offset = pbx_builtin_getvar_helper(chan, "PROC_OFFSET");
-	if (save_proc_offset) 
-		save_proc_offset = strdup(save_proc_offset);
+	save_macro_offset = pbx_builtin_getvar_helper(chan, "PROC_OFFSET");
+	if (save_macro_offset) 
+		save_macro_offset = strdup(save_macro_offset);
 	pbx_builtin_setvar_helper(chan, "PROC_OFFSET", NULL);
 
 	/* Setup environment for new run */
 	chan->exten[0] = 's';
 	chan->exten[1] = '\0';
-	cw_copy_string(chan->context, fullproc, sizeof(chan->context));
+	opbx_copy_string(chan->context, fullmacro, sizeof(chan->context));
 	chan->priority = 1;
 
-	for (x = 1; x < argc; x++) {
+	while((cur = strsep(&rest, "|")) && (argc < MAX_ARGS)) {
   		/* Save copy of old arguments if we're overwriting some, otherwise
 	   	let them pass through to the other macro */
-  		snprintf(varname, sizeof(varname), "ARG%d", x);
-		oldargs[x] = pbx_builtin_getvar_helper(chan, varname);
-		if (oldargs[x])
-			oldargs[x] = strdup(oldargs[x]);
-		pbx_builtin_setvar_helper(chan, varname, argv[x]);
+  		snprintf(varname, sizeof(varname), "ARG%d", argc);
+		oldargs[argc] = pbx_builtin_getvar_helper(chan, varname);
+		if (oldargs[argc])
+			oldargs[argc] = strdup(oldargs[argc]);
+		pbx_builtin_setvar_helper(chan, varname, cur);
+		argc++;
 	}
-	autoloopflag = cw_test_flag(chan, CW_FLAG_IN_AUTOLOOP);
-	cw_set_flag(chan, CW_FLAG_IN_AUTOLOOP);
-	while(cw_exists_extension(chan, chan->context, chan->exten, chan->priority, chan->cid.cid_num)) {
-		/* Reset the proc depth, if it was changed in the last iteration */
+	autoloopflag = opbx_test_flag(chan, OPBX_FLAG_IN_AUTOLOOP);
+	opbx_set_flag(chan, OPBX_FLAG_IN_AUTOLOOP);
+	while(opbx_exists_extension(chan, chan->context, chan->exten, chan->priority, chan->cid.cid_num)) {
+		/* Reset the macro depth, if it was changed in the last iteration */
 		pbx_builtin_setvar_helper(chan, "PROC_DEPTH", depthc);
-		if ((res = cw_exec_extension(chan, chan->context, chan->exten, chan->priority, chan->cid.cid_num))) {
+		if ((res = opbx_spawn_extension(chan, chan->context, chan->exten, chan->priority, chan->cid.cid_num))) {
 			/* Something bad happened, or a hangup has been requested. */
 			if (((res >= '0') && (res <= '9')) || ((res >= 'A') && (res <= 'F')) ||
 		    	(res == '*') || (res == '#')) {
 				/* Just return result as to the previous application as if it had been dialed */
-				cw_log(LOG_DEBUG, "Oooh, got something to jump out with ('%c')!\n", res);
+				opbx_log(LOG_DEBUG, "Oooh, got something to jump out with ('%c')!\n", res);
 				break;
 			}
 			switch(res) {
-	        	case PROC_EXIT_RESULT:
-				res = 0;
+	        	case MACRO_EXIT_RESULT:
+                        	res = 0;
 				goto out;
-			case CW_PBX_KEEPALIVE:
+			case OPBX_PBX_KEEPALIVE:
 				if (option_debug)
-					cw_log(LOG_DEBUG, "Spawn extension (%s,%s,%d) exited KEEPALIVE in proc %s on '%s'\n", chan->context, chan->exten, chan->priority, proc, chan->name);
+					opbx_log(LOG_DEBUG, "Spawn extension (%s,%s,%d) exited KEEPALIVE in proc %s on '%s'\n", chan->context, chan->exten, chan->priority, macro, chan->name);
 				if (option_verbose > 1)
-					cw_verbose( VERBOSE_PREFIX_2 "Spawn extension (%s, %s, %d) exited KEEPALIVE in proc '%s' on '%s'\n", chan->context, chan->exten, chan->priority, proc, chan->name);
+					opbx_verbose( VERBOSE_PREFIX_2 "Spawn extension (%s, %s, %d) exited KEEPALIVE in proc '%s' on '%s'\n", chan->context, chan->exten, chan->priority, macro, chan->name);
 				goto out;
 				break;
 			default:
 				if (option_debug)
-					cw_log(LOG_DEBUG, "Spawn extension (%s,%s,%d) exited non-zero on '%s' in proc '%s'\n", chan->context, chan->exten, chan->priority, chan->name, proc);
+					opbx_log(LOG_DEBUG, "Spawn extension (%s,%s,%d) exited non-zero on '%s' in proc '%s'\n", chan->context, chan->exten, chan->priority, chan->name, macro);
 				if (option_verbose > 1)
-					cw_verbose( VERBOSE_PREFIX_2 "Spawn extension (%s, %s, %d) exited non-zero on '%s' in proc '%s'\n", chan->context, chan->exten, chan->priority, chan->name, proc);
+					opbx_verbose( VERBOSE_PREFIX_2 "Spawn extension (%s, %s, %d) exited non-zero on '%s' in proc '%s'\n", chan->context, chan->exten, chan->priority, chan->name, macro);
 				goto out;
 			}
 		}
-		if (strcasecmp(chan->context, fullproc)) {
+		if (strcasecmp(chan->context, fullmacro)) {
 			if (option_verbose > 1)
-				cw_verbose(VERBOSE_PREFIX_2 "Channel '%s' jumping out of proc '%s'\n", chan->name, proc);
+				opbx_verbose(VERBOSE_PREFIX_2 "Channel '%s' jumping out of proc '%s'\n", chan->name, macro);
 			break;
 		}
 		/* don't stop executing extensions when we're in "h" */
-		if (chan->_softhangup)
-		{
-			cw_log(LOG_DEBUG, "Extension %s, priority %d returned normally even though call was hung up\n",
+		if (chan->_softhangup && strcasecmp(oldexten,"h")) {
+			opbx_log(LOG_DEBUG, "Extension %s, priority %d returned normally even though call was hung up\n",
 				chan->exten, chan->priority);
 			goto out;
 		}
-goon:
 		chan->priority++;
   	}
-out:
-	cw_log(LOG_DEBUG, "Checking for hangup extension in proc\n",
-		chan->exten, chan->priority);
-	/* Now, this is dirty, dirty, dirty, but hopefully it works */
-	//if (strcasecmp(oldexten,"h") == 0)
-	if (inhangup)
-	{
-		cw_log(LOG_DEBUG, "Extension %s, priority %d - Found hangup extension - returning to main run loop\n",
-			chan->exten, chan->priority);
-		goto goon;
-	}
-	cw_log(LOG_DEBUG, "Hangup extension in proc not found - returning to calling extension\n",
-		chan->exten, chan->priority);
-	/* Reset the depth back to what it was when the routine was entered (like if we called Proc recursively) */
+	out:
+	/* Reset the depth back to what it was when the routine was entered (like if we called Macro recursively) */
 	snprintf(depthc, sizeof(depthc), "%d", depth);
 	pbx_builtin_setvar_helper(chan, "PROC_DEPTH", depthc);
 
-	cw_set2_flag(chan, autoloopflag, CW_FLAG_IN_AUTOLOOP);
+	opbx_set2_flag(chan, autoloopflag, OPBX_FLAG_IN_AUTOLOOP);
   	for (x=1; x<argc; x++) {
   		/* Restore old arguments and delete ours */
 		snprintf(varname, sizeof(varname), "ARG%d", x);
@@ -290,34 +267,34 @@ out:
 		}
   	}
 
-	/* Restore proc variables */
-	pbx_builtin_setvar_helper(chan, "PROC_EXTEN", save_proc_exten);
-	if (save_proc_exten)
-		free(save_proc_exten);
-	pbx_builtin_setvar_helper(chan, "PROC_CONTEXT", save_proc_context);
-	if (save_proc_context)
-		free(save_proc_context);
-	pbx_builtin_setvar_helper(chan, "PROC_PRIORITY", save_proc_priority);
-	if (save_proc_priority)
-		free(save_proc_priority);
-	if (setproccontext) {
-		chan->proc_context[0] = '\0';
-		chan->proc_exten[0] = '\0';
-		chan->proc_priority = 0;
+	/* Restore macro variables */
+	pbx_builtin_setvar_helper(chan, "PROC_EXTEN", save_macro_exten);
+	if (save_macro_exten)
+		free(save_macro_exten);
+	pbx_builtin_setvar_helper(chan, "PROC_CONTEXT", save_macro_context);
+	if (save_macro_context)
+		free(save_macro_context);
+	pbx_builtin_setvar_helper(chan, "PROC_PRIORITY", save_macro_priority);
+	if (save_macro_priority)
+		free(save_macro_priority);
+	if (setmacrocontext) {
+		chan->macrocontext[0] = '\0';
+		chan->macroexten[0] = '\0';
+		chan->macropriority = 0;
 	}
 
-	if (!strcasecmp(chan->context, fullproc)) {
-  		/* If we're leaving the proc normally, restore original information */
+	if (!strcasecmp(chan->context, fullmacro)) {
+  		/* If we're leaving the macro normally, restore original information */
 		chan->priority = oldpriority;
-		cw_copy_string(chan->context, oldcontext, sizeof(chan->context));
-		if (!(chan->_softhangup & CW_SOFTHANGUP_ASYNCGOTO)) {
+		opbx_copy_string(chan->context, oldcontext, sizeof(chan->context));
+		if (!(chan->_softhangup & OPBX_SOFTHANGUP_ASYNCGOTO)) {
 			/* Copy the extension, so long as we're not in softhangup, where we could be given an asyncgoto */
-			cw_copy_string(chan->exten, oldexten, sizeof(chan->exten));
+			opbx_copy_string(chan->exten, oldexten, sizeof(chan->exten));
 			if ((offsets = pbx_builtin_getvar_helper(chan, "PROC_OFFSET"))) {
-				/* Handle proc offset if it's set by checking the availability of step n + offset + 1, otherwise continue
+				/* Handle macro offset if it's set by checking the availability of step n + offset + 1, otherwise continue
 			   	normally if there is any problem */
 				if (sscanf(offsets, "%d", &offset) == 1) {
-					if (cw_exists_extension(chan, chan->context, chan->exten, chan->priority + offset + 1, chan->cid.cid_num)) {
+					if (opbx_exists_extension(chan, chan->context, chan->exten, chan->priority + offset + 1, chan->cid.cid_num)) {
 						chan->priority += offset;
 					}
 				}
@@ -325,77 +302,65 @@ out:
 		}
 	}
 
-	pbx_builtin_setvar_helper(chan, "PROC_OFFSET", save_proc_offset);
-	if (save_proc_offset)
-		free(save_proc_offset);
+	pbx_builtin_setvar_helper(chan, "PROC_OFFSET", save_macro_offset);
+	if (save_macro_offset)
+		free(save_macro_offset);
 	LOCAL_USER_REMOVE(u);
 	return res;
 }
 
-static int procif_exec(struct cw_channel *chan, int argc, char **argv) 
+static int procif_exec(struct opbx_channel *chan, void *data) 
 {
-	char *s, *q;
-	int i;
+	char *expr = NULL, *label_a = NULL, *label_b = NULL;
+	int res = 0;
+	struct localuser *u;
 
-	/* First argument is "<condition ? ..." */
-	if (argc < 1 || !(s = strchr(argv[0], '?'))) {
-		cw_log(LOG_ERROR, "Syntax: %s\n", if_syntax);
+	LOCAL_USER_ADD(u);
+
+	expr = opbx_strdupa(data);
+	if (!expr) {
+		opbx_log(LOG_ERROR, "Out of Memory!\n");
+		LOCAL_USER_REMOVE(u);
 		return -1;
 	}
 
-	/* Trim trailing space from the condition */
-	q = s;
-	do { *(q--) = '\0'; } while (q >= argv[0] && isspace(*q));
-
-	do { *(s++) = '\0'; } while (isspace(*s));
-
-	if (pbx_checkcondition(argv[0])) {
-		/* True: we want everything between '?' and ':' */
-		argv[0] = s;
-		for (i = 0; i < argc; i++) {
-			if ((s = strchr(argv[i], ':'))) {
-				do { *(s--) = '\0'; } while (s >= argv[i] && isspace(*s));
-				argc = i + 1;
-				break;
-			}
+	if ((label_a = strchr(expr, '?'))) {
+		*label_a = '\0';
+		label_a++;
+		if ((label_b = strchr(label_a, ':'))) {
+			*label_b = '\0';
+			label_b++;
 		}
-		return proc_exec(chan, argc, argv);
-	} else {
-		/* False: we want everything after ':' (if anything) */
-		argv[0] = s;
-		for (i = 0; i < argc; i++) {
-			if ((s = strchr(argv[i], ':'))) {
-				do { *(s++) = '\0'; } while (isspace(*s));
-				argv[i] = s;
-				return proc_exec(chan, argc - i, argv + i);
-			}
-		}
-		/* No ": ..." so we just drop through */
-		return 0;
-	}
+		if (opbx_true(expr))
+			proc_exec(chan, label_a);
+		else if (label_b) 
+			proc_exec(chan, label_b);
+	} else
+		opbx_log(LOG_WARNING, "Invalid Syntax.\n");
+
+	LOCAL_USER_REMOVE(u);
+
+	return res;
 }
 			
-static int proc_exit_exec(struct cw_channel *chan, int argc, char **argv)
+static int proc_exit_exec(struct opbx_channel *chan, void *data)
 {
-	return PROC_EXIT_RESULT;
+	return MACRO_EXIT_RESULT;
 }
 
 int unload_module(void)
 {
-	int res = 0;
 	STANDARD_HANGUP_LOCALUSERS;
-	res |= cw_unregister_application(if_app);
-	res |= cw_unregister_application(exit_app);
-	res |= cw_unregister_application(proc_app);
-	return res;
+	opbx_unregister_application(if_app);
+	opbx_unregister_application(exit_app);
+	return opbx_unregister_application(app);
 }
 
 int load_module(void)
 {
-	exit_app = cw_register_application(exit_name, proc_exit_exec, exit_synopsis, exit_syntax, exit_descrip);
-	if_app = cw_register_application(if_name, procif_exec, if_synopsis, if_syntax, if_descrip);
-	proc_app = cw_register_application(proc_name, proc_exec, proc_synopsis, proc_syntax, proc_descrip);
-	return 0;
+	opbx_register_application(exit_app, proc_exit_exec, exit_synopsis, exit_descrip);
+	opbx_register_application(if_app, procif_exec, if_synopsis, if_descrip);
+	return opbx_register_application(app, proc_exec, synopsis, descrip);
 }
 
 char *description(void)
@@ -409,3 +374,5 @@ int usecount(void)
 	STANDARD_USECOUNT(res);
 	return res;
 }
+
+

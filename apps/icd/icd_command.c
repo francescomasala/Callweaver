@@ -6,17 +6,17 @@
  * Written by Anthony Minessale II <anthmct at yahoo dot com>
  * Written by Bruce Atherton <bruce at callenish dot com>
  * Additions, Changes and Support by Tim R. Clark <tclark at shaw dot ca>
- * Changed to adopt to jabber interaction and adjusted for CallWeaver.org by
+ * Changed to adopt to jabber interaction and adjusted for OpenPBX.org by
  * Halo Kwadrat Sp. z o.o., Piotr Figurny and Michal Bielicki
  * 
  * This application is a part of:
  * 
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  * Copyright (C) 1999 - 2005, Digium, Inc.
  * Mark Spencer <markster@digium.com>
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -34,28 +34,28 @@
 #include "confdefs.h"
 #endif 
 
-#include "callweaver/icd/app_icd.h"
-#include "callweaver/icd/icd_command.h"
-#include "callweaver/icd/icd_common.h"
-#include "callweaver/icd/icd_fieldset.h"
+#include "openpbx/icd/app_icd.h"
+#include "openpbx/icd/icd_command.h"
+#include "openpbx/icd/icd_common.h"
+#include "openpbx/icd/icd_fieldset.h"
 /* For dump function only */
-#include "callweaver/icd/icd_queue.h"
-#include "callweaver/icd/icd_distributor.h"
-#include "callweaver/icd/icd_list.h"
-#include "callweaver/icd/icd_caller.h"
-#include "callweaver/icd/icd_member.h"
-#include "callweaver/icd/icd_member_list.h"
-#include "callweaver/icd/icd_bridge.h"
-#include "callweaver/icd/icd_agent.h"
-#include "callweaver/icd/icd_customer.h"
-#include "callweaver/icd/icd_caller_private.h"
-#include "callweaver/icd/icd_conference.h"
-#include "callweaver/icd/icd_play_dtmf.h"
+#include "openpbx/icd/icd_queue.h"
+#include "openpbx/icd/icd_distributor.h"
+#include "openpbx/icd/icd_list.h"
+#include "openpbx/icd/icd_caller.h"
+#include "openpbx/icd/icd_member.h"
+#include "openpbx/icd/icd_member_list.h"
+#include "openpbx/icd/icd_bridge.h"
+#include "openpbx/icd/icd_agent.h"
+#include "openpbx/icd/icd_customer.h"
+#include "openpbx/icd/icd_caller_private.h"
+#include "openpbx/icd/icd_conference.h"
+#include "openpbx/icd/icd_play_dtmf.h"
 
 static int verbosity = 1;
 
 /* This is the lock customers add, remove and seek */
-    extern cw_mutex_t customers_lock;
+    extern opbx_mutex_t customers_lock;
 
 
 /*
@@ -173,8 +173,8 @@ static int cli_line(int fd, char *c, int y)
     int x = 0;
 
     for (x = 0; x < y; x++)
-        cw_cli(fd, "%s", c);
-    cw_cli(fd, "\n");
+        opbx_cli(fd, "%s", c);
+    opbx_cli(fd, "\n");
     /* BCA - What should this return? */
     return ICD_SUCCESS;
 }
@@ -225,6 +225,7 @@ int icd_command_cli(int fd, int argc, char **argv)
     char **newargv;
     int newargc;
     int x = 0, y = 0;
+    int mem = 0;
 
     func = NULL;
 
@@ -252,28 +253,28 @@ int icd_command_cli(int fd, int argc, char **argv)
         }
         free(newargv);
     } else
-        cw_cli(fd, "Mega Error %d\n", argc);
+        opbx_cli(fd, "Mega Error %d\n", argc);
 
     return ICD_SUCCESS;
 }
 
 static int icd_command_short_help(int fd, icd_command_node * node)
 {
-    cw_cli(fd, "'%s'", node->short_help);
+    opbx_cli(fd, "'%s'", node->short_help);
 
     return ICD_SUCCESS;
 }
 
 static int icd_command_syntax_help(int fd, icd_command_node * node)
 {
-    cw_cli(fd, "Usage: %s %s", node->name, node->syntax_help);
+    opbx_cli(fd, "Usage: %s %s", node->name, node->syntax_help);
 
     return ICD_SUCCESS;
 }
 
 static int icd_command_long_help(int fd, icd_command_node * node)
 {
-    cw_cli(fd, "%s", node->long_help);
+    opbx_cli(fd, "%s", node->long_help);
 
     return ICD_SUCCESS;
 }
@@ -285,24 +286,24 @@ int icd_command_list(int fd, int argc, char **argv)
     vh_keylist *keys;
 
     if (argc < 2) {
-        cw_cli(fd, "\n\n");
-        cw_cli(fd, "Available Commands\n");
+        opbx_cli(fd, "\n\n");
+        opbx_cli(fd, "Available Commands\n");
         cli_line(fd, "=", 80);
-        cw_cli(fd, "\n");
+        opbx_cli(fd, "\n");
 
         for (keys = vh_keys((COMMAND_HASH)); keys; keys = keys->next) {
 
             fetch = (icd_command_node *) vh_read(COMMAND_HASH, keys->name);
             if (fetch && strcmp(fetch->short_help, "")) {
-                cw_cli(fd, "%s: ", fetch->name);
+                opbx_cli(fd, "%s: ", fetch->name);
                 icd_command_short_help(fd, fetch);
-                cw_cli(fd, "\n");
+                opbx_cli(fd, "\n");
             }
         }
 
-        cw_cli(fd, "\n");
+        opbx_cli(fd, "\n");
         cli_line(fd, "=", 80);
-        cw_cli(fd, "\n");
+        opbx_cli(fd, "\n");
 
         return ICD_SUCCESS;
     }
@@ -311,22 +312,22 @@ int icd_command_list(int fd, int argc, char **argv)
     fetch = (icd_command_node *) vh_read(COMMAND_HASH, argv[1]);
     if (fetch) {
 
-        cw_cli(fd, "\n\n");
-        cw_cli(fd, "Help with '%s'\n", fetch->name);
+        opbx_cli(fd, "\n\n");
+        opbx_cli(fd, "Help with '%s'\n", fetch->name);
         cli_line(fd, "=", 80);
-        cw_cli(fd, "\n");
+        opbx_cli(fd, "\n");
 
-        cw_cli(fd, "%s: ", fetch->name);
+        opbx_cli(fd, "%s: ", fetch->name);
         icd_command_short_help(fd, fetch);
-        cw_cli(fd, "\n");
+        opbx_cli(fd, "\n");
         icd_command_syntax_help(fd, fetch);
-        cw_cli(fd, "\n");
-        cw_cli(fd, "\n");
+        opbx_cli(fd, "\n");
+        opbx_cli(fd, "\n");
         icd_command_long_help(fd, fetch);
-        cw_cli(fd, "\n");
-        cw_cli(fd, "\n");
+        opbx_cli(fd, "\n");
+        opbx_cli(fd, "\n");
         cli_line(fd, "=", 80);
-        cw_cli(fd, "\n");
+        opbx_cli(fd, "\n");
 
     }
 
@@ -336,7 +337,7 @@ int icd_command_list(int fd, int argc, char **argv)
 int icd_command_help(int fd, int argc, char **argv)
 {
     icd_command_list(fd, argc, argv);
-    cw_cli(fd, "\nUsage 'icd <command> <arg1> .. <argn>\n");
+    opbx_cli(fd, "\nUsage 'icd <command> <arg1> .. <argn>\n");
 
     /* BCA - What should this return? */
     return ICD_SUCCESS;
@@ -347,9 +348,9 @@ int icd_command_bad(int fd, int argc, char **argv)
     int x;
 
     for (x = 0; x < argc; x++)
-        cw_cli(fd, "%d=%s\n", x, argv[x]);
+        opbx_cli(fd, "%d=%s\n", x, argv[x]);
 
-    cw_cli(fd, "\n\nInvalid Command\n");
+    opbx_cli(fd, "\n\nInvalid Command\n");
     icd_command_help(fd, argc, argv);
 
     /* BCA - What should this return? */
@@ -366,11 +367,11 @@ int icd_command_verbose(int fd, int argc, char **argv)
         }
         icd_verbose = atoi(argv[1]);
         if (icd_verbose > 0 && icd_verbose < 10)
-            cw_cli(fd, "ICD Verbosity[%d] set \n", icd_verbose);
+            opbx_cli(fd, "ICD Verbosity[%d] set \n", icd_verbose);
         else
-            cw_cli(fd, "ICD Verbosity[%d] range is 1-9 not [%s] \n", icd_verbose, argv[1]);
+            opbx_cli(fd, "ICD Verbosity[%d] range is 1-9 not [%s] \n", icd_verbose, argv[1]);
     } else
-        cw_cli(fd, "ICD Verbosity[%d] range is 1-9 \n", icd_verbose);
+        opbx_cli(fd, "ICD Verbosity[%d] range is 1-9 \n", icd_verbose);
 
     return ICD_SUCCESS;
 }
@@ -384,9 +385,9 @@ int icd_command_debug(int fd, int argc, char **argv)
         else if (!strcmp(argv[1], "off"))
             icd_debug = 0;
         else
-            cw_cli(fd, "ICD debug[%d] must be either [on] or [off] not[%s]\n", icd_debug, argv[1]);
+            opbx_cli(fd, "ICD debug[%d] must be either [on] or [off] not[%s]\n", icd_debug, argv[1]);
     } else
-        cw_cli(fd, "ICD debug[%d] must be either [on] or [off] \n", icd_debug);
+        opbx_cli(fd, "ICD debug[%d] must be either [on] or [off] \n", icd_debug);
 
     return ICD_SUCCESS;
 }
@@ -426,9 +427,9 @@ icd_status icd_command_show_queue(int fd, int argc, char **argv)
     icd_member *member;
     icd_caller *caller = NULL;
 
-    cw_cli(fd, "\n");
+    opbx_cli(fd, "\n");
     cli_line(fd, "=", 80);
-    cw_cli(fd, FMT_QUEUE_HEADING, "QUEUE", "AGENTS", "LOGIN AGENTS", "PENDING AGENTS", "CUSTOMERS", "PENDING CUSTOMERS");
+    opbx_cli(fd, FMT_QUEUE_HEADING, "QUEUE", "AGENTS", "LOGIN AGENTS", "PENDING AGENTS", "CUSTOMERS", "PENDING CUSTOMERS");
 
     iter = icd_fieldset__get_key_iterator(queues);
     while (icd_fieldset_iterator__has_more(iter)) {
@@ -448,10 +449,10 @@ icd_status icd_command_show_queue(int fd, int argc, char **argv)
 	    }
 	    icd_member_list__unlock(icd_queue__get_agents(queue));
             destroy_icd_list_iterator(&list_iter);
-	    cw_cli(fd, "AGENTS STATES:");
+	    opbx_cli(fd, "AGENTS STATES:");
 	    for(state = ICD_CALLER_STATE_CREATED; state <= ICD_CALLER_STATE_CONFERENCED; state++ ){
                 if(state_count[state] > 0)
-                    cw_cli(fd, " %s = %d,", icd_caller_state_strings[state] + 17, state_count[state]);
+                    opbx_cli(fd, " %s = %d,", icd_caller_state_strings[state] + 17, state_count[state]);
             }
             
 	    for(state = ICD_CALLER_STATE_CREATED; state <= ICD_CALLER_STATE_CONFERENCED; state_count[state++] = 0);
@@ -466,12 +467,12 @@ icd_status icd_command_show_queue(int fd, int argc, char **argv)
 	    }
 	    icd_member_list__unlock(icd_queue__get_customers(queue));
             destroy_icd_list_iterator(&list_iter);
-	    cw_cli(fd, "\nCUSTOMERS STATES:");
+	    opbx_cli(fd, "\nCUSTOMERS STATES:");
 	    for(state = ICD_CALLER_STATE_CREATED; state <= ICD_CALLER_STATE_CONFERENCED; state++ ){
                 if(state_count[state] > 0)
-                    cw_cli(fd, " %s = %d,", icd_caller_state_strings[state] + 17, state_count[state]);
+                    opbx_cli(fd, " %s = %d,", icd_caller_state_strings[state] + 17, state_count[state]);
             }
-	    cw_cli(fd, "\n");
+	    opbx_cli(fd, "\n");
 	    
             if (argc != 2)
                 break;
@@ -479,9 +480,9 @@ icd_status icd_command_show_queue(int fd, int argc, char **argv)
     }
     destroy_icd_fieldset_iterator(&iter);
 
-    cw_cli(fd, "\n");
+    opbx_cli(fd, "\n");
     cli_line(fd, "=", 80);
-    cw_cli(fd, "\n");
+    opbx_cli(fd, "\n");
 
     return ICD_SUCCESS;
 }
@@ -494,7 +495,7 @@ icd_status icd_command_show_agent(int fd, int argc, char **argv)
 #define FMT_AGENT_DATA2   "%s:%d:%s:%s:%s:%s:%s:\n"
 
     char *curr_key;
-    struct cw_channel *chan = NULL;
+    struct opbx_channel *chan = NULL;
     icd_agent *agent = NULL;
     icd_caller *caller = NULL;
     icd_caller *associate = NULL;
@@ -506,10 +507,10 @@ icd_status icd_command_show_agent(int fd, int argc, char **argv)
     int state;
     char buf[256];
 
-    cw_cli(fd, "\n");
+    opbx_cli(fd, "\n");
     cli_line(fd, "=", 80);
-    cw_cli(fd, "\n");
-    cw_cli(fd, FMT_AGENT_HEADING, "GROUP", "ID", "NAME", "STATE", "CHANNEL", "TALKING", "QUEUE", "LISTEN CODE");
+    opbx_cli(fd, "\n");
+    opbx_cli(fd, FMT_AGENT_HEADING, "GROUP", "ID", "NAME", "STATE", "CHANNEL", "TALKING", "QUEUE", "LISTEN CODE");
     
     for(state = ICD_CALLER_STATE_CREATED; state <= ICD_CALLER_STATE_CONFERENCED; state_count[state++] = 0);
         
@@ -545,7 +546,7 @@ icd_status icd_command_show_agent(int fd, int argc, char **argv)
             destroy_icd_list_iterator(&list_iter);
             icd_list__unlock((icd_list *) (icd_caller__get_associations(caller)));
         }
-	cw_cli(fd, FMT_AGENT_DATA1, (char *) icd_caller__get_param(caller, "group"),
+	opbx_cli(fd, FMT_AGENT_DATA1, (char *) icd_caller__get_param(caller, "group"),
             icd_caller__get_id(caller), icd_caller__get_name(caller), icd_caller__get_state_string(caller)+17,
             icd_caller__get_channel(caller) ? icd_caller__get_channel(caller)->name : "(None)", buf);
 	    
@@ -556,7 +557,7 @@ icd_status icd_command_show_agent(int fd, int argc, char **argv)
 		if(member){
 	          queue = icd_member__get_queue(member);
 		  if(queue){
-                      cw_cli(fd, "%s, ", icd_queue__get_name(queue));
+                      opbx_cli(fd, "%s, ", icd_queue__get_name(queue));
 		  }
                 }
         }
@@ -564,19 +565,19 @@ icd_status icd_command_show_agent(int fd, int argc, char **argv)
         icd_list__unlock((icd_list *) (icd_caller__get_memberships(caller)));
         
 
-        cw_cli(fd, "\n");
+        opbx_cli(fd, "\n");
     }
 
     destroy_icd_fieldset_iterator(&iter);
-    cw_cli(fd, "AGENTS IN STATE:" );
+    opbx_cli(fd, "AGENTS IN STATE:" );
     for(state = ICD_CALLER_STATE_CREATED; state <= ICD_CALLER_STATE_CONFERENCED; state++ ){
           if(state_count[state] > 0)
-                cw_cli(fd, " %s = %d,", icd_caller_state_strings[state] + 17, state_count[state]);
+                opbx_cli(fd, " %s = %d,", icd_caller_state_strings[state] + 17, state_count[state]);
     }
 
-    cw_cli(fd, "\n");
+    opbx_cli(fd, "\n");
     cli_line(fd, "=", 80);
-    cw_cli(fd, "\n");
+    opbx_cli(fd, "\n");
 
     return ICD_SUCCESS;
 
@@ -590,7 +591,7 @@ icd_status icd_command_show_customer(int fd, int argc, char **argv)
 #define FMT_CUSTOMER_DATA2   "%s:%d:%s:%s:%s:%s:%s:\n"
 
     char *curr_key;
-    struct cw_channel *chan = NULL;
+    struct opbx_channel *chan = NULL;
     icd_customer *customer = NULL;
     icd_caller *caller = NULL;
     icd_caller *associate = NULL;
@@ -602,14 +603,14 @@ icd_status icd_command_show_customer(int fd, int argc, char **argv)
     int state;
     char buf[256];
 
-    cw_cli(fd, "\n");
+    opbx_cli(fd, "\n");
     cli_line(fd, "=", 80);
-    cw_cli(fd, "\n");
-    cw_cli(fd, FMT_CUSTOMER_HEADING, "GROUP", "ID", "CALLER ID", "STATE", "CHANNEL", "TALKING", "QUEUE", "LISTEN CODE");
+    opbx_cli(fd, "\n");
+    opbx_cli(fd, FMT_CUSTOMER_HEADING, "GROUP", "ID", "CALLER ID", "STATE", "CHANNEL", "TALKING", "QUEUE", "LISTEN CODE");
     
     for(state = ICD_CALLER_STATE_CREATED; state <= ICD_CALLER_STATE_CONFERENCED; state_count[state++] = 0);
     
-    cw_mutex_lock(&customers_lock);       
+    opbx_mutex_lock(&customers_lock);       
     iter = icd_fieldset__get_key_iterator(customers);
     while (icd_fieldset_iterator__has_more(iter)) {
         curr_key = icd_fieldset_iterator__next(iter);
@@ -642,7 +643,7 @@ icd_status icd_command_show_customer(int fd, int argc, char **argv)
             destroy_icd_list_iterator(&list_iter);
             icd_list__unlock((icd_list *) (icd_caller__get_associations(caller)));
         }
-	cw_cli(fd, FMT_CUSTOMER_DATA1, (char *) icd_caller__get_param(caller, "group"),
+	opbx_cli(fd, FMT_CUSTOMER_DATA1, (char *) icd_caller__get_param(caller, "group"),
             icd_caller__get_id(caller), icd_caller__get_caller_id(caller), icd_caller__get_state_string(caller)+17,
             icd_caller__get_channel(caller) ? icd_caller__get_channel(caller)->name : "(None)", buf);
 	    
@@ -653,7 +654,7 @@ icd_status icd_command_show_customer(int fd, int argc, char **argv)
 		if(member){
 	          queue = icd_member__get_queue(member);
 		  if(queue){
-                      cw_cli(fd, "%s, ", icd_queue__get_name(queue));
+                      opbx_cli(fd, "%s, ", icd_queue__get_name(queue));
 		  }
                 }
         }
@@ -661,20 +662,20 @@ icd_status icd_command_show_customer(int fd, int argc, char **argv)
         icd_list__unlock((icd_list *) (icd_caller__get_memberships(caller)));
         
 
-        cw_cli(fd, "\n");
+        opbx_cli(fd, "\n");
     }
 
-    cw_mutex_unlock(&customers_lock);
+    opbx_mutex_unlock(&customers_lock);
     destroy_icd_fieldset_iterator(&iter);
-    cw_cli(fd, "CUSTOMERS IN STATE:" );
+    opbx_cli(fd, "CUSTOMERS IN STATE:" );
     for(state = ICD_CALLER_STATE_CREATED; state <= ICD_CALLER_STATE_CONFERENCED; state++ ){
           if(state_count[state] > 0)
-                  cw_cli(fd, " %s = %d,", icd_caller_state_strings[state] + 17, state_count[state]);
+                  opbx_cli(fd, " %s = %d,", icd_caller_state_strings[state] + 17, state_count[state]);
     }
 
-    cw_cli(fd, "\n");
+    opbx_cli(fd, "\n");
     cli_line(fd, "=", 80);
-    cw_cli(fd, "\n");
+    opbx_cli(fd, "\n");
 
     return ICD_SUCCESS;
 
@@ -715,15 +716,15 @@ static icd_status icd_command_dump_queue(int fd, int argc, char **argv)
     icd_queue *queue;
     icd_distributor *dist;
 
-    cw_cli(fd, "\n");
+    opbx_cli(fd, "\n");
     cli_line(fd, "=", 80);
-    cw_cli(fd, "Queue Dump \n");
+    opbx_cli(fd, "Queue Dump \n");
 
     iter = icd_fieldset__get_key_iterator(queues);
     while (icd_fieldset_iterator__has_more(iter)) {
         curr_key = icd_fieldset_iterator__next(iter);
         if (argc == 2 || (!strcmp(curr_key, argv[2]))) {
-            cw_cli(fd, "\nFound %s\n", curr_key);
+            opbx_cli(fd, "\nFound %s\n", curr_key);
             queue = (icd_queue *) icd_fieldset__get_value(queues, curr_key);
             icd_queue__dump(queue, verbosity, fd);
             dist = (icd_distributor *) icd_queue__get_distributor(queue);
@@ -737,9 +738,9 @@ static icd_status icd_command_dump_queue(int fd, int argc, char **argv)
     }
     destroy_icd_fieldset_iterator(&iter);
 
-    cw_cli(fd, "\n");
+    opbx_cli(fd, "\n");
     cli_line(fd, "=", 80);
-    cw_cli(fd, "\n");
+    opbx_cli(fd, "\n");
 
     return ICD_SUCCESS;
 }
@@ -749,14 +750,14 @@ static icd_status icd_command_dump_distributor(int fd, int argc, char **argv)
 /*
     icd_distributor *dist;
 
-     cw_cli(fd,"\n");
+     opbx_cli(fd,"\n");
      cli_line(fd,"=",80);
-     cw_cli(fd,"\n");
+     opbx_cli(fd,"\n");
 
  
-     cw_cli(fd,"\n");
+     opbx_cli(fd,"\n");
      cli_line(fd,"=",80);
-     cw_cli(fd,"\n");
+     opbx_cli(fd,"\n");
 */
     return ICD_SUCCESS;
 }
@@ -772,10 +773,10 @@ static icd_status icd_command_dump_customer(int fd, int argc, char **argv)
     icd_member *member;
     icd_caller *caller;
 
-    cw_cli(fd, "\n");
+    opbx_cli(fd, "\n");
     cli_line(fd, "=", 80);
-    cw_cli(fd, "\n");
-    cw_cli(fd, "Customer Dump \n");
+    opbx_cli(fd, "\n");
+    opbx_cli(fd, "Customer Dump \n");
 
     fs_iter = icd_fieldset__get_key_iterator(queues);
     if (fs_iter == NULL) {
@@ -783,7 +784,7 @@ static icd_status icd_command_dump_customer(int fd, int argc, char **argv)
     }
     while (icd_fieldset_iterator__has_more(fs_iter)) {
         curr_key = icd_fieldset_iterator__next(fs_iter);
-        cw_cli(fd, "\nCustomers in Queue %s\n", curr_key);
+        opbx_cli(fd, "\nCustomers in Queue %s\n", curr_key);
         queue = icd_fieldset__get_value(queues, curr_key);
         customers = (icd_member_list *) icd_queue__get_customers(queue);
 
@@ -807,9 +808,9 @@ static icd_status icd_command_dump_customer(int fd, int argc, char **argv)
     }
     destroy_icd_fieldset_iterator(&fs_iter);
 
-    cw_cli(fd, "\n");
+    opbx_cli(fd, "\n");
     cli_line(fd, "=", 80);
-    cw_cli(fd, "\n");
+    opbx_cli(fd, "\n");
 
     return ICD_SUCCESS;
 }
@@ -818,13 +819,14 @@ static icd_status icd_command_dump_agent(int fd, int argc, char **argv)
 {
     icd_fieldset_iterator *iter;
     char *curr_key;
+    icd_queue *queue;
     icd_agent *agent = NULL;
     icd_caller *caller = NULL;
 
-    cw_cli(fd, "\n");
+    opbx_cli(fd, "\n");
     cli_line(fd, "=", 80);
-    cw_cli(fd, "\n");
-    cw_cli(fd, "Agent Dump \n");
+    opbx_cli(fd, "\n");
+    opbx_cli(fd, "Agent Dump \n");
 
     iter = icd_fieldset__get_key_iterator(agents);
     while (icd_fieldset_iterator__has_more(iter)) {
@@ -838,9 +840,9 @@ static icd_status icd_command_dump_agent(int fd, int argc, char **argv)
     }
     destroy_icd_fieldset_iterator(&iter);
 
-    cw_cli(fd, "\n");
+    opbx_cli(fd, "\n");
     cli_line(fd, "=", 80);
-    cw_cli(fd, "\n");
+    opbx_cli(fd, "\n");
 
     return ICD_SUCCESS;
 }
@@ -851,22 +853,22 @@ static icd_status icd_command_dump__agent(int fd, int argc, char **argv) {
     icd_queue *queue;
     icd_caller *caller;
 
-     cw_cli(fd,"\n");
+     opbx_cli(fd,"\n");
      cli_line(fd,"=",80);
-     cw_cli(fd,"\n");
-     cw_cli(fd,"Agent Dump \n",);
+     opbx_cli(fd,"\n");
+     opbx_cli(fd,"Agent Dump \n",);
 
      iter = icd_fieldset__get_key_iterator(agents);
      while (icd_fieldset_iterator__has_more(iter)) {
        curr_key = icd_fieldset_iterator__next(iter);
-       cw_cli(fd,"\nFound %s\n",curr_key);
+       opbx_cli(fd,"\nFound %s\n",curr_key);
        agent = icd_fieldset__get_value(agents, curr_key) ;
      }
      destroy_icd_fieldset_iterator(&iter);
 
-     cw_cli(fd,"\n");
+     opbx_cli(fd,"\n");
      cli_line(fd,"=",80);
-     cw_cli(fd,"\n");
+     opbx_cli(fd,"\n");
 
     return ICD_SUCCESS;
 }
@@ -896,48 +898,48 @@ int icd_command_load(int fd, int argc, char **argv)
 
 icd_status icd_command_load_app_icd(int fd, int argc, char **argv)
 {
-    cw_cli(fd, "\n");
+    opbx_cli(fd, "\n");
     cli_line(fd, "=", 80);
-    cw_cli(fd, "\n");
-    cw_cli(fd, "APP_ICD Reload \n");
+    opbx_cli(fd, "\n");
+    opbx_cli(fd, "APP_ICD Reload \n");
 
     reload_app_icd(APP_ICD);    /*implemenation in app_icd.c */
 
-    cw_cli(fd, "\n");
+    opbx_cli(fd, "\n");
     cli_line(fd, "=", 80);
-    cw_cli(fd, "\n");
+    opbx_cli(fd, "\n");
 
     return ICD_SUCCESS;
 }
 
 icd_status icd_command_load_conferences(int fd, int argc, char **argv)
 {
-    cw_cli(fd, "\n");
+    opbx_cli(fd, "\n");
     cli_line(fd, "=", 80);
-    cw_cli(fd, "\n");
-    cw_cli(fd, "Conferences Reload \n");
+    opbx_cli(fd, "\n");
+    opbx_cli(fd, "Conferences Reload \n");
 
     reload_app_icd(ICD_CONFERENCE);     /*implemenation in app_icd.c */
 
-    cw_cli(fd, "\n");
+    opbx_cli(fd, "\n");
     cli_line(fd, "=", 80);
-    cw_cli(fd, "\n");
+    opbx_cli(fd, "\n");
 
     return ICD_SUCCESS;
 }
 
 icd_status icd_command_load_agents(int fd, int argc, char **argv)
 {
-    cw_cli(fd, "\n");
+    opbx_cli(fd, "\n");
     cli_line(fd, "=", 80);
-    cw_cli(fd, "\n");
-    cw_cli(fd, "Agents Reload \n");
+    opbx_cli(fd, "\n");
+    opbx_cli(fd, "Agents Reload \n");
 
     reload_app_icd(ICD_AGENT);  /*implemenation in app_icd.c */
 
-    cw_cli(fd, "\n");
+    opbx_cli(fd, "\n");
     cli_line(fd, "=", 80);
-    cw_cli(fd, "\n");
+    opbx_cli(fd, "\n");
 
     return ICD_SUCCESS;
 }
@@ -945,16 +947,16 @@ icd_status icd_command_load_agents(int fd, int argc, char **argv)
 icd_status icd_command_load_queues(int fd, int argc, char **argv)
 {
 
-    cw_cli(fd, "\n");
+    opbx_cli(fd, "\n");
     cli_line(fd, "=", 80);
-    cw_cli(fd, "\n");
-    cw_cli(fd, "Queue Reload \n");
+    opbx_cli(fd, "\n");
+    opbx_cli(fd, "Queue Reload \n");
 
     reload_app_icd(ICD_QUEUE);  /*implemenation in app_icd.c */
 
-    cw_cli(fd, "\n");
+    opbx_cli(fd, "\n");
     cli_line(fd, "=", 80);
-    cw_cli(fd, "\n");
+    opbx_cli(fd, "\n");
 
     return ICD_SUCCESS;
 }
@@ -965,7 +967,7 @@ int icd_command_ack (int fd, int argc, char **argv)
   icd_agent *agent = NULL;
 
   if(argc != 2) {
-     	cw_cli(fd, "icd ack: Bad number of parameters\n");
+     	opbx_cli(fd, "icd ack: Bad number of parameters\n");
         manager_event(EVENT_FLAG_USER, "icd_command",
                 "Command: Ack\r\nResult: Fail\r\nCause: Wrong parameters number\r\n");
      	return -1;
@@ -973,7 +975,7 @@ int icd_command_ack (int fd, int argc, char **argv)
   agent_id = argv[1];   	   
   agent = (icd_agent *) icd_fieldset__get_value(agents, agent_id);
   if (!agent) {
-        cw_cli(fd, "icd ack failed. Agent [%s] could not be found.\n", agent_id);        
+        opbx_cli(fd, "icd ack failed. Agent [%s] could not be found.\n", agent_id);        
         manager_event(EVENT_FLAG_USER, "icd_command",
                 "Command: Ack\r\nResult: Fail\r\nCause: Agent not found\r\nCallerID: %s\r\n", agent_id);
 		return -1;
@@ -985,10 +987,10 @@ int icd_command_ack (int fd, int argc, char **argv)
    	 manager_event(EVENT_FLAG_USER, "icd_command",
        "Command: Ack\r\nResult: OK\r\nCallerID: %s\r\nState: %s\r\n", 
        agent_id, icd_caller__get_state_string((icd_caller *)agent));
-     cw_cli(fd, "icd ack for agent[%s] - OK\n", agent_id);
+     opbx_cli(fd, "icd ack for agent[%s] - OK\n", agent_id);
      return 0;
   }
-  cw_log(LOG_WARNING, "Function Ack failed, Agent [%s] is not in appropriate state [%s]\n", agent_id, icd_caller__get_state_string((icd_caller *) agent));
+  opbx_log(LOG_WARNING, "Function Ack failed, Agent [%s] is not in appropriate state [%s]\n", agent_id, icd_caller__get_state_string((icd_caller *) agent));
   manager_event(EVENT_FLAG_USER, "icd_command",
        "Command: Ack\r\nResult: Fail\r\nCause: Not correct state\r\nCallerID: %s\r\nState: %s\r\n", 
        agent_id, icd_caller__get_state_string((icd_caller *)agent));
@@ -1001,7 +1003,7 @@ int icd_command_hang_up (int fd, int argc, char **argv)
     char *agent_id;
     
     if (argc != 2) {
-        cw_cli(fd, "Function Hang up failed- bad number of parameters [%d]\n", argc);
+        opbx_cli(fd, "Function Hang up failed- bad number of parameters [%d]\n", argc);
         manager_event(EVENT_FLAG_USER, "icd_command",
                 "Command: Hangup\r\nResult: Fail\r\nCause: Wrong parameters number\r\n");
         return -1;
@@ -1009,14 +1011,14 @@ int icd_command_hang_up (int fd, int argc, char **argv)
     agent_id = argv[1];   
     agent = (icd_caller *) icd_fieldset__get_value(agents, agent_id);
     if (!agent) {
-        cw_cli(fd, "Function Hang up failed. Agent '%s' could not be found.\n", agent_id);        
+        opbx_cli(fd, "Function Hang up failed. Agent '%s' could not be found.\n", agent_id);        
         manager_event(EVENT_FLAG_USER, "icd_command",
                 "Command: Hangup\r\nResult: Fail\r\nCause: Agent not found\r\nCallerID: %s\r\n", agent_id);
 		return -1;
     }		    
     if(icd_caller__get_state(agent) != ICD_CALLER_STATE_BRIDGED &&
        icd_caller__get_state(agent) != ICD_CALLER_STATE_CONFERENCED){
-       cw_cli(fd, "Function Hang up failed. Agent '%s' in state [%s].\n", agent_id,
+       opbx_cli(fd, "Function Hang up failed. Agent '%s' in state [%s].\n", agent_id,
 		    icd_caller__get_state_string(agent));        
         manager_event(EVENT_FLAG_USER, "icd_command",
             "Command: Hangup\r\nResult: Fail\r\nCause: Not correct state\r\nCallerID: %s\r\nState: %s\r\n", 
@@ -1024,13 +1026,13 @@ int icd_command_hang_up (int fd, int argc, char **argv)
 		return -1;
     }    
     if(icd_caller__set_state(agent, ICD_CALLER_STATE_CALL_END)!=ICD_SUCCESS){    	     
-       cw_cli(fd, "Function Hang up failed. Agent [%s] can not change state to CALL_END\n", agent_id);
+       opbx_cli(fd, "Function Hang up failed. Agent [%s] can not change state to CALL_END\n", agent_id);
        manager_event(EVENT_FLAG_USER, "icd_command",
             "Command: Hangup\r\nResult: Fail\r\nCause: State change to CALL_END failed\r\nCallerID: %s\r\nState: %s\r\n", 
             agent_id, icd_caller__get_state_string(agent));
     	return -1;
     }
-    cw_log(LOG_NOTICE, "Function Hang up for agent [%s] executed OK.\n", agent_id);
+    opbx_log(LOG_NOTICE, "Function Hang up for agent [%s] executed OK.\n", agent_id);
     manager_event(EVENT_FLAG_USER, "icd_command",
         "Command: Hangup\r\nResult: OK\r\nCallerID: %s\r\n", 
          agent_id);
@@ -1039,7 +1041,7 @@ int icd_command_hang_up (int fd, int argc, char **argv)
 
 static void *icd_command_login_thread(void *arg) {
     icd_caller *agent = arg;
-    struct cw_channel *chan;
+    struct opbx_channel *chan;
     char *channelstring;
     char *agent_id;
     int res;
@@ -1049,47 +1051,46 @@ static void *icd_command_login_thread(void *arg) {
 	channelstring = icd_caller__get_channel_string(agent);
 	agent_id = icd_caller__get_caller_id(agent);
     chan = icd_caller__get_channel(agent);
-    res = icd_bridge_dial_callweaver_channel(agent, channelstring, 20000);
+    res = icd_bridge_dial_openpbx_channel(agent, channelstring, 20000);
     icd_caller__set_channel(agent, NULL);
-    if (res != CW_CONTROL_ANSWER){
-        cw_log(LOG_WARNING, "Login of agent [%s] failed - unable to get answer from channel [%s] .\n", agent_id, channelstring);
+    if (res != OPBX_CONTROL_ANSWER){
+        opbx_log(LOG_WARNING, "Login of agent [%s] failed - unable to get answer from channel [%s] .\n", agent_id, channelstring);
         manager_event(EVENT_FLAG_USER, "icd_command",
                 "Command: Login\r\nResult: Fail\r\nCause: No channel answer\r\nID: %d\r\nCallerID: %s\r\nCallerName: %s\r\nChannelString: %s\r\n",
                 icd_caller__get_id(agent), icd_caller__get_caller_id(agent), icd_caller__get_name(agent),
                 channelstring);
 /* More detailed check why there is no answer probably needed in the future. */	 
-        cw_hangup(chan);
+        opbx_hangup(chan);
         icd_caller__del_param(agent, "LogInProgress");
-	    return NULL;
+	    return;
     }	 
   	sprintf(buf, "agent=%s", agent_id);
   	passwd = icd_caller__get_param(agent, "login_password");
-  	if (passwd)
+  	if(passwd){
   		sprintf(buf + strlen(buf), "|password=%s", passwd);  			
-#if 0
-/* TODO: fudged to compile */
+    }
     app_icd__agent_exec(chan, buf);
-#endif
     icd_caller__del_param(agent, "LogInProgress");
-    cw_log(LOG_NOTICE, "Agent login: External thread for Agent [%s] ending\n", agent_id);
+    opbx_log(LOG_NOTICE, "Agent login: External thread for Agent [%s] ending\n", agent_id);
 /*    icd_bridge__safe_hangup(agent);*/
     chan = icd_caller__get_channel(agent);
     if(chan){
         icd_caller__stop_waiting(agent);
-        cw_softhangup(chan, CW_SOFTHANGUP_EXPLICIT);
-        cw_hangup(chan);
+        opbx_softhangup(chan, OPBX_SOFTHANGUP_EXPLICIT);
+        opbx_hangup(chan);
         icd_caller__set_channel(agent, NULL);
     }	
-    return NULL;
 }
 
 int icd_command_login (int fd, int argc, char **argv)
 {
+    struct opbx_channel *chan;
     icd_caller *agent = NULL;
     char *agent_id;
     char *passwd=NULL;
     char *channelstring;
     int logFlag=1;
+    int res;
 	pthread_t thread;
 	pthread_attr_t attr;
 	int result;
@@ -1105,7 +1106,7 @@ int icd_command_login (int fd, int argc, char **argv)
       	 
     agent = (icd_caller *) icd_fieldset__get_value(agents, agent_id);    
     if (!agent) {
-        cw_log(LOG_WARNING,
+        opbx_log(LOG_WARNING,
                     "AGENT LOGIN Fail!  Agent '%s' could not be found.\n"
                     "Please correct the 'agent' argument in the extensions.conf file\n", agent_id);        
         manager_event(EVENT_FLAG_USER, "icd_command",
@@ -1114,7 +1115,7 @@ int icd_command_login (int fd, int argc, char **argv)
     }       
     if (icd_caller__get_state(agent) != ICD_CALLER_STATE_SUSPEND &&
       icd_caller__get_state(agent) != ICD_CALLER_STATE_INITIALIZED) {
-        cw_log(LOG_WARNING, "Login - Agent '%s' already logged in nothing to do\n", agent_id);        
+        opbx_log(LOG_WARNING, "Login - Agent '%s' already logged in nothing to do\n", agent_id);        
         manager_event(EVENT_FLAG_USER, "icd_command",
                 "Command: Login\r\nResult: Fail\r\nCause: Already logged\r\nID: %d\r\nCallerID: %s\r\nCallerName: %s\r\nCallerState: %s\r\n",
                 icd_caller__get_id(agent), icd_caller__get_caller_id(agent), icd_caller__get_name(agent),
@@ -1122,7 +1123,7 @@ int icd_command_login (int fd, int argc, char **argv)
          	    return ICD_EGENERAL;
     }
 	if(icd_caller__get_param(agent, "LogInProgress")){ 
-	    cw_log(LOG_WARNING, "Login - Agent '%s' previous login try not finished yet.\n", agent_id);         
+	    opbx_log(LOG_WARNING, "Login - Agent '%s' previous login try not finished yet.\n", agent_id);         
         manager_event(EVENT_FLAG_USER, "icd_command",
                 "Command: Login\r\nResult: Fail\r\nCause: Previouv login try not finished\r\nID: %d\r\nCallerID: %s\r\nCallerName: %s\r\nCallerState: %s\r\n",
                 icd_caller__get_id(agent), icd_caller__get_caller_id(agent), icd_caller__get_name(agent),
@@ -1133,7 +1134,7 @@ int icd_command_login (int fd, int argc, char **argv)
     icd_caller__set_channel_string(agent, channelstring);
     icd_caller__set_param_string(agent, "channel", channelstring);
     if(!icd_caller__create_channel(agent) ) {
-        cw_log(LOG_WARNING,"Not avaliable channel [%s] \n", channelstring);
+        opbx_log(LOG_WARNING,"Not avaliable channel [%s] \n", channelstring);
         manager_event(EVENT_FLAG_USER, "icd_command",
                 "Command: Login\r\nResult: Fail\r\nCause: Channel not avaliable\r\nID: %d\r\nCallerID: %s\r\nCallerName: %s\r\nCallerState: %s\r\n",
                 icd_caller__get_id(agent), icd_caller__get_caller_id(agent), icd_caller__get_name(agent),
@@ -1150,7 +1151,7 @@ int icd_command_login (int fd, int argc, char **argv)
 	result = pthread_attr_init(&attr);
 	pthread_attr_setschedpolicy(&attr, SCHED_RR);
 	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
-	result = cw_pthread_create(&thread, &attr, icd_command_login_thread, agent);
+	result = opbx_pthread_create(&thread, &attr, icd_command_login_thread, agent);
 	result = pthread_attr_destroy(&attr);	
     return 0;
 }
@@ -1173,7 +1174,7 @@ int icd_command_logout (int fd, int argc, char **argv)
     passwd_to_check = argv[2];
     agent = (icd_caller *) icd_fieldset__get_value(agents, agent_id);   
     if (agent == NULL) {
-        cw_log(LOG_WARNING,
+        opbx_log(LOG_WARNING,
                     "LOGOUT FAILURE!  Agent '%s' could not be found.\n", agent_id);
           manager_event(EVENT_FLAG_USER, "icd_command",
                 "Command: Logout\r\nResult: Fail\r\nCause: Agent not found\r\nCallerID: %s\r\n", agent_id);
@@ -1183,7 +1184,7 @@ int icd_command_logout (int fd, int argc, char **argv)
     passwd = icd_caller__get_param(agent, "passwd");
     if (passwd) 
           if(strcmp(passwd, passwd_to_check)){
-          cw_log(LOG_WARNING,
+          opbx_log(LOG_WARNING,
                  "LOGOUT FAILURE! Wrong password for Agent '%s'.\n", agent_id);
           manager_event(EVENT_FLAG_USER, "icd_command",
                 "Command: Logout\r\nResult: Fail\r\nCause: Wrong password\r\nID: %d\r\nCallerID: %s\r\nAgentName: %s\r\nAgentState: %s\r\n",
@@ -1192,14 +1193,14 @@ int icd_command_logout (int fd, int argc, char **argv)
           return ICD_EGENERAL;
     }     
     
-    cw_log(LOG_NOTICE, "Agent [%s] (found in registry) will be logged out.\n", agent_id);
+    opbx_log(LOG_NOTICE, "Agent [%s] (found in registry) will be logged out.\n", agent_id);
     /* TBD - Implement state change to ICD_CALLER_STATE_WAIT. We can't just pause the thread
      * because the caller's members would still be in the distributors. We need to go into a
      * caller state that is actually different, a paused/waiting/down state.
      */
     
      if (icd_caller__set_state(agent, ICD_CALLER_STATE_SUSPEND)  != ICD_SUCCESS){
-        cw_log(LOG_WARNING,
+        opbx_log(LOG_WARNING,
                     "LOGOUT FAILURE!  Agent [%s] vetoed or ivalid state change, state [%s].\n", agent_id,icd_caller__get_state_string(agent));
         manager_event(EVENT_FLAG_USER, "icd_command",
                 "Command: Logout\r\nResult: Fail\r\nCause: Unable to change state\r\nID: %d\r\nCallerID: %s\r\nCallerName: %s\r\nCallerState: %s\r\n",
@@ -1208,7 +1209,7 @@ int icd_command_logout (int fd, int argc, char **argv)
 	    return ICD_EGENERAL;
 	} 
 	else {	    
-        cw_log(LOG_WARNING, "LOGOUT OK!  Agent [%s] logged out.\n", agent_id);
+        opbx_log(LOG_WARNING, "LOGOUT OK!  Agent [%s] logged out.\n", agent_id);
         manager_event(EVENT_FLAG_USER, "icd_command",
                 "Command: Logout\r\nResult: OK\r\nID: %d\r\nCallerID: %s\r\nCallerName: %s\r\nCallerState: %s\r\n",
                 icd_caller__get_id(agent), icd_caller__get_caller_id(agent), icd_caller__get_name(agent),
@@ -1222,25 +1223,25 @@ int icd_command_logout (int fd, int argc, char **argv)
 int icd_command_hangup_channel (int fd, int argc, char **argv)
 {
    char *chan_name;
-   struct cw_channel *chan;
+   struct opbx_channel *chan;
 
    if (argc != 2) {
-       cw_cli(fd, "Function Hang up channel failed - bad number of parameters [%d]\n", argc);
+       opbx_cli(fd, "Function Hang up channel failed - bad number of parameters [%d]\n", argc);
        manager_event(EVENT_FLAG_USER, "icd_command",
                 "Command: HangupChannel\r\nResult: Fail\r\nCause: Wrong parameters number\r\n");
 	   return -1;
     }
    chan_name = argv[1];
-   chan = cw_get_channel_by_name_locked(chan_name);
+   chan = opbx_get_channel_by_name_locked(chan_name);
    if (chan == NULL) {
-       cw_cli(fd, "Function Hang up channel failed - channel not found [%s]\n", chan_name);
+       opbx_cli(fd, "Function Hang up channel failed - channel not found [%s]\n", chan_name);
        manager_event(EVENT_FLAG_USER, "icd_command",
                 "Command: HangupChannel\r\nResult: Fail\r\nCause: Channel not found\r\nChannel : %s\r\n", chan_name);
 	   return -1;
    }
-   cw_mutex_unlock (&chan->lock);
-   cw_softhangup(chan, CW_SOFTHANGUP_EXPLICIT);
-   cw_cli(fd, "Function Hang Up succeed - channel[%s]\n", chan_name);
+   opbx_mutex_unlock (&chan->lock);
+   opbx_softhangup(chan, OPBX_SOFTHANGUP_EXPLICIT);
+   opbx_cli(fd, "Function Hang Up succeed - channel[%s]\n", chan_name);
    manager_event(EVENT_FLAG_USER, "icd_command",
       "Command: HangupChannel\r\nResult: OK\r\nChannel : %s\r\n", chan_name);
    return 0;
@@ -1260,7 +1261,7 @@ int icd_command_playback_channel (int fd, int argc, char **argv)
 
 
    if (argc != 3){
-       cw_cli(fd, "Function Playback_chan (play_dtmf) failed - bad number of parameters [%d]\n", argc);
+       opbx_cli(fd, "Function Playback_chan (play_dtmf) failed - bad number of parameters [%d]\n", argc);
        manager_event(EVENT_FLAG_USER, "icd_command",
                 "Command: PlaybackChannel\r\nResult: Fail\r\nCause: Wrong parameters number\r\n");
        return -1;
@@ -1273,7 +1274,7 @@ int icd_command_playback_channel (int fd, int argc, char **argv)
     key = argv[2];
 
    if (agent == NULL) {
-       cw_cli(fd, "Function Playback_chan (play_dtmf) failed - agent not found [%s]\n", agent_id);
+       opbx_cli(fd, "Function Playback_chan (play_dtmf) failed - agent not found [%s]\n", agent_id);
        manager_event(EVENT_FLAG_USER, "icd_command",
                 "Command: PlaybackChannel\r\nResult: Fail\r\nCause: Channel not found\r\nChannel : %s\r\n", agent_id);
        return -1;
@@ -1331,13 +1332,13 @@ int icd_command_playback_channel (int fd, int argc, char **argv)
             break;
 
         default:
-            return -1;
+            return;
     }
 
         conf = ((icd_caller *)agent)->conference;
 
         if (!conf) {
-            cw_cli(fd, "Function Playback_chan (play_dtmf) failed - agent conference not found [%s]\n", agent_id);
+            opbx_cli(fd, "Function Playback_chan (play_dtmf) failed - agent conference not found [%s]\n", agent_id);
             manager_event(EVENT_FLAG_USER, "icd_command",
                 "Command: PlaybackChannel\r\nResult: Fail\r\nCause: Agent conference not found\r\nAgent : %s\r\n", agent_id);
             return -1;
@@ -1348,14 +1349,14 @@ int icd_command_playback_channel (int fd, int argc, char **argv)
     	    res = write(conf->fd, data, len);
 
     	    if (res < 1) {      
-                cw_log(LOG_WARNING, "Failed to write audio data to conference: \n");
+                opbx_log(LOG_WARNING, "Failed to write audio data to conference: \n");
                 return 0;
     	    }
     	    len -= res;
     	    data += res;
         }
 
-    cw_cli(fd, "Function Playback succeed - agent[%s]\n", agent_id);
+    opbx_cli(fd, "Function Playback succeed - agent[%s]\n", agent_id);
     manager_event(EVENT_FLAG_USER, "icd_command",
       "Command: PlaybackChannel (play_dtmf)\r\nResult: OK\r\nAgent : %s\r\n", agent_id);
     return 0;
@@ -1371,7 +1372,7 @@ argv[1] = start or stop
 argv[2] = customer token 
 argv[3] = if start - directory & file name. %D -day, %M - minute, %S - second. To this failename wil be added
 	  token and .WAV. Example: 
-argv[3] = /tmp/%D/%m/  fliename is: /tmp/29/59/callweaver123123423423454.WAV	                 
+argv[3] = /tmp/%D/%m/  fliename is: /tmp/29/59/openpbx123123423423454.WAV	                 
 */
 
 int icd_command_record(int fd, int argc, char **argv)
@@ -1383,14 +1384,14 @@ int icd_command_record(int fd, int argc, char **argv)
   char buf[300];
   char cust_buf[40];
   char *RecFile;
-  cw_channel * chan;
+  opbx_channel * chan;
   char * customer_source;
   struct tm *ptr;
   time_t tm;
   int record_start = -1;
 
   if (argc != 3  && argc != 4 ) {
-       cw_cli(fd, "Function record bad no of parameters [%d]\n", argc);
+       opbx_cli(fd, "Function record bad no of parameters [%d]\n", argc);
        manager_event(EVENT_FLAG_USER, "icd_command",
                 "Command: Record\r\nResult: Fail\r\nCause: Wrong parameters number\r\n");
        return 1;
@@ -1401,7 +1402,7 @@ int icd_command_record(int fd, int argc, char **argv)
    if (!strcasecmp(argv[1],"stop"))
         record_start = 0;
    if (record_start == -1) {
-       cw_cli(fd, "Function record first parameter [%s] start/stop allowed\n", argv[1]);
+       opbx_cli(fd, "Function record first parameter [%s] start/stop allowed\n", argv[1]);
        manager_event(EVENT_FLAG_USER, "icd_command",
                 "Command: Record\r\nResult: Fail\r\nCause: Wrong parameters\r\n");
        return 1;
@@ -1414,12 +1415,12 @@ int icd_command_record(int fd, int argc, char **argv)
         strcpy(buf,"MuxMon stop ");
    }	 
    customer_source = argv[2]; 
-   cw_mutex_lock(&customers_lock);
+   opbx_mutex_lock(&customers_lock);
    customer = (icd_caller *) icd_fieldset__get_value(customers, customer_source);
-   cw_mutex_unlock(&customers_lock);
+   opbx_mutex_unlock(&customers_lock);
 
    if (customer == NULL) {
-            cw_cli(fd, "Record FAILURE! Customer [%s] not found\n", customer_source);
+            opbx_cli(fd, "Record FAILURE! Customer [%s] not found\n", customer_source);
        		manager_event(EVENT_FLAG_USER, "icd_command",
                 "Command: Record\r\nResult: Fail\r\nCause: Wrong customer ID\r\nCallerID: %s\r\n", 
                 customer_source);
@@ -1427,14 +1428,14 @@ int icd_command_record(int fd, int argc, char **argv)
    }
    chan = icd_caller__get_channel(customer);
    if (chan == NULL) {
-            cw_cli(fd, "Record FAILURE! Channel for customer [%s] not found\n", customer_source);
+            opbx_cli(fd, "Record FAILURE! Channel for customer [%s] not found\n", customer_source);
        		manager_event(EVENT_FLAG_USER, "icd_command",
                 "Command: Record\r\nResult: Fail\r\nCause: No customer channel\r\nCallerID: %s\r\n", 
                 customer_source);
 	        return 1;
    }
    if (chan->name == NULL) {
-            cw_cli(fd,  "Record FAILURE! Channel name for customer [%s] not found\n", customer_source);
+            opbx_cli(fd,  "Record FAILURE! Channel name for customer [%s] not found\n", customer_source);
        		manager_event(EVENT_FLAG_USER, "icd_command",
                 "Command: Record\r\nResult: Fail\r\nCause: No customer channel name\r\nCallerID: %s\r\n", 
                 customer_source);
@@ -1442,7 +1443,7 @@ int icd_command_record(int fd, int argc, char **argv)
    }
    strncpy(buf + strlen(buf), chan->name, sizeof(buf) - strlen(buf));
    if (!record_start){
-   		cw_log(LOG_NOTICE, "Stop of recording for customer [%s] \n", customer_source);
+   		opbx_log(LOG_NOTICE, "Stop of recording for customer [%s] \n", customer_source);
     	manager_event(EVENT_FLAG_USER, "icd_command",
                 "Command: Record\r\nSubCommand: Stop\r\nResult: OK\r\nCallerID: %s\r\n", 
                 customer_source);
@@ -1450,11 +1451,11 @@ int icd_command_record(int fd, int argc, char **argv)
                 "Event: RecordStop\r\nCallerID: %s\r\n", 
                 customer_source);
         fd = fileno(stderr);
-        cw_cli_command(fd, buf);
+        opbx_cli_command(fd, buf);
         return 0;
    }
    if(chan->spiers !=NULL){
-   	cw_log(LOG_NOTICE, "Start of recording for customer [%s] failed - already recording \n", customer_source);
+   	opbx_log(LOG_NOTICE, "Start of recording for customer [%s] failed - already recording \n", customer_source);
         manager_event(EVENT_FLAG_USER, "icd_command",
                 "Command: Record\r\nSubCommand: Start\r\nResult: Fail\r\nCause: Already recording\r\nCallerID: %s\r\n", 
                 customer_source);
@@ -1462,9 +1463,9 @@ int icd_command_record(int fd, int argc, char **argv)
    }
    strcpy(buf + strlen(buf), " ");
    strncpy(rec_directory_buf, argv[3],sizeof(rec_directory_buf)-1);
-   if((rec_format=strchr(rec_directory_buf,'.'))){
+   if(rec_format=strchr(rec_directory_buf,'.')){
       *rec_format='\0';
-      rec_format++;
+      *rec_format++;
       rec_format_buf[0]='.';
       strncpy(rec_format_buf+1, rec_format, sizeof(rec_format_buf)-2);
    }   
@@ -1482,10 +1483,10 @@ int icd_command_record(int fd, int argc, char **argv)
    strncpy(buf + strlen(buf),  cust_buf, sizeof(buf) - strlen(buf)-1);
    strncpy(buf + strlen(buf),  rec_format_buf, sizeof(buf) - strlen(buf)-1);
  
-//   muxmon <start|stop> <chan_name> <args>cw_cli_command(fd, command);fd can be like fileno(stderr)
+//   muxmon <start|stop> <chan_name> <args>opbx_cli_command(fd, command);fd can be like fileno(stderr)
    fd = fileno(stderr);
-   cw_cli_command(fd, buf);
-   cw_log(LOG_NOTICE, "Start of recording for customer [%s] \n", customer_source);
+   opbx_cli_command(fd, buf);
+   opbx_log(LOG_NOTICE, "Start of recording for customer [%s] \n", customer_source);
    manager_event(EVENT_FLAG_USER, "icd_command",
                 "Command: Record\r\nSubCommand: Start\r\nResult: OK\r\nCallerID: %s\r\nFileName: %s\r\n", 
                 customer_source, RecFile);
@@ -1514,7 +1515,7 @@ int icd_command_join_queue (int fd, int argc, char **argv)
 	 
 	     
 	    if ((argc != 3) && (argc !=4)) { 
-       		cw_cli(fd, "icd queue FAILURE! bad parameters\n");
+       		opbx_cli(fd, "icd queue FAILURE! bad parameters\n");
        		manager_event(EVENT_FLAG_USER, "icd_command",
                 "Command: Queue\r\nResult: Fail\r\nCause: Wrong parameters number\r\n");
   	         return 1;
@@ -1523,7 +1524,7 @@ int icd_command_join_queue (int fd, int argc, char **argv)
 	    queuename = argv[2]; 
 	    agent = (icd_caller *) icd_fieldset__get_value(agents, agent_id);    
 	    if (agent == NULL) { 
-            cw_cli(fd, "icd queue FAILURE! Agent [%s] not found\n", agent_id);
+            opbx_cli(fd, "icd queue FAILURE! Agent [%s] not found\n", agent_id);
             manager_event(EVENT_FLAG_USER, "icd_command",
                 "Command: Queue\r\nResult: Fail\r\nCause: Agent not found\r\nCallerID: %s\r\n", agent_id);
 	        return 1;
@@ -1536,13 +1537,13 @@ int icd_command_join_queue (int fd, int argc, char **argv)
 	    if(!remove || strcasecmp(queuename,"all")){          
 	      queue = (icd_queue *) icd_fieldset__get_value(queues, queuename); 
 	      if (queue == NULL) { 
-            	cw_cli(fd,"icd queue FAILURE! Queue not found[%s], Agent [%s]\n", queuename, agent_id);
+            	opbx_cli(fd,"icd queue FAILURE! Queue not found[%s], Agent [%s]\n", queuename, agent_id);
             	manager_event(EVENT_FLAG_USER, "icd_command",
                 	"Command: Queue\r\nResult: Fail\r\nCause: Queue not found\r\nCallerID: %s\r\nQueue: %s\r\n", agent_id, queuename);
 	        	return 1;
 	      } 
 	    }  	 
-	    cw_log(LOG_NOTICE, "Agent [%s] will %s the queue [%s]\n", agent_id, remove?"leave":"join", queuename); 
+	    opbx_log(LOG_NOTICE, "Agent [%s] will %s the queue [%s]\n", agent_id, remove?"leave":"join", queuename); 
             if(!remove){ 
               icd_list__lock((icd_list *) (agent->memberships));
  	        if(icd_caller__add_to_queue(agent, queue) == ICD_SUCCESS){
@@ -1552,7 +1553,7 @@ int icd_command_join_queue (int fd, int argc, char **argv)
 	                	icd_queue__agent_distribute(queue, member); 
 	           	}
 		   }		   		 
-                  cw_cli(fd,"icd queue OK! Agent[%s] added to queue[%s]\n", agent_id, queuename);
+                  opbx_cli(fd,"icd queue OK! Agent[%s] added to queue[%s]\n", agent_id, queuename);
                    manager_event(EVENT_FLAG_USER, "icd_command",
                	    "Command: Queue\r\nSubCommand: Add\r\nResult: OK\r\nCallerID: %s\r\nQueue: %s\r\n", 
                   agent_id, queuename);
@@ -1563,12 +1564,12 @@ int icd_command_join_queue (int fd, int argc, char **argv)
               icd_list__lock((icd_list *) (agent->memberships));
 	      if(queue){ 
 	       if(agent->memberships) 
-	           if((member = icd_member_list__get_for_queue(agent->memberships, queue))){ 
+	           if(member = icd_member_list__get_for_queue(agent->memberships, queue)){ 
 	                if(icd_caller__get_active_member(agent) == member){ 
 	                     icd_caller__set_active_member (agent, NULL); 
 	                }   
 	           icd_caller__remove_from_queue(agent, queue); 
-            	   cw_cli(fd,"icd queue OK! Agent[%s] removed from queue[%s]\n", agent_id, queuename);
+            	   opbx_cli(fd,"icd queue OK! Agent[%s] removed from queue[%s]\n", agent_id, queuename);
             	   manager_event(EVENT_FLAG_USER, "icd_command",
                    "Command: Queue\r\nSubCommand: Remove\r\nResult: OK\r\nCallerID: %s\r\nQueue: %s\r\n", 
                   agent_id, queuename);
@@ -1577,7 +1578,7 @@ int icd_command_join_queue (int fd, int argc, char **argv)
 	      else {
                icd_caller__set_active_member (agent, NULL); 
 	       icd_caller__remove_from_all_queues(agent); 
-      	       cw_cli(fd,"icd queue OK! Agent[%s] removed from all queues\n", agent_id);
+      	       opbx_cli(fd,"icd queue OK! Agent[%s] removed from all queues\n", agent_id);
                 manager_event(EVENT_FLAG_USER, "icd_command",
               	  "Command: Queue\r\nSubCommand: RemoveAll\r\nResult: OK\r\nCallerID: %s\r\n", 
                	  agent_id);
@@ -1595,13 +1596,16 @@ int icd_command_control_playback(int fd, int argc, char **argv) {
     icd_caller * associated_caller;
     char * agent_id;
     icd_conference * conf;
+    int len;
+    int res;
+    unsigned char * data;
     char * key;
-    struct cw_frame write_frame;
+    struct opbx_frame write_frame;
     int count;
     int i;
 
     if (argc < 3){
-        cw_cli(fd, "Function control_playback failed - bad number of parameters [%d]\n", argc);
+        opbx_cli(fd, "Function control_playback failed - bad number of parameters [%d]\n", argc);
         manager_event(EVENT_FLAG_USER, "icd_command",
             "Command: control_playback\r\nResult: Fail\r\nCause: Wrong parameters number\r\n");
         return -1;
@@ -1620,7 +1624,7 @@ int icd_command_control_playback(int fd, int argc, char **argv) {
     }
 
     if (agent == NULL) {
-        cw_cli(fd, "Function control_playback failed - agent not found [%s]\n", agent_id);
+        opbx_cli(fd, "Function control_playback failed - agent not found [%s]\n", agent_id);
         manager_event(EVENT_FLAG_USER, "icd_command",
             "Command: control_playback\r\nResult: Fail\r\nCause: Agent not found\r\nAgent : %s\r\n", agent_id);
         return -1;
@@ -1629,7 +1633,7 @@ int icd_command_control_playback(int fd, int argc, char **argv) {
     conf = ((icd_caller *)agent)->conference;
 
     if (!conf) {
-        cw_cli(fd, "Function control_playback failed - agent conference not found [%s]\n", agent_id);
+        opbx_cli(fd, "Function control_playback failed - agent conference not found [%s]\n", agent_id);
         manager_event(EVENT_FLAG_USER, "icd_command",
             "Command: control_playback\r\nResult: Fail\r\nCause: Agent conference not found\r\nAgent : %s\r\n", agent_id);
         return -1;
@@ -1638,26 +1642,29 @@ int icd_command_control_playback(int fd, int argc, char **argv) {
     associated_caller = (icd_caller *) icd_list__peek((icd_list *) ((icd_caller*)agent)->associations);
     
     if (!associated_caller){
-        cw_cli(fd, "Associated caller not found for agent [%s]\n", agent_id);
+        opbx_cli(fd, "Associated caller not found for agent [%s]\n", agent_id);
         return -1;
     }
 
     if (!associated_caller->chan){
-        cw_cli(fd, "Associated caller channel not found for agent [%s]\n", agent_id);
+        opbx_cli(fd, "Associated caller channel not found for agent [%s]\n", agent_id);
         return -1;
     }
 
-    cw_fr_init_ex(&write_frame, CW_FRAME_DTMF, *key, NULL);
+    memset(&write_frame, 0, sizeof(write_frame));
+    write_frame.frametype = OPBX_FRAME_DTMF;
+    write_frame.subclass = *key;
+    write_frame.datalen = 0;
+    write_frame.samples = 0;
     write_frame.offset = 76;
 
-    for (i = 0;  i < count;  i++)
-    {
-        if (cw_write(associated_caller->chan, &write_frame) < 0) {
-            cw_log(LOG_WARNING, "Unable to write frame to channel: %s\n", "strerror(errno)");
+    for (i=0; i<count; i++){
+        if (opbx_write(associated_caller->chan, &write_frame) < 0) {
+            opbx_log(LOG_WARNING, "Unable to write frame to channel: %s\n", "strerror(errno)");
         }
     }
 
-    cw_cli(fd, "Function control_playback succeed - agent[%s]\n", agent_id);
+    opbx_cli(fd, "Function control_playback succeed - agent[%s]\n", agent_id);
     manager_event(EVENT_FLAG_USER, "icd_command",
         "Command: control_playback\r\nResult: OK\r\nAgent : %s\r\n", agent_id);
     return 0;
@@ -1668,33 +1675,33 @@ int icd_command_control_playback(int fd, int argc, char **argv) {
 int icd_command_transfer (int fd, int argc, char **argv)
 {
   icd_caller *customer;
-  struct cw_channel *chan = NULL;
+  struct opbx_channel *chan = NULL;
   char *customer_source;
   int pri=0;
   char *pria, *exten, *context;
 
   if (argc != 3) {
-       cw_cli(fd, "Transfer FAILURE! bad parameters\n");
+       opbx_cli(fd, "Transfer FAILURE! bad parameters\n");
        manager_event(EVENT_FLAG_USER, "icd_command",
                 "Command: Transfer\r\nResult: Fail\r\nCause: Wrong parameters number\r\n");
        return 1;
    }    
    customer_source = argv[1];
-   cw_mutex_lock(&customers_lock);
+   opbx_mutex_lock(&customers_lock);
    customer = (icd_caller *) icd_fieldset__get_value(customers, customer_source);
-   cw_mutex_unlock(&customers_lock);
+   opbx_mutex_unlock(&customers_lock);
    if (customer == NULL) {
-            cw_cli(fd,"Transfer FAILURE! Customer [%s] not found\n", customer_source);
+            opbx_cli(fd,"Transfer FAILURE! Customer [%s] not found\n", customer_source);
             manager_event(EVENT_FLAG_USER, "icd_command",
                 "Command: Transfer\r\nResult: Fail\r\nCause: Customer not found\r\nCallerID: %s\r\n", customer_source);
 	        return 1;
    }
-   	exten = cw_strdupa(argv[2]);
+   	exten = opbx_strdupa(argv[2]);
 	if((context = strchr(exten,'@'))) {
 		*context = 0;
 		context++;
 		if(!(context && exten)) {
-			cw_cli(fd,"Transfer failure, customer[%s] : no context\n", customer_source);
+			opbx_cli(fd,"Transfer failure, customer[%s] : no context\n", customer_source);
             manager_event(EVENT_FLAG_USER, "icd_command",
                 "Command: Transfer\r\nResult: Fail\r\nCause: Wrong extension@context\r\nCallerID: %s\r\n", customer_source);
 			return 1;
@@ -1708,34 +1715,34 @@ int icd_command_transfer (int fd, int argc, char **argv)
 			pri = 1;
 	}
 	else {		
-		cw_cli(fd,"Transfer failure, customer[%s] : no context\n", customer_source);
+		opbx_cli(fd,"Transfer failure, customer[%s] : no context\n", customer_source);
         manager_event(EVENT_FLAG_USER, "icd_command",
         	"Command: Transfer\r\nResult: Fail\r\nCause: Wrong extension@context\r\nCallerID: %s\r\n", customer_source);
 		return 1;
 	}
 	chan = icd_caller__get_channel(customer);
     if(!chan){
-		cw_cli(fd,"Transfer failure, customer[%s] : no channel\n", customer_source);
+		opbx_cli(fd,"Transfer failure, customer[%s] : no channel\n", customer_source);
     	manager_event(EVENT_FLAG_USER, "icd_command",
     	"Command: Transfer\r\nResult: Fail\r\nCause: No channel\r\nCallerID: %s\r\nContext: %s\r\nExtension: %s\r\nPriority: %d\r\n", 
         customer_source, context, exten, pri);
     }	 	
-    if(!cw_exists_extension(chan, context, exten, pri, NULL)){
-		cw_cli(fd,"Transfer failure, customer[%s] : not correct context-extension\n", customer_source);
+    if(!opbx_exists_extension(chan, context, exten, pri, NULL)){
+		opbx_cli(fd,"Transfer failure, customer[%s] : not correct context-extension\n", customer_source);
     	manager_event(EVENT_FLAG_USER, "icd_command",
     	"Command: Transfer\r\nResult: Fail\r\nCause: Destination not exist\r\nCallerID: %s\r\nContext: %s\r\nExtension: %s\r\nPriority: %d\r\n", 
         customer_source, context, exten, pri);
         return 1;
     }	 	
-	if(cw_goto_if_exists(chan, context, exten, pri)){
-		cw_cli(fd,"Transfer failed customer[%s] to context[%s], extension[%s], priority [%d]\n", customer_source, context, exten, pri);
+	if(opbx_goto_if_exists(chan, context, exten, pri)){
+		opbx_cli(fd,"Transfer failed customer[%s] to context[%s], extension[%s], priority [%d]\n", customer_source, context, exten, pri);
     	manager_event(EVENT_FLAG_USER, "icd_command",
     	"Command: Transfer\r\nResult: Fail\r\nCause: Unknown\r\nCallerID: %s\r\nContext: %s\r\nExtension: %s\r\nPriority: %d\r\n", 
         customer_source, context, exten, pri);
 	    return 1;	   
 	};
  	if(icd_caller__set_state(customer, ICD_CALLER_STATE_CALL_END) != ICD_SUCCESS){
-		cw_cli(fd,"Transfer failed customer[%s] to context[%s], extension[%s], priority [%d]\n", customer_source, context, exten, pri);
+		opbx_cli(fd,"Transfer failed customer[%s] to context[%s], extension[%s], priority [%d]\n", customer_source, context, exten, pri);
     	manager_event(EVENT_FLAG_USER, "icd_command",
     	"Command: Transfer\r\nResult: Fail\r\nCause: Unable to change state to CALL_END\r\nCallerID: %s\r\nState: %s\r\nContext: %s\r\nExtension: %s\r\nPriority: %d\r\n", 
         customer_source, icd_caller__get_state_string(customer), context, exten, pri);

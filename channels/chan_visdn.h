@@ -1,5 +1,5 @@
 /*
- * vISDN channel driver for CallWeaver
+ * vISDN channel driver for Asterisk
  *
  * Copyright (C) 2004-2005 Daniele Orlandi
  *
@@ -14,18 +14,17 @@
  #include "confdefs.h"
 #endif
 
+#include <openpbx/channel.h>
 #include <libq931/list.h>
 
-#include "callweaver/channel.h"
-
 static const char visdn_channeltype[] = "VISDN";
-static const char visdn_description[] = "VISDN Channel Driver for CallWeaver.org";
+static const char visdn_description[] = "VISDN Channel Driver for OpenPBX.org";
 
 struct visdn_suspended_call
 {
 	struct list_head node;
 
-	struct cw_channel *cw_chan;
+	struct opbx_channel *opbx_chan;
 	struct q931_channel *q931_chan;
 
 	char call_identity[10];
@@ -35,7 +34,7 @@ struct visdn_suspended_call
 };
 
 struct visdn_chan {
-	struct cw_channel *cw_chan;
+	struct opbx_channel *opbx_chan;
 	struct q931_call *q931_call;
 	struct visdn_suspended_call *suspended_call;
 
@@ -50,22 +49,22 @@ struct visdn_chan {
 	char queued_digits[21];
 };
 
-static int visdn_call(struct cw_channel*, char *, int);
-static struct cw_frame *visdn_exception(struct cw_channel *);
-static int visdn_hangup(struct cw_channel*);
-static int visdn_answer(struct cw_channel*);
-static struct cw_frame *visdn_read(struct cw_channel*);
-static int visdn_write(struct cw_channel*, struct cw_frame *);
-static int visdn_indicate(struct cw_channel*, int);
-static int visdn_transfer(struct cw_channel*, const char *);
-static int visdn_fixup(struct cw_channel*, struct cw_channel *);
-static int visdn_send_digit(struct cw_channel*, char);
-static int visdn_sendtext(struct cw_channel*, const char *);
-static int visdn_bridge(struct cw_channel*, struct cw_channel*, int, struct cw_frame **, struct cw_channel **, int);
-static int visdn_setoption(struct cw_channel*, int, void *, int);
-static struct cw_channel *visdn_request(const char *, int, void *, int *);
+static int visdn_call(struct opbx_channel*, char *, int);
+static struct opbx_frame *visdn_exception(struct opbx_channel *);
+static int visdn_hangup(struct opbx_channel*);
+static int visdn_answer(struct opbx_channel*);
+static struct opbx_frame *visdn_read(struct opbx_channel*);
+static int visdn_write(struct opbx_channel*, struct opbx_frame *);
+static int visdn_indicate(struct opbx_channel*, int);
+static int visdn_transfer(struct opbx_channel*, const char *);
+static int visdn_fixup(struct opbx_channel*, struct opbx_channel *);
+static int visdn_send_digit(struct opbx_channel*, char);
+static int visdn_sendtext(struct opbx_channel*, const char *);
+static int visdn_bridge(struct opbx_channel*, struct opbx_channel*, int, struct opbx_frame **, struct opbx_channel **, int);
+static int visdn_setoption(struct opbx_channel*, int, void *, int);
+static struct opbx_channel *visdn_request(const char *, int, void *, int *);
 
-static const struct cw_channel_tech visdn_tech = {
+static const struct opbx_channel_tech visdn_tech = {
 	.type = visdn_channeltype,
 	.description = visdn_description,
 	.exception = visdn_exception,
@@ -81,7 +80,7 @@ static const struct cw_channel_tech visdn_tech = {
 	.send_text = visdn_sendtext,
 	.bridge = visdn_bridge,
 	.setoption = visdn_setoption,
-	.capabilities = CW_FORMAT_ALAW,
+	.capabilities = OPBX_FORMAT_ALAW,
 	.requester = visdn_request,
 };
 

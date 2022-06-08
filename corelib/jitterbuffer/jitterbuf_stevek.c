@@ -1,5 +1,5 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  *
  * Copyright (C) 2004-2005, Horizon Wimba, Inc.
  *
@@ -7,8 +7,8 @@
  * Steve Kann <stevek@stevek.com>
  *
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -31,11 +31,11 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <callweaver/logger.h>
+#include <openpbx/logger.h>
 
-#include "callweaver.h"
+#include "openpbx.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/corelib/jitterbuffer/jitterbuf_stevek.c $", "$Revision: 4723 $")
+OPENPBX_FILE_VERSION("$HeadURL$", "$Revision$")
 
 #include "jitterbuf_stevek.h"
 
@@ -140,9 +140,9 @@ static void resync(jitterbuf *jb, long ts, long now)
 	jb->hist_maxbuf_valid = 0;
 	jb->force_resync = 0;
 	
-	jb_warn("Resyncing the jb. last_delay %ld, this delay %ld, threshold %ld, new offset %ld\n", jb->info.last_delay, delay, threshold, ts - now);
+	jb_warn("Resyncing the jb. lopbx_delay %ld, this delay %ld, threshold %ld, new offset %ld\n", jb->info.lopbx_delay, delay, threshold, ts - now);
 	jb->info.resync_offset = ts - now;
-	jb->info.last_delay = 0; /* after resync, frame is right on time */
+	jb->info.lopbx_delay = 0; /* after resync, frame is right on time */
 }
 
 static int history_put(jitterbuf *jb, long ts, long now, long ms) 
@@ -163,7 +163,7 @@ static int history_put(jitterbuf *jb, long ts, long now, long ms)
 
 	/* check for drastic change in delay */
 	if (jb->conf.resync_threshold != -1) {
-	    if (abs(delay - jb->info.last_delay) > threshold) {
+	    if (abs(delay - jb->info.lopbx_delay) > threshold) {
 			jb->info.cnt_delay_discont++;
 			if (jb->info.cnt_delay_discont > 3) {
 				resync(jb, ts, now);
@@ -173,7 +173,7 @@ static int history_put(jitterbuf *jb, long ts, long now, long ms)
 				return -1;
 			}
 		} else {
-			jb->info.last_delay = delay;
+			jb->info.lopbx_delay = delay;
 			jb->info.cnt_delay_discont = 0;
 		}
 	}
@@ -487,12 +487,12 @@ static void jb_dbginfo(jitterbuf *jb)
 		jb_dbg("jb info: Loss PCT = %ld%%, Late PCT = %ld%%\n",
 			jb->info.frames_lost * 100/(jb->info.frames_in + jb->info.frames_lost), 
 			jb->info.frames_late * 100/jb->info.frames_in);
-	jb_dbg("jb info: queue %d -> %d.  last_ts %d (queue len: %d) last_ms %d\n",
+	jb_dbg("jb info: queue %d -> %d.  lopbx_ts %d (queue len: %d) lopbx_ms %d\n",
 		queue_next(jb), 
 		queue_last(jb),
 		jb->info.next_voice_ts, 
 		queue_last(jb) - queue_next(jb),
-		jb->info.last_voice_ms);
+		jb->info.lopbx_voice_ms);
 }
 #endif
 
@@ -563,7 +563,7 @@ static int _jb_get(jitterbuf *jb, jb_frame *frameout, long now, long interpl)
 	long diff;
 	static int dbg_cnt = 0;
 
-	/*if ((now - jb_next(jb)) > 2 * jb->info.last_voice_ms) jb_warn("SCHED: %ld", (now - jb_next(jb))); */
+	/*if ((now - jb_next(jb)) > 2 * jb->info.lopbx_voice_ms) jb_warn("SCHED: %ld", (now - jb_next(jb))); */
 	/* get jitter info */
 	history_get(jb);
 
@@ -584,21 +584,21 @@ static int _jb_get(jitterbuf *jb, jb_frame *frameout, long now, long interpl)
 	diff = jb->info.target - jb->info.current;
 
 	/* jb_warn("diff = %d lms=%d last = %d now = %d\n", diff,  */
-	/*	jb->info.last_voice_ms, jb->info.last_adjustment, now); */
+	/*	jb->info.lopbx_voice_ms, jb->info.lopbx_adjustment, now); */
 
 	/* let's work on non-silent case first */
 	if (!jb->info.silence_begin_ts) { 
 		/* we want to grow */
 		if ((diff > 0) && 
 			/* we haven't grown in the delay length */
-			(((jb->info.last_adjustment + JB_ADJUST_DELAY) < now) || 
+			(((jb->info.lopbx_adjustment + JB_ADJUST_DELAY) < now) || 
 			/* we need to grow more than the "length" we have left */
 			(diff > queue_last(jb)  - queue_next(jb)) ) ) {
 			/* grow by interp frame length */
 			jb->info.current += interpl;
 			jb->info.next_voice_ts += interpl;
-			jb->info.last_voice_ms = interpl;
-			jb->info.last_adjustment = now;
+			jb->info.lopbx_voice_ms = interpl;
+			jb->info.lopbx_adjustment = now;
 			jb->info.cnt_contig_interp++;
 			if (jb->conf.max_contig_interp && jb->info.cnt_contig_interp >= jb->conf.max_contig_interp) {
 				jb->info.silence_begin_ts = jb->info.next_voice_ts - jb->info.current;
@@ -625,7 +625,7 @@ static int _jb_get(jitterbuf *jb, jb_frame *frameout, long now, long interpl)
 
 		/* voice frame is later than expected */
 		if (frame && frame->ts + jb->info.current < jb->info.next_voice_ts) {
-			if (frame->ts + jb->info.current > jb->info.next_voice_ts - jb->info.last_voice_ms) {
+			if (frame->ts + jb->info.current > jb->info.next_voice_ts - jb->info.lopbx_voice_ms) {
 				/* either we interpolated past this frame in the last jb_get */
 				/* or the frame is still in order, but came a little too quick */ 
 				*frameout = *frame;
@@ -652,7 +652,7 @@ static int _jb_get(jitterbuf *jb, jb_frame *frameout, long now, long interpl)
 
 		/* keep track of frame sizes, to allow for variable sized-frames */
 		if (frame && frame->ms > 0) {
-			jb->info.last_voice_ms = frame->ms;
+			jb->info.lopbx_voice_ms = frame->ms;
 		}
 
 		/* we want to shrink; shrink at 1 frame / 500ms */
@@ -660,10 +660,10 @@ static int _jb_get(jitterbuf *jb, jb_frame *frameout, long now, long interpl)
 		/* every 80ms (though perhaps we can shrink even faster */
 		/* in this case) */
 		if (diff < -JB_TARGET_EXTRA && 
-			((!frame && jb->info.last_adjustment + 80 < now) || 
-			(jb->info.last_adjustment + 500 < now))) {
+			((!frame && jb->info.lopbx_adjustment + 80 < now) || 
+			(jb->info.lopbx_adjustment + 500 < now))) {
 
-			jb->info.last_adjustment = now;
+			jb->info.lopbx_adjustment = now;
 			jb->info.cnt_contig_interp = 0;
 
 			if (frame) {
@@ -676,8 +676,8 @@ static int _jb_get(jitterbuf *jb, jb_frame *frameout, long now, long interpl)
 				jb_dbg("s");
 				return JB_DROP;
 			} else {
-				/* shrink by last_voice_ms */
-				jb->info.current -= jb->info.last_voice_ms;
+				/* shrink by lopbx_voice_ms */
+				jb->info.current -= jb->info.lopbx_voice_ms;
 				jb->info.frames_lost++;
 				increment_losspct(jb);
 				jb_dbg("S");
@@ -694,24 +694,24 @@ static int _jb_get(jitterbuf *jb, jb_frame *frameout, long now, long interpl)
 			 * INTERP for the lost frame, then it shows up next, and we
 			 * throw it away because it's late */
 	  		/* I've recently only been able to replicate this using
-			 * iaxclient talking to app_echo on callweaver.  In this case,
-			 * my outgoing packets go through callweaver's (old)
+			 * iaxclient talking to app_echo on openpbx.  In this case,
+			 * my outgoing packets go through openpbx's (old)
 			 * jitterbuffer, and then might get an unusual increasing delay 
 			 * there if it decides to grow?? */
 			/* Update: that might have been a different bug, that has been fixed..
 			 * But, this still seemed like a good idea, except that it ended up making a single actual
 			 * lost frame get interpolated two or more times, when there was "room" to grow, so it might
 			 * be a bit of a bad idea overall */
-			/*if (diff > -1 * jb->info.last_voice_ms) { 
-				jb->info.current += jb->info.last_voice_ms;
-				jb->info.last_adjustment = now;
+			/*if (diff > -1 * jb->info.lopbx_voice_ms) { 
+				jb->info.current += jb->info.lopbx_voice_ms;
+				jb->info.lopbx_adjustment = now;
 				jb_warn("g");
 				return JB_INTERP;
 			} */
 			jb->info.frames_lost++;
 			increment_losspct(jb);
 			jb->info.next_voice_ts += interpl;
-			jb->info.last_voice_ms = interpl;
+			jb->info.lopbx_voice_ms = interpl;
 			jb->info.cnt_contig_interp++;
 			if (jb->conf.max_contig_interp && jb->info.cnt_contig_interp >= jb->conf.max_contig_interp) {
 				jb->info.silence_begin_ts = jb->info.next_voice_ts - jb->info.current;
@@ -738,9 +738,9 @@ static int _jb_get(jitterbuf *jb, jb_frame *frameout, long now, long interpl)
 
  		/* shrink interpl len every 10ms during silence */
  		if (diff < -JB_TARGET_EXTRA &&
- 			jb->info.last_adjustment + 10 <= now) {
+ 			jb->info.lopbx_adjustment + 10 <= now) {
  			jb->info.current -= interpl;
- 			jb->info.last_adjustment = now;
+ 			jb->info.lopbx_adjustment = now;
  		}
 
 		frame = queue_get(jb, now - jb->info.current);
@@ -770,7 +770,7 @@ static int _jb_get(jitterbuf *jb, jb_frame *frameout, long now, long interpl)
 			jb->info.current = jb->info.target;
 			jb->info.silence_begin_ts = 0;
 			jb->info.next_voice_ts = frame->ts + jb->info.current + frame->ms;
-			jb->info.last_voice_ms = frame->ms;
+			jb->info.lopbx_voice_ms = frame->ms;
 			jb->info.frames_out++;
 			decrement_losspct(jb);
 			*frameout = *frame;
@@ -788,7 +788,7 @@ long jb_next(jitterbuf *jb)
 			history_get(jb);
 			/* shrink during silence */
 			if (jb->info.target - jb->info.current < -JB_TARGET_EXTRA)
-				return jb->info.last_adjustment + 10;
+				return jb->info.lopbx_adjustment + 10;
 			return next + jb->info.target;
 		}
 		else 
@@ -809,7 +809,7 @@ int jb_get(jitterbuf *jb, jb_frame *frameout, long now, long interpl)
 	lastts = thists;
 #endif
 	if(ret == JB_INTERP) 
-		frameout->ms = jb->info.last_voice_ms;
+		frameout->ms = jb->info.lopbx_voice_ms;
 	
 	return ret;
 }
@@ -828,7 +828,7 @@ int jb_getall(jitterbuf *jb, jb_frame *frameout)
 }
 
 
-int jb_getinfo(jitterbuf *jb, cw_jb_info *stats) 
+int jb_getinfo(jitterbuf *jb, opbx_jb_info *stats) 
 {
 
 	history_get(jb);

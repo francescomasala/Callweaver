@@ -2,7 +2,7 @@
  * app_nconference
  *
  * NConference
- * A channel independent conference application for CallWeaver
+ * A channel independent conference application for Openpbx
  *
  * Copyright (C) 2002, 2003 Navynet SRL
  * http://www.navynet.it
@@ -14,12 +14,12 @@
  *
  */
 
-#define CW_CONF_8K_MEMBER
-#define CW_CONF_16K_MEMBER
+#define OPBX_CONF_8K_MEMBER
+#define OPBX_CONF_16K_MEMBER
 
 // Circular buffer
 struct member_cbuffer {
-    short buffer8k[CW_CONF_CBUFFER_8K_SIZE];
+    short buffer8k[OPBX_CONF_CBUFFER_8K_SIZE];
 
     int	 index8k;	// The index of the last valid frame in the circular buffer
 
@@ -29,11 +29,11 @@ struct member_cbuffer {
 
 
 
-struct cw_frame* get_outgoing_frame( struct cw_conference *conf, struct cw_conf_member* member, int samples ) ;
-int queue_incoming_frame( struct cw_conf_member* member, struct cw_frame* fr ) ;
-int queue_incoming_silent_frame( struct cw_conf_member *member, int count);
+struct opbx_frame* get_outgoing_frame( struct opbx_conference *conf, struct opbx_conf_member* member, int samples ) ;
+int queue_incoming_frame( struct opbx_conf_member* member, struct opbx_frame* fr ) ;
+int queue_incoming_silent_frame( struct opbx_conf_member *member, int count);
 
 long usecdiff( struct timeval* timeA, struct timeval* timeB );
 void add_milliseconds( struct timeval* tv, long ms );
-int set_talk_volume(struct cw_conf_member *member, struct cw_frame *f, int is_talk);
+int set_talk_volume(struct opbx_conf_member *member, struct opbx_frame *f, int is_talk);
 

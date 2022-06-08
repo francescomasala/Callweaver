@@ -1,10 +1,10 @@
-Inter-PBX eXchange Protocol
-===========================
+Inter-OpenPBX eXchange Protocol
+================================
 
 INTRODUCTION
 ------------
 
-This document is intended as an introduction to the Inter-CallWeaver 
+This document is intended as an introduction to the Inter-OpenPBX 
 eXchange (or simply IAX) protocol.  It provides both a theoretical 
 background and practical information on its use.
 
@@ -14,9 +14,9 @@ The first question most people are thinking at this point is "Why do you
 need another VoIP protocol?  Why didn't you just use SIP or H.323?"
 
 Well, the answer is a fairly complicated one, but in a nutshell it's like
-this...  CallWeaver is intended as a very flexible and powerful
+this...  OpenPBX is intended as a very flexible and powerful
 communications tool.  As such, the primary feature we need from a VoIP
-protocol is the ability to meet our own goals with CallWeaver, and one with
+protocol is the ability to meet our own goals with OpenPBX, and one with
 enough flexibility that we could use it as a kind of laboratory for
 inventing and implementing new concepts in the field.  Neither H.323 or
 SIP fit the roles we needed, so we developed our own protocol, which,
@@ -105,16 +105,16 @@ would be specific to that object.  Note that the config file parser
 considers "=>" and "=" to be equivalent and their use is purely to make
 configuration files more readable and easier to "humanly parse".
 
-The comment character in CallWeaver configuration files is the semicolon 
+The comment character in OpenPBX configuration files is the semicolon 
 ";".  The reason it is not "#" is because the "#" symbol can be used as 
 parts of extensions and it didn't seem like a good idea to have to escape 
 it.
 
-IAX CONFIGURATION IN CALLWEAVER
--------------------------------
+IAX CONFIGURATION IN OPENPBX
+-----------------------------
 
-Like everything else in CallWeaver, IAX's configuration lies in 
-/etc/callweaver -- specifically /etc/callweaver/iax.conf
+Like everything else in OpenPBX, IAX's configuration lies in 
+/etc/openpbx -- specifically /etc/openpbx/iax.conf
 
 The IAX configuration file is a collection of sections, each of which
 (with the exception of the "general" section) represents an entity within 
@@ -137,7 +137,7 @@ Following the first line are a number of other possibilities:
 
 This sets the port that IAX will bind to.  The default IAX version 1 
 port number is 5036.  For IAX version 2, that is now the default in
-CallWeaver, the default port is 4569.
+OpenPBX, the default port is 4569.
 It is recommended that this value not be altered in general.
 
 > bindaddr = <ipaddr>
@@ -187,27 +187,27 @@ these packets, improving voice quality.
 > register => <name>[:<secret>]@<host>[:port]
 
 Any number of registry entries may be instantiated in the general 
-section.  Registration allows CallWeaver to notify a remote CallWeaver server 
+section.  Registration allows OpenPBX to notify a remote OpenPBX server 
 (with a fixed address) what our current address is.  In order for 
-registration to work, the remote CallWeaver server will need to have a 
+registration to work, the remote OpenPBX server will need to have a 
 dynamic peer entry with the same name (and secret if provided).  
 
 The name is a required field, and is the remote peer name that we wish to 
 identify ourselves as.  A secret may be provided as well.  The secret is 
 generally a shared password between the local server and the remote 
 server.  However, if the secret is in square brackets ([]'s) then it is 
-interpreted as the name of a RSA key to use.  In that case, the local CallWeaver 
-server must have the *private* key (/var/lib/callweaver/keys/<name>.key) and 
+interpreted as the name of a RSA key to use.  In that case, the local OpenPBX 
+server must have the *private* key (/var/lib/openpbx/keys/<name>.key) and 
 the remote server will have to have the corresponding public key.
 
 The "host" is a required field and is the hostname or IP address of the 
-remote CallWeaver server.  The port specification is optional and is by 
+remote OpenPBX server.  The port specification is optional and is by 
 default 4569 for iax2 if not specified.
 
 > notransfer = yes | no
 
-If an IAX phone calls another IAX phone by using a CallWeaver server, 
-CallWeaver will transfer the call to go peer to peer. If you do not
+If an IAX phone calls another IAX phone by using a OpenPBX server, 
+OpenPBX will transfer the call to go peer to peer. If you do not
 want this, turn on notransfer with a "yes". This is also settable
 for peers and users.
 
@@ -226,7 +226,7 @@ should be an alphanumeric string.
 
 > type = [user|peer|friend]
 
-This line tells CallWeaver how to interpret this entity.  Users are things 
+This line tells OpenPBX how to interpret this entity.  Users are things 
 that connect to us, while peers are phones we connect to, and a friend is 
 shorthand for creating a user and a peer with identical information
 
@@ -237,7 +237,7 @@ User fields:
 
 One or more context lines may be specified in a user, thus giving the user 
 access to place calls in the given contexts.  Contexts are used by 
-CallWeaver to divide dialing plans into logical units each with the ability 
+OpenPBX to divide dialing plans into logical units each with the ability 
 to have numbers interpreted differently, have their own security model, 
 auxiliary switch handling, and include other contexts.  Most users are 
 given access to the default context.  Trusted users could be given access 
@@ -294,7 +294,7 @@ some cases for debugging.
 The "inkeys" line specifies which keys we can use to authenticate the 
 remote peer.  If the peer's challenge passes with any of the given keys, 
 then we accept its authentication.  The key files live in 
-/var/lib/callweaver/keys/<name>.pub and are *public keys*.  Public keys are 
+/var/lib/openpbx/keys/<name>.pub and are *public keys*.  Public keys are 
 not typically DES3 encrypted and thus do not usually need initialization.
 
 ---------------
@@ -314,7 +314,7 @@ may be the word "dynamic" signifying that the host will register with us
 
 > defaultip = <ipaddr>
 
-If the host uses dynamic registration, CallWeaver may still be given a 
+If the host uses dynamic registration, OpenPBX may still be given a 
 default IP address to use when dynamic registration has not been performed 
 or has timed out.
 

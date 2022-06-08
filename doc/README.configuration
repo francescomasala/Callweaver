@@ -1,7 +1,7 @@
-CallWeaver.org Configuration Parser (version 1.1 and later)
+OpenPBX.org Configuration Parser (version 1.1 and later)
 -----------------------------------------------------
 
-The CallWeaver.org configuration parser in the 0.2 stable and beyond series 
+The OpenPBX.org configuration parser in the 0.2 stable and beyond series 
 has been improved in a number of ways. In addition to the realtime 
 architecture, we now have the ability to create templates in 
 configuration files, and use these as templates when we
@@ -12,7 +12,7 @@ all configuration files.
 
 General syntax
 --------------
-CallWeaver configuration files are defined as follows:
+OpenPBX configuration files are defined as follows:
 
 	[section]
 	label = value
@@ -69,16 +69,16 @@ included at the row that the #include statement occured.
 	#include myusers.conf
 
 You may also include the output of a program with the #exec directive,
-if you enable it in callweaver.conf
+if you enable it in openpbx.conf
 	
-In callweaver.conf, add the execincludes = yes statement in the options
+In openpbx.conf, add the execincludes = yes statement in the options
 section:
 	[options]
 	execincludes=yes
 
 The exec directive is used like this:
 	
-	#exec /usr/local/bin/mycallweaverconfigurator.sh
+	#exec /usr/local/bin/myopenpbxconfigurator.sh
 
 Adding to an existing section
 -----------------------------
@@ -101,7 +101,7 @@ Defining a template-only section
 	label = value
 
 The exclamation mark indicates to the config parser that this is a only
-a template and should not itself be used by the CallWeaver module for
+a template and should not itself be used by the OpenPBX module for
 configuration. The section can be inherited by other sections (see 
 section "Using templates" below) but is not used by itself.
 

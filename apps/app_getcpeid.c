@@ -1,12 +1,12 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  *
  * Copyright (C) 1999 - 2005, Digium, Inc.
  *
  * Mark Spencer <markster@digium.com>
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -32,36 +32,35 @@
 #include <inttypes.h>
 #include <spandsp.h>
 
-#include "callweaver.h"
+#include "openpbx.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/apps/app_getcpeid.c $", "$Revision: 4723 $")
+OPENPBX_FILE_VERSION("$HeadURL$", "$Revision$")
 
-#include "callweaver/lock.h"
-#include "callweaver/file.h"
-#include "callweaver/logger.h"
-#include "callweaver/channel.h"
-#include "callweaver/pbx.h"
-#include "callweaver/module.h"
-#include "callweaver/adsi.h"
-#include "callweaver/options.h"
+#include "openpbx/lock.h"
+#include "openpbx/file.h"
+#include "openpbx/logger.h"
+#include "openpbx/channel.h"
+#include "openpbx/pbx.h"
+#include "openpbx/module.h"
+#include "openpbx/adsi.h"
+#include "openpbx/options.h"
 
 static char *tdesc = "Get ADSI CPE ID";
 
-static void *getcpeid_app;
-static const char *getcpeid_name = "GetCPEID";
-static const char *getcpeid_synopsis = "Get ADSI CPE ID";
-static const char *getcpeid_syntax = "GetCPEID";
-static const char *getcpeid_descrip =
-"Obtains and displays ADSI CPE ID and other information in order\n"
+static char *app = "GetCPEID";
+
+static char *synopsis = "Get ADSI CPE ID";
+
+static char *descrip =
+"  GetCPEID: Obtains and displays ADSI CPE ID and other information in order\n"
 "to properly setup zapata.conf for on-hook operations.\n"
 "Returns -1 on hangup only.\n";
-
 
 STANDARD_LOCAL_USER;
 
 LOCAL_USER_DECL;
 
-static int cpeid_setstatus(struct cw_channel *chan, char *stuff[], int voice)
+static int cpeid_setstatus(struct opbx_channel *chan, char *stuff[], int voice)
 {
 	int justify[5] = { ADSI_JUST_CENT, ADSI_JUST_LEFT, ADSI_JUST_LEFT, ADSI_JUST_LEFT };
 	char *tmp[5];
@@ -72,16 +71,16 @@ static int cpeid_setstatus(struct cw_channel *chan, char *stuff[], int voice)
 	return adsi_print(chan, tmp, justify, voice);
 }
 
-static int cpeid_exec(struct cw_channel *chan, int argc, char **argv)
+static int cpeid_exec(struct opbx_channel *chan, void *idata)
 {
-	char data[4][80];
-	char *stuff[4];
-	unsigned char cpeid[4];
+	int res=0;
 	struct localuser *u;
+	unsigned char cpeid[4];
 	int gotgeometry = 0;
 	int gotcpeid = 0;
 	int width, height, buttons;
-	int res=0;
+	char data[4][80];
+	char *stuff[4];
 
 	LOCAL_USER_ADD(u);
 	stuff[0] = data[0];
@@ -99,7 +98,7 @@ static int cpeid_exec(struct cw_channel *chan, int argc, char **argv)
 		if (res > 0) {
 			gotcpeid = 1;
 			if (option_verbose > 2)
-				cw_verbose(VERBOSE_PREFIX_3 "Got CPEID of '%02x:%02x:%02x:%02x' on '%s'\n", cpeid[0], cpeid[1], cpeid[2], cpeid[3], chan->name);
+				opbx_verbose(VERBOSE_PREFIX_3 "Got CPEID of '%02x:%02x:%02x:%02x' on '%s'\n", cpeid[0], cpeid[1], cpeid[2], cpeid[3], chan->name);
 		}
 		if (res > -1) {
 			strncpy(stuff[1], "Measuring CPE...", sizeof(data[1]) - 1);
@@ -108,7 +107,7 @@ static int cpeid_exec(struct cw_channel *chan, int argc, char **argv)
 			res = adsi_get_cpeinfo(chan, &width, &height, &buttons, 0);
 			if (res > -1) {
 				if (option_verbose > 2)
-					cw_verbose(VERBOSE_PREFIX_3 "CPE has %d lines, %d columns, and %d buttons on '%s'\n", height, width, buttons, chan->name);
+					opbx_verbose(VERBOSE_PREFIX_3 "CPE has %d lines, %d columns, and %d buttons on '%s'\n", height, width, buttons, chan->name);
 				gotgeometry = 1;
 			}
 		}
@@ -124,7 +123,7 @@ static int cpeid_exec(struct cw_channel *chan, int argc, char **argv)
 			strncpy(stuff[3], "Press # to exit", sizeof(data[3]) - 1);
 			cpeid_setstatus(chan, stuff, 1);
 			for(;;) {
-				res = cw_waitfordigit(chan, 1000);
+				res = opbx_waitfordigit(chan, 1000);
 				if (res < 0)
 					break;
 				if (res == '#') {
@@ -141,16 +140,13 @@ static int cpeid_exec(struct cw_channel *chan, int argc, char **argv)
 
 int unload_module(void)
 {
-	int res = 0;
 	STANDARD_HANGUP_LOCALUSERS;
-	res |= cw_unregister_application(getcpeid_app);
-	return res;
+	return opbx_unregister_application(app);
 }
 
 int load_module(void)
 {
-	getcpeid_app = cw_register_application(getcpeid_name, cpeid_exec, getcpeid_synopsis, getcpeid_syntax, getcpeid_descrip);
-	return 0;
+	return opbx_register_application(app, cpeid_exec, synopsis, descrip);
 }
 
 char *description(void)

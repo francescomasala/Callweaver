@@ -1,12 +1,12 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  *
  * Copyright (C) 1999 - 2005, Digium, Inc.
  *
  * Mark Spencer <markster@digium.com>
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -31,45 +31,44 @@
 #include <unistd.h>
 #include <string.h>
 
-#include "callweaver.h"
+#include "openpbx.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/apps/app_softhangup.c $", "$Revision: 4723 $")
+OPENPBX_FILE_VERSION("$HeadURL$", "$Revision$")
 
-#include "callweaver/file.h"
-#include "callweaver/logger.h"
-#include "callweaver/channel.h"
-#include "callweaver/pbx.h"
-#include "callweaver/module.h"
-#include "callweaver/lock.h"
+#include "openpbx/file.h"
+#include "openpbx/logger.h"
+#include "openpbx/channel.h"
+#include "openpbx/pbx.h"
+#include "openpbx/module.h"
+#include "openpbx/lock.h"
+
+static char *synopsis = "Soft Hangup Application";
 
 static char *tdesc = "Hangs up the requested channel";
 
-static void *softhangup_app;
-static const char *softhangup_name = "SoftHangup";
-static const char *softhangup_synopsis = "Soft Hangup Application";
-static const char *softhangup_syntax = "SoftHangup([Technology/resource[, options]])";
-static const char *softhangup_descrip =
+static char *desc = "  SoftHangup(|Technology/resource|options)\n"
 "Hangs up the requested channel.  Always returns 0\n"
 "- 'options' may contain the following letter:\n"
 "     'a' : hang up all channels on a specified device instead of a single resource\n";
 
+static char *app = "SoftHangup";
 
 STANDARD_LOCAL_USER;
 
 LOCAL_USER_DECL;
 
-static int softhangup_exec(struct cw_channel *chan, int argc, char **argv)
+static int softhangup_exec(struct opbx_channel *chan, void *data)
 {
 	struct localuser *u;
-	struct cw_channel *c=NULL;
-	char *cut;
-	char name[CW_CHANNEL_NAME] = "";
+	struct opbx_channel *c=NULL;
+	char *options, *cut, *cdata, *match;
+	char name[OPBX_CHANNEL_NAME] = "";
 	int all = 0;
 	
-	if (argc == 0) {
+	if (opbx_strlen_zero(data)) {
 		if (chan){
-			cw_log(LOG_WARNING, "Soft hanging %s up.\n",chan->name);
-			cw_softhangup(chan, CW_SOFTHANGUP_EXPLICIT);
+			opbx_log(LOG_WARNING, "Soft hanging %s up.\n",chan->name);
+			opbx_softhangup(chan, OPBX_SOFTHANGUP_EXPLICIT);
 			/* To allow other possible threads finish their work */
 			/*usleep(50000);*/
 		}
@@ -78,11 +77,15 @@ static int softhangup_exec(struct cw_channel *chan, int argc, char **argv)
 	
 	LOCAL_USER_ADD(u);
 
-	all = (argc > 1 && strchr(argv[1], 'a'));
-
-	c = cw_channel_walk_locked(NULL);
+	cdata = opbx_strdupa(data);
+	match = strsep(&cdata, "|");
+	options = strsep(&cdata, "|");
+	all = options && strchr(options,'a');
+	c = opbx_channel_walk_locked(NULL);
 	while (c) {
 		strncpy(name, c->name, sizeof(name)-1);
+		opbx_mutex_unlock(&c->lock);
+		/* XXX watch out, i think it is wrong to access c-> after unlocking! */
 		if (all) {
 			/* CAPI is set up like CAPI[foo/bar]/clcnt */ 
 			if (!strcmp(c->type,"CAPI")) 
@@ -94,14 +97,13 @@ static int softhangup_exec(struct cw_channel *chan, int argc, char **argv)
 			if (cut)
 				*cut = 0;
 		}
-		cw_mutex_unlock(&c->lock);
-		if (!strcasecmp(name, argv[0])) {
-			cw_log(LOG_WARNING, "Soft hanging %s up.\n",c->name);
-			cw_softhangup(c, CW_SOFTHANGUP_EXPLICIT);
+		if (!strcasecmp(name, match)) {
+			opbx_log(LOG_WARNING, "Soft hanging %s up.\n",c->name);
+			opbx_softhangup(c, OPBX_SOFTHANGUP_EXPLICIT);
 			if(!all)
 				break;
 		}
-		c = cw_channel_walk_locked(c);
+		c = opbx_channel_walk_locked(c);
 	}
 	
 	LOCAL_USER_REMOVE(u);
@@ -111,16 +113,13 @@ static int softhangup_exec(struct cw_channel *chan, int argc, char **argv)
 
 int unload_module(void)
 {
-	int res = 0;
 	STANDARD_HANGUP_LOCALUSERS;
-	res |= cw_unregister_application(softhangup_app);
-	return res;
+	return opbx_unregister_application(app);
 }
 
 int load_module(void)
 {
-	softhangup_app = cw_register_application(softhangup_name, softhangup_exec, softhangup_synopsis, softhangup_syntax, softhangup_descrip);
-	return 0;
+	return opbx_register_application(app, softhangup_exec, synopsis, desc);
 }
 
 char *description(void)

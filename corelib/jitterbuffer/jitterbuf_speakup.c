@@ -25,7 +25,7 @@
  * please look at the comments in the code file.
  */
 
-#include <callweaver/frame.h>
+#include <openpbx/frame.h>
 #include "jitterbuf_speakup.h"
 #include <stdlib.h>
 #include <string.h>
@@ -106,7 +106,7 @@ void jb_speakup_reset(speakup_jitterbuffer *jb)
     frame_free(frame);
   }
   //reset stats
-  memset(&(jb->info),0,sizeof(cw_jb_info) );
+  memset(&(jb->info),0,sizeof(opbx_jb_info) );
   // set default settings
   reset(jb);
 }
@@ -118,7 +118,7 @@ void jb_speakup_reset(speakup_jitterbuffer *jb)
  * reset statistics 
  * reset settings to default
  */
-static void jb_reset_all(speakup_jitterbuffer *jb) 
+void jb_reset_all(speakup_jitterbuffer *jb) 
 {
   jb_frame *frame;
   
@@ -202,7 +202,7 @@ void jb_speakup_set_settings(speakup_jitterbuffer *jb, jb_speakup_settings *sett
  * delay and delay_target will be calculated
  * *stats = info
  */
-void jb_speakup_get_info(speakup_jitterbuffer *jb, cw_jb_info *stats) 
+void jb_speakup_get_info(speakup_jitterbuffer *jb, opbx_jb_info *stats) 
 {
   long max_index, pointer;
   
@@ -221,13 +221,6 @@ jb->hist_pointer : JB_HISTORY_SIZE-1;
   if (max_index>1) {
     pointer = find_pointer(&jb->hist_sorted_delay[0], max_index, 
 jb->current);
-    /* If jb->current occurs more than once in the history, we must
-     * check that pointer is advanced beyond all positions equal to
-     * jb->current
-     */
-    while (pointer <= max_index && jb->current == jb->hist_sorted_delay[pointer]) {
-	pointer++;
-   }  
     jb->info.losspct = ((max_index - pointer)*100/max_index);
     if (jb->info.losspct < 0) {
       jb->info.losspct = 0;
@@ -262,28 +255,28 @@ void jb_speakup_get_settings(speakup_jitterbuffer *jb, jb_speakup_settings *sett
  * please use the JB_CODEC_OTHER if you want to define your own formula
  * 
  */
-float jb_speakup_guess_mos(float p, long d, int codec) 
+float jb_guess_mos(float p, long d, int codec) 
 {
   float result;
   
   switch (codec) {
-  case CW_FORMAT_GSM:
+  case OPBX_FORMAT_GSM:
 	  result = (4.31 - 0.23*p - 0.0071*d);
 	  break;
 
-  case CW_FORMAT_G723_1: 
+  case OPBX_FORMAT_G723_1: 
 	  result = (3.99 - 0.16*p - 0.0071*d);
 	  break;
 
-  case CW_FORMAT_G729A: 
+  case OPBX_FORMAT_G729A: 
 	  result = (4.13 - 0.14*p - 0.0071*d);
 	  break;
 
-  case CW_FORMAT_ALAW:
+  case OPBX_FORMAT_ALAW:
 	  result = (4.42 - 0.087*p - 0.0071*d);
 	  break;
 
-  case CW_FORMAT_ULAW:
+  case OPBX_FORMAT_ULAW:
 	  result = (4.42 - 0.087*p - 0.0071*d);
 	  break;
 
@@ -298,12 +291,12 @@ float jb_speakup_guess_mos(float p, long d, int codec)
 /***********
  * if there are any frames left in JB returns JB_OK, otherwise returns JB_EMPTY
  */
-int jb_speakup_has_frames(speakup_jitterbuffer *jb)
+int jb_has_frames(speakup_jitterbuffer *jb)
 {
   jb_dbg("H");
   if (jb == NULL) {
     jb_err("no jitterbuffer in jb_has_frames()\n");
-    return JB_EMPTY;
+    return;
   }
   
   if(jb->controlframes || jb->voiceframes) {
@@ -380,7 +373,7 @@ int jb_speakup_get(speakup_jitterbuffer *jb, void **data, long now, long interpl
   jb_dbg("A");
   if (jb == NULL) {
     jb_err("no jitterbuffer in jb_get()\n");
-    return JB_EMPTY;
+    return;
   }
   
   result = get_control(jb, data);
@@ -452,11 +445,12 @@ static long find_pointer(long *array, long max_index, long value)
     mid= (low+high)/2;
     if (array[mid] < value) {
       low = mid+1;
-    } else if (array[mid] > value) {
-      high = mid-1;
     } else {
-      return mid;
+      high = mid-1;
     }
+  }
+  while(low < max_index && (array[low]==array[(low+1)]) ) {
+    low++;
   }
   return low;
 }
@@ -662,7 +656,7 @@ static void put_history(speakup_jitterbuffer *jb, long ts, long now, long ms, in
  */
 static void calculate_info(speakup_jitterbuffer *jb, long ts, long now, int codec) 
 {
-  long diff, size, max_index, d, d1, d2, n, max_n;
+  long diff, size, max_index, d, d1, d2, n;
   float p, p1, p2, A, B;
   //size = how many items there in the history
   size = (jb->hist_pointer < JB_HISTORY_SIZE) ? jb->hist_pointer : JB_HISTORY_SIZE;
@@ -720,15 +714,13 @@ static void calculate_info(speakup_jitterbuffer *jb, long ts, long now, int code
   } else if (jb->info.iqr >50){ 
     p1=11;
   } 
-
-  max_n = p1 * size / 100;
   
   //find the optimum delay..
-  while(max_index>10 && n < max_n) { 
+  while(max_index>10 && (B >= A ||p2<p1)) { 
     //the packetloss with this delay
     p2 =(n*100/size);
     // estimate MOS-value
-    B = jb_speakup_guess_mos(p2,d2,codec);
+    B = jb_guess_mos(p2,d2,codec);
     if (B > A) {
       p = p2;
       d = d2;
@@ -737,16 +729,16 @@ static void calculate_info(speakup_jitterbuffer *jb, long ts, long now, int code
     d1 = d2;
     //find next delay != delay so the same delay isn't calculated twice
     //don't look further if we have seen half of the history
-    do {
+    while((d2>=d1) && ((n*2)<max_index) ) {
       n++;
       d2 = jb->hist_sorted_delay[(max_index-n)] - jb->min;
-    } while((d2>=d1) && ((n*2)<max_index) );
+    }
   }
   //the targeted size of the jitterbuffer
   if (jb->settings.min_jb && (jb->settings.min_jb > d) ) {
     jb->target = jb->min + jb->settings.min_jb; 
-  } else if (jb->settings.max_jb && (jb->settings.max_jb < d) ){
-    jb->target = jb->min + jb->settings.max_jb;
+  } else if (jb->settings.max_jb && (jb->settings.max_jb > d) ){
+    jb->min + jb->settings.max_jb;
   } else {
     jb->target = jb->min + d; 
   }

@@ -24,11 +24,11 @@
 
 ;[default]
 ;mode=files
-;directory=@cwdatadir@/moh
+;directory=@opbxmohdir@
 ;
 ;[default-random]
 ;mode=files
-;directory=@cwdatadir@/moh
+;directory=@opbxmohdir@
 ;random=yes 	; Play the files in a random order
 
 ;[ulawstream]
@@ -44,28 +44,28 @@
 ; classes.  These examples are kept here only for backwards
 ; compatibility.  We recommend that you convert your MP3s to file
 ; types that are supported by the native file MOH above.  See the
-; CallWeaver.org Wiki for tips on how to convert your sound files.
+; OpenPBX.org Wiki for tips on how to convert your sound files.
 
 ;[mp3stream]
 ;mode=custom
-;directory=@cwdatadir@/moh
+;directory=@opbxmohdir@
 ;application=/usr/bin/mpg123 -q -s --mono -r 8000 -f 8192
 ;format=slin
 ;
 ;[mp3nbstream]
 ;mode=custom
-;directory=@cwdatadir@/moh
+;directory=@opbxmohdir@
 ;application=/usr/bin/mpg123 -q -s --mono -r 8000 -b 2048 -f 8192
 ;format=slin
 ;
 ;[quietmp3stream]
 ;mode=custom
-;directory=@cwdatadir@/moh
+;directory=@opbxmohdir@
 ;application=/usr/bin/mpg123 -q -s --mono -r 8000 -f 4096
 ;format=slin
 ;
 ;[quietmp3nbstream]
 ;mode=custom
-;directory=@cwdatadir@/moh
+;directory=@opbxmohdir@
 ;application=/usr/bin/mpg123 -q -s --mono -r 8000 -b 2048 -f 4096
 ;format=slin

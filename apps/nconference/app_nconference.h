@@ -2,7 +2,7 @@
  * app_nconference
  *
  * NConference
- * A channel independent conference application for CallWeaver
+ * A channel independent conference application for Openpbx
  *
  * Copyright (C) 2002, 2003 Navynet SRL
  * http://www.navynet.it
@@ -14,4 +14,4 @@
  *
  */
 
-int app_conference_main( struct cw_channel* chan, int argc, char **argv ) ;
+int app_conference_main( struct opbx_channel* chan, void* data ) ;

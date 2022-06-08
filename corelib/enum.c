@@ -1,5 +1,5 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  *
  * Copyright (C) 1999 - 2005, Digium, Inc.
  *
@@ -7,8 +7,8 @@
  *
  * Funding provided by nic.at
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -20,7 +20,7 @@
 
 /*! \file
  *
- * \brief ENUM Support for CallWeaver
+ * \brief ENUM Support for OpenPBX
  *
  */
 #ifdef HAVE_CONFIG_H
@@ -31,7 +31,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/nameser.h>
-#if defined(__APPLE_CC__) && __APPLE_CC__ >= 1495
+#if __APPLE_CC__ >= 1495
 #include <arpa/nameser_compat.h>
 #endif
 #include <resolv.h>
@@ -42,18 +42,17 @@
 #include <unistd.h>
 #include <errno.h>
 
-#include "callweaver.h"
+#include "openpbx.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/corelib/enum.c $", "$Revision: 4723 $")
+OPENPBX_FILE_VERSION("$HeadURL$", "$Revision$")
 
-#include "callweaver/pbx.h"
-#include "callweaver/logger.h"
-#include "callweaver/options.h"
-#include "callweaver/enum.h"
-#include "callweaver/dns.h"
-#include "callweaver/channel.h"
-#include "callweaver/config.h"
-#include "callweaver/utils.h"
+#include "openpbx/logger.h"
+#include "openpbx/options.h"
+#include "openpbx/enum.h"
+#include "openpbx/dns.h"
+#include "openpbx/channel.h"
+#include "openpbx/config.h"
+#include "openpbx/utils.h"
 
 #ifdef __APPLE__
 #undef T_NAPTR
@@ -76,7 +75,7 @@ static struct enum_search {
 
 static int enumver = 0;
 
-CW_MUTEX_DEFINE_STATIC(enumlock);
+OPBX_MUTEX_DEFINE_STATIC(enumlock);
 
 struct naptr {
 	unsigned short order;
@@ -92,7 +91,7 @@ static int parse_ie(char *data, int maxdatalen, char *src, int srclen)
 	src++;
 	srclen--;
 	if (len > srclen) {
-		cw_log(LOG_WARNING, "Want %d, got %d\n", len, srclen);
+		opbx_log(LOG_WARNING, "Want %d, got %d\n", len, srclen);
 		return -1;
 	}
 	if (len > maxdatalen)
@@ -126,27 +125,27 @@ static int parse_naptr(char *dst, int dstsize, char *tech, int techsize, char *a
 	dst[0] = '\0';
 
 	if (len < sizeof(struct naptr)) {
-		cw_log(LOG_WARNING, "NAPTR record length too short\n");
+		opbx_log(LOG_WARNING, "NAPTR record length too short\n");
 		return -1;
 	}
 	answer += sizeof(struct naptr);
 	len -= sizeof(struct naptr);
 	if ((res = parse_ie(flags, sizeof(flags) - 1, answer, len)) < 0) {
-		cw_log(LOG_WARNING, "Failed to get flags from NAPTR record\n");
+		opbx_log(LOG_WARNING, "Failed to get flags from NAPTR record\n");
 		return -1;
 	} else {
 		answer += res;
 		len -= res;
 	}
 	if ((res = parse_ie(services, sizeof(services) - 1, answer, len)) < 0) {
-		cw_log(LOG_WARNING, "Failed to get services from NAPTR record\n");
+		opbx_log(LOG_WARNING, "Failed to get services from NAPTR record\n");
 		return -1;
 	} else {
 		answer += res;
 		len -= res;
 	}
 	if ((res = parse_ie(regexp, sizeof(regexp) - 1, answer, len)) < 0) {
-		cw_log(LOG_WARNING, "Failed to get regexp from NAPTR record\n");
+		opbx_log(LOG_WARNING, "Failed to get regexp from NAPTR record\n");
 		return -1;
 	} else {
 		answer += res;
@@ -154,16 +153,16 @@ static int parse_naptr(char *dst, int dstsize, char *tech, int techsize, char *a
 	}
 
 	if ((res = dn_expand((unsigned char *)oanswer, (unsigned char *)answer + len, (unsigned char *)answer, repl, sizeof(repl) - 1)) < 0) {
-		cw_log(LOG_WARNING, "Failed to expand hostname\n");
+		opbx_log(LOG_WARNING, "Failed to expand hostname\n");
 		return -1;
 	}
 
 	if (option_debug > 2)	/* Advanced NAPTR debugging */
-		cw_log(LOG_DEBUG, "NAPTR input='%s', flags='%s', services='%s', regexp='%s', repl='%s'\n",
+		opbx_log(LOG_DEBUG, "NAPTR input='%s', flags='%s', services='%s', regexp='%s', repl='%s'\n",
 			naptrinput, flags, services, regexp, repl);
 
 	if (tolower(flags[0]) != 'u') {
-		cw_log(LOG_WARNING, "NAPTR Flag must be 'U' or 'u'.\n");
+		opbx_log(LOG_WARNING, "NAPTR Flag must be 'U' or 'u'.\n");
 		return -1;
 	}
 
@@ -176,7 +175,7 @@ static int parse_naptr(char *dst, int dstsize, char *tech, int techsize, char *a
 		if(strchr(p, ':')) {
 			p = strchr(p, ':') + 1;
 		}
-		cw_copy_string(tech_return, p, sizeof(tech_return));
+		opbx_copy_string(tech_return, p, sizeof(tech_return));
 	} else {
 		p = strstr(services, "+e2u");
 		if(p == NULL)
@@ -186,17 +185,17 @@ static int parse_naptr(char *dst, int dstsize, char *tech, int techsize, char *a
 			p = strchr(services, ':');
 			if(p)
 				*p = 0;
-			cw_copy_string(tech_return, services, sizeof(tech_return));
+			opbx_copy_string(tech_return, services, sizeof(tech_return));
 		}
 	}
 
 	/* DEDBUGGING STUB
-	cw_copy_string(regexp, "!^\\+43(.*)$!\\1@bla.fasel!", sizeof(regexp) - 1);
+	opbx_copy_string(regexp, "!^\\+43(.*)$!\\1@bla.fasel!", sizeof(regexp) - 1);
 	*/
 
 	regexp_len = strlen(regexp);
 	if (regexp_len < 7) {
-		cw_log(LOG_WARNING, "Regex too short to be meaningful.\n");
+		opbx_log(LOG_WARNING, "Regex too short to be meaningful.\n");
 		return -1;
 	}
 
@@ -204,7 +203,7 @@ static int parse_naptr(char *dst, int dstsize, char *tech, int techsize, char *a
 	delim = regexp[0];
 	delim2 = strchr(regexp + 1, delim);
 	if ((delim2 == NULL) || (regexp[regexp_len-1] != delim)) {
-		cw_log(LOG_WARNING, "Regex delimiter error (on \"%s\").\n",regexp);
+		opbx_log(LOG_WARNING, "Regex delimiter error (on \"%s\").\n",regexp);
 		return -1;
 	}
 
@@ -218,18 +217,18 @@ static int parse_naptr(char *dst, int dstsize, char *tech, int techsize, char *a
  */
 
 	if (regcomp(&preg, pattern, REG_EXTENDED | REG_NEWLINE)) {
-		cw_log(LOG_WARNING, "NAPTR Regex compilation error (regex = \"%s\").\n",regexp);
+		opbx_log(LOG_WARNING, "NAPTR Regex compilation error (regex = \"%s\").\n",regexp);
 		return -1;
 	}
 
 	if (preg.re_nsub > 9) {
-		cw_log(LOG_WARNING, "NAPTR Regex compilation error: too many subs.\n");
+		opbx_log(LOG_WARNING, "NAPTR Regex compilation error: too many subs.\n");
 		regfree(&preg);
 		return -1;
 	}
 
 	if (regexec(&preg, naptrinput, 9, pmatch, 0)) {
-		cw_log(LOG_WARNING, "NAPTR Regex match failed.\n");
+		opbx_log(LOG_WARNING, "NAPTR Regex match failed.\n");
 		regfree(&preg);
 		return -1;
 	}
@@ -242,7 +241,7 @@ static int parse_naptr(char *dst, int dstsize, char *tech, int techsize, char *a
 			backref = subst[1]-'0';
 			size = pmatch[backref].rm_eo - pmatch[backref].rm_so;
 			if (size > d_len) {
-				cw_log(LOG_WARNING, "Not enough space during NAPTR regex substitution.\n");
+				opbx_log(LOG_WARNING, "Not enough space during NAPTR regex substitution.\n");
 				return -1;
 				}
 			memcpy(d, naptrinput + pmatch[backref].rm_so, size);
@@ -253,12 +252,12 @@ static int parse_naptr(char *dst, int dstsize, char *tech, int techsize, char *a
 			*d++ = *subst++;
 			d_len--;
 		} else {
-			cw_log(LOG_WARNING, "Error during regex substitution.\n");
+			opbx_log(LOG_WARNING, "Error during regex substitution.\n");
 			return -1;
 		}
 	}
 	*d = 0;
-	cw_copy_string(dst, temp, dstsize);
+	opbx_copy_string(dst, temp, dstsize);
 	dst[dstsize - 1] = '\0';
 
 	if(*tech != '\0'){ /* check if it is requested NAPTR */
@@ -266,7 +265,7 @@ static int parse_naptr(char *dst, int dstsize, char *tech, int techsize, char *a
 			return 1; /* return or count any RR */
 		}
 		if(!strncasecmp(tech_return, tech, sizeof(tech_return)<techsize?sizeof(tech_return):techsize)){
-			cw_copy_string(tech, tech_return, techsize);
+			opbx_copy_string(tech, tech_return, techsize);
 			return 1; /* we got out RR */
 		} else { /* go to the next RR in the DNS answer */
 			return 0;
@@ -274,15 +273,13 @@ static int parse_naptr(char *dst, int dstsize, char *tech, int techsize, char *a
 	}
 
 	/* tech was not specified, return first parsed RR */
-	cw_copy_string(tech, tech_return, techsize);
+	opbx_copy_string(tech, tech_return, techsize);
 
 	return 1;
 }
 
 /* do not return requested value, just count RRs and return thei number in dst */
 #define ENUMLOOKUP_OPTIONS_COUNT	1
-/* use options field as a variable name pattern to set (e.g. name%d) */
-#define ENUMLOOKUP_OPTIONS_ARRAY       2
 
 struct enum_naptr_rr {
 	struct naptr naptr; /* order and preference of RR */
@@ -329,7 +326,7 @@ static int txt_callback(void *context, char *answer, int len, char *fullanswer)
 	len +=1;
 
 	/* finally, copy the answer into c->txt */
-	cw_copy_string(c->txt, answer, len < c->txtlen ? len : (c->txtlen));
+	opbx_copy_string(c->txt, answer, len < c->txtlen ? len : (c->txtlen));
 
 	/* just to be safe, let's make sure c->txt is null terminated */
 	c->txt[(c->txtlen)-1] = '\0';
@@ -347,25 +344,36 @@ static int enum_callback(void *context, char *answer, int len, char *fullanswer)
 	res = parse_naptr(c->dst, c->dstlen, c->tech, c->techlen, answer, len, c->naptrinput);
 
 	if(res < 0){
-		cw_log(LOG_WARNING, "Failed to parse naptr :(\n");
+		opbx_log(LOG_WARNING, "Failed to parse naptr :(\n");
 		return -1;
-	} else if(res > 0 && !cw_strlen_zero(c->dst)){ /* ok, we got needed NAPTR */
-		if ((p = realloc(c->naptr_rrs, sizeof(*c->naptr_rrs) * (c->naptr_rrs_count + 1)))) {
-			c->naptr_rrs = p;
-			memcpy(&c->naptr_rrs[c->naptr_rrs_count].naptr, answer, sizeof(c->naptr_rrs->naptr));
-			c->naptr_rrs[c->naptr_rrs_count].result = strdup(c->dst);
-			c->naptr_rrs[c->naptr_rrs_count].tech = strdup(c->tech);
-			c->naptr_rrs[c->naptr_rrs_count].sort_pos = c->naptr_rrs_count;
-			c->naptr_rrs_count++;
+	} else if(res > 0 && !opbx_strlen_zero(c->dst)){ /* ok, we got needed NAPTR */
+		 if(c->options & ENUMLOOKUP_OPTIONS_COUNT){ /* counting RRs */
+			  c->position++;
+			  snprintf(c->dst, c->dstlen, "%d", c->position);
+		 } else  {
+			  p = realloc(c->naptr_rrs, sizeof(struct enum_naptr_rr)*(c->naptr_rrs_count+1));
+			  if(p){
+				   c->naptr_rrs = (struct enum_naptr_rr*)p;
+				   memcpy(&c->naptr_rrs[c->naptr_rrs_count].naptr, answer, sizeof(struct naptr));
+				   c->naptr_rrs[c->naptr_rrs_count].result = strdup(c->dst);
+				   c->naptr_rrs[c->naptr_rrs_count].tech = strdup(c->tech);
+				   c->naptr_rrs[c->naptr_rrs_count].sort_pos = c->naptr_rrs_count;
+				   c->naptr_rrs_count++;
+			  }
+			  c->dst[0] = 0;
 		 }
 		 return 0;
+	}
+
+	if(c->options & ENUMLOOKUP_OPTIONS_COUNT){ /* counting RRs */
+		 snprintf(c->dst, c->dstlen, "%d", c->position);
 	}
 
 	return 0;
 }
 
-/*--- cw_get_enum: ENUM lookup */
-int cw_get_enum(struct cw_channel *chan, const char *number, char *dst, int dstlen, char *tech, int techlen, char* suffix, char* options)
+/*--- opbx_get_enum: ENUM lookup */
+int opbx_get_enum(struct opbx_channel *chan, const char *number, char *dst, int dstlen, char *tech, int techlen, char* suffix, char* options)
 {
 	struct enum_context context;
 	char tmp[259 + 512];
@@ -399,11 +407,7 @@ int cw_get_enum(struct cw_channel *chan, const char *number, char *dst, int dstl
 	context.naptr_rrs_count = 0;
 
 	if(options != NULL){
-		p1 = strchr(options, '%');
-		if (p1 && p1[1] == 'd' && !strchr(p1+1, '%')) {
-			context.options = ENUMLOOKUP_OPTIONS_ARRAY|ENUMLOOKUP_OPTIONS_COUNT;
-			context.position = 0;
-		} else if(*options == 'c'){
+		 if(*options == 'c'){
 			  context.options = ENUMLOOKUP_OPTIONS_COUNT;
 			  context.position = 0;
 		 } else {
@@ -449,11 +453,11 @@ int cw_get_enum(struct cw_channel *chan, const char *number, char *dst, int dstl
 		 }
 	}
 
-	if (chan && cw_autoservice_start(chan) < 0)
+	if (chan && opbx_autoservice_start(chan) < 0)
 		return -1;
 
 	for(;;) {
-		cw_mutex_lock(&enumlock);
+		opbx_mutex_lock(&enumlock);
 		if (version != enumver) {
 			/* Ooh, a reload... */
 			s = toplevs;
@@ -466,21 +470,21 @@ int cw_get_enum(struct cw_channel *chan, const char *number, char *dst, int dstl
 		 } else if (s) {
 			strncpy(tmp + newpos, s->toplev, sizeof(tmp) - newpos - 1);
 		}
-		cw_mutex_unlock(&enumlock);
+		opbx_mutex_unlock(&enumlock);
 		if (!s)
 			break;
-		ret = cw_search_dns(&context, tmp, C_IN, T_NAPTR, enum_callback);
+		ret = opbx_search_dns(&context, tmp, C_IN, T_NAPTR, enum_callback);
 		if (ret > 0)
 			break;
 		 if(suffix != NULL)
 			  break;
 	}
 	if (ret < 0) {
-		cw_log(LOG_DEBUG, "No such number found: %s (%s)\n", tmp, strerror(errno));
+		opbx_log(LOG_DEBUG, "No such number found: %s (%s)\n", tmp, strerror(errno));
 		ret = 0;
 	}
 
-	if (context.naptr_rrs_count >= context.position || (context.options & ENUMLOOKUP_OPTIONS_ARRAY)) {
+	if(context.naptr_rrs_count >= context.position && ! (context.options & ENUMLOOKUP_OPTIONS_COUNT)){
 		 /* sort array by NAPTR order/preference */
 		 for(k=0; k<context.naptr_rrs_count; k++){
 			  for(i=0; i<context.naptr_rrs_count; i++){
@@ -506,31 +510,19 @@ int cw_get_enum(struct cw_channel *chan, const char *number, char *dst, int dstl
 				   }
 			  }
 		 }
-		if ((context.options & ENUMLOOKUP_OPTIONS_ARRAY)) {
-			for (k = 0; k < context.naptr_rrs_count; k++) {
-				if (snprintf(dst, dstlen, options, context.naptr_rrs[k].sort_pos+1) >= dstlen) {
-					cw_log(LOG_WARNING, "ENUM buffer too small setting result vars!");
-					break;
-				} else {
-					pbx_builtin_setvar_helper(chan, dst, context.naptr_rrs[k].result);	
-				}
-			}
-		} else {
-			for (k = 0; k < context.naptr_rrs_count; k++) {
-				if (context.naptr_rrs[k].sort_pos == context.position-1) {
-					cw_copy_string(dst, context.naptr_rrs[k].result, dstlen);
-					cw_copy_string(tech, context.naptr_rrs[k].tech, techlen);
-					break;
-				}
-			}
-		}
-	}
-	if ((context.options & ENUMLOOKUP_OPTIONS_COUNT)) {
-		snprintf(dst, dstlen, "%d", context.naptr_rrs_count);
+		 for(k=0; k<context.naptr_rrs_count; k++){
+			  if(context.naptr_rrs[k].sort_pos == context.position-1){
+				   opbx_copy_string(context.dst, context.naptr_rrs[k].result, dstlen);
+				   opbx_copy_string(context.tech, context.naptr_rrs[k].tech, techlen);
+				   break;
+			  }
+		 }
+	} else if( !(context.options & ENUMLOOKUP_OPTIONS_COUNT) ) {
+		 context.dst[0] = 0;
 	}
 
 	if (chan)
-		ret |= cw_autoservice_stop(chan);
+		ret |= opbx_autoservice_stop(chan);
 
 	for(k=0; k<context.naptr_rrs_count; k++){
 		 free(context.naptr_rrs[k].result);
@@ -542,10 +534,10 @@ int cw_get_enum(struct cw_channel *chan, const char *number, char *dst, int dstl
 	return ret;
 }
 
-/*--- cw_get_txt: Get TXT record from DNS.
+/*--- opbx_get_txt: Get TXT record from DNS.
 	Really has nothing to do with enum, but anyway...
  */
-int cw_get_txt(struct cw_channel *chan, const char *number, char *dst, int dstlen, char *tech, int techlen, char *txt, int txtlen)
+int opbx_get_txt(struct opbx_channel *chan, const char *number, char *dst, int dstlen, char *tech, int techlen, char *txt, int txtlen)
 {
 	struct enum_context context;
 	char tmp[259 + 512];
@@ -573,11 +565,11 @@ int cw_get_txt(struct cw_channel *chan, const char *number, char *dst, int dstle
 		tmp[newpos++] = '.';
 	}
 
-	if (chan && cw_autoservice_start(chan) < 0)
+	if (chan && opbx_autoservice_start(chan) < 0)
 		return -1;
 
 	for(;;) {
-		cw_mutex_lock(&enumlock);
+		opbx_mutex_lock(&enumlock);
 		if (version != enumver) {
 			/* Ooh, a reload... */
 			s = toplevs;
@@ -588,20 +580,20 @@ int cw_get_txt(struct cw_channel *chan, const char *number, char *dst, int dstle
 		if (s) {
 			strncpy(tmp + newpos, s->toplev, sizeof(tmp) - newpos - 1);
 		}
-		cw_mutex_unlock(&enumlock);
+		opbx_mutex_unlock(&enumlock);
 		if (!s)
 			break;
 
-		ret = cw_search_dns(&context, tmp, C_IN, T_TXT, txt_callback);
+		ret = opbx_search_dns(&context, tmp, C_IN, T_TXT, txt_callback);
 		if (ret > 0)
 			break;
 	}
 	if (ret < 0) {
-		cw_log(LOG_DEBUG, "No such number found: %s (%s)\n", tmp, strerror(errno));
+		opbx_log(LOG_DEBUG, "No such number found: %s (%s)\n", tmp, strerror(errno));
 		ret = 0;
 	}
 	if (chan)
-		ret |= cw_autoservice_stop(chan);
+		ret |= opbx_autoservice_stop(chan);
 	return ret;
 }
 
@@ -613,20 +605,20 @@ static struct enum_search *enum_newtoplev(char *s)
 	tmp = malloc(sizeof(struct enum_search));
 	if (tmp) {
 		memset(tmp, 0, sizeof(struct enum_search));
-		cw_copy_string(tmp->toplev, s, sizeof(tmp->toplev));
+		opbx_copy_string(tmp->toplev, s, sizeof(tmp->toplev));
 	}
 	return tmp;
 }
 
-/*--- cw_enum_init: Initialize the ENUM support subsystem */
-int cw_enum_init(void)
+/*--- opbx_enum_init: Initialize the ENUM support subsystem */
+int opbx_enum_init(void)
 {
-	struct cw_config *cfg;
+	struct opbx_config *cfg;
 	struct enum_search *s, *sl;
-	struct cw_variable *v;
+	struct opbx_variable *v;
 
 	/* Destroy existing list */
-	cw_mutex_lock(&enumlock);
+	opbx_mutex_lock(&enumlock);
 	s = toplevs;
 	while(s) {
 		sl = s;
@@ -634,10 +626,10 @@ int cw_enum_init(void)
 		free(sl);
 	}
 	toplevs = NULL;
-	cfg = cw_config_load("enum.conf");
+	cfg = opbx_config_load("enum.conf");
 	if (cfg) {
 		sl = NULL;
-		v = cw_variable_browse(cfg, "general");
+		v = opbx_variable_browse(cfg, "general");
 		while(v) {
 			if (!strcasecmp(v->name, "search")) {
 				s = enum_newtoplev(v->value);
@@ -651,16 +643,16 @@ int cw_enum_init(void)
 			}
 			v = v->next;
 		}
-		cw_config_destroy(cfg);
+		opbx_config_destroy(cfg);
 	} else {
 		toplevs = enum_newtoplev(TOPLEV);
 	}
 	enumver++;
-	cw_mutex_unlock(&enumlock);
+	opbx_mutex_unlock(&enumlock);
 	return 0;
 }
 
-int cw_enum_reload(void)
+int opbx_enum_reload(void)
 {
-	return cw_enum_init();
+	return opbx_enum_init();
 }

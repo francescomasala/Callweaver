@@ -1,12 +1,12 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  *
  * Copyright (C) 1999 - 2005, Digium, Inc.
  *
  * Mark Spencer <markster@digium.com>
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -29,28 +29,29 @@
 #include <string.h>
 #include <stdlib.h>
 
-#include "callweaver.h"
+#include "openpbx.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/apps/app_read.c $", "$Revision: 4723 $")
+OPENPBX_FILE_VERSION("$HeadURL$", "$Revision$")
 
-#include "callweaver/lock.h"
-#include "callweaver/file.h"
-#include "callweaver/logger.h"
-#include "callweaver/channel.h"
-#include "callweaver/pbx.h"
-#include "callweaver/app.h"
-#include "callweaver/module.h"
-#include "callweaver/translate.h"
-#include "callweaver/options.h"
-#include "callweaver/utils.h"
+#include "openpbx/lock.h"
+#include "openpbx/file.h"
+#include "openpbx/logger.h"
+#include "openpbx/channel.h"
+#include "openpbx/pbx.h"
+#include "openpbx/app.h"
+#include "openpbx/module.h"
+#include "openpbx/translate.h"
+#include "openpbx/options.h"
+#include "openpbx/utils.h"
 
 static char *tdesc = "Read Variable Application";
 
-static void *read_app;
-static char *read_name = "Read";
-static char *read_synopsis = "Read a variable";
-static char *read_syntax = "Read(variable[, filename[, maxdigits[, option[, attempts[, timeout]]]]])";
-static char *read_descrip = 
+static char *app = "Read";
+
+static char *synopsis = "Read a variable";
+
+static char *descrip = 
+"  Read(variable[|filename][|maxdigits][|option][|attempts][|timeout])\n\n"
 "Reads a #-terminated string of digits a certain number of times from the\n"
 "user in to the given variable.\n"
 "  filename   -- file to play before reading digits.\n"
@@ -66,98 +67,135 @@ static char *read_descrip =
 "  timeout    -- if greater than 0, that value will override the default timeout.\n\n"
 "Returns -1 on hangup or error and 0 otherwise.\n";
 
-
 STANDARD_LOCAL_USER;
 
 LOCAL_USER_DECL;
 
-#define cw_next_data(instr,ptr,delim) if((ptr=strchr(instr,delim))) { *(ptr) = '\0' ; ptr++;}
+#define opbx_next_data(instr,ptr,delim) if((ptr=strchr(instr,delim))) { *(ptr) = '\0' ; ptr++;}
 
-static int read_exec(struct cw_channel *chan, int argc, char **argv)
+static int read_exec(struct opbx_channel *chan, void *data)
 {
 	int res = 0;
 	struct localuser *u;
 	char tmp[256];
+	char *timeout = NULL;
+	char *varname = NULL;
+	char *filename = NULL;
+	char *loops;
+	char *maxdigitstr=NULL;
+	char *options=NULL;
 	int option_skip = 0;
 	int option_noanswer = 0;
-	int maxdigits = 255;
+	int maxdigits=255;
 	int tries = 1;
 	int to = 0;
+	int x = 0;
+	char *argcopy = NULL;
+	char *args[8];
 
-	if (argc < 1 || argc > 6) {
-		cw_log(LOG_ERROR, "Syntax: %s\n", read_syntax);
+	if (opbx_strlen_zero(data)) {
+		opbx_log(LOG_WARNING, "Read requires an argument (variable)\n");
 		return -1;
 	}
 
 	LOCAL_USER_ADD(u);
 	
-	if (argc > 2 && argv[2][0]) {
-		maxdigits = atoi(argv[2]);
-		if (maxdigits < 1 || maxdigits > 255)
-    			maxdigits = 255;
-		else if (option_verbose > 2)
-			cw_verbose(VERBOSE_PREFIX_3 "Accepting a maximum of %d digits.\n", maxdigits);
+	argcopy = opbx_strdupa(data);
+	if (!argcopy) {
+		opbx_log(LOG_ERROR, "Out of memory\n");
+		LOCAL_USER_REMOVE(u);
+		return -1;
 	}
 
-	if (argc > 3) {
-		if (!strcasecmp(argv[3], "skip"))
+	if (opbx_separate_app_args(argcopy, '|', args, sizeof(args) / sizeof(args[0])) < 1) {
+		opbx_log(LOG_WARNING, "Cannot Parse Arguments.\n");
+		LOCAL_USER_REMOVE(u);
+		return -1;
+	}
+
+	varname = args[x++];
+	filename = args[x++];
+	maxdigitstr = args[x++];
+	options = args[x++];
+	loops = args[x++];
+	timeout = args[x++];
+	
+	if (options) { 
+		if (!strcasecmp(options, "skip"))
 			option_skip = 1;
-		else if (!strcasecmp(argv[3], "noanswer"))
+		else if (!strcasecmp(options, "noanswer"))
 			option_noanswer = 1;
 		else {
-			if (strchr(argv[3], 's'))
+			if (strchr(options, 's'))
 				option_skip = 1;
-			if (strchr(argv[3], 'n'))
+			if (strchr(options, 'n'))
 				option_noanswer = 1;
 		}
 	}
 
-	if (argc > 4) {
-		tries = atoi(argv[4]);
-		if (tries <= 0)
+	if(loops) {
+		tries = atoi(loops);
+		if(tries <= 0)
 			tries = 1;
 	}
 
-	if (argc > 5) {
-		to = atoi(argv[5]) * 1000;
+	if(timeout) {
+		to = atoi(timeout);
 		if (to <= 0)
 			to = 0;
+		else
+			to *= 1000;
 	}
 
-	if (chan->_state != CW_STATE_UP) {
+	if (opbx_strlen_zero(filename)) 
+		filename = NULL;
+	if (maxdigitstr) {
+		maxdigits = atoi(maxdigitstr);
+		if ((maxdigits<1) || (maxdigits>255)) {
+    			maxdigits = 255;
+		} else if (option_verbose > 2)
+			opbx_verbose(VERBOSE_PREFIX_3 "Accepting a maximum of %d digits.\n", maxdigits);
+	}
+	if (opbx_strlen_zero(varname)) {
+		opbx_log(LOG_WARNING, "Invalid! Usage: Read(variable[|filename][|maxdigits][|option][|attempts][|timeout])\n\n");
+		LOCAL_USER_REMOVE(u);
+		return -1;
+	}
+	
+	if (chan->_state != OPBX_STATE_UP) {
 		if (option_skip) {
 			/* At the user's option, skip if the line is not up */
-			pbx_builtin_setvar_helper(chan, argv[0], "\0");
+			pbx_builtin_setvar_helper(chan, varname, "\0");
 			LOCAL_USER_REMOVE(u);
 			return 0;
 		} else if (!option_noanswer) {
 			/* Otherwise answer unless we're supposed to read while on-hook */
-			res = cw_answer(chan);
+			res = opbx_answer(chan);
 		}
 	}
 	if (!res) {
 		while(tries && !res) {
-			cw_stopstream(chan);
-			res = cw_app_getdata(chan, (argc > 1 && argv[1][0] ? argv[1] : NULL), tmp, maxdigits, to);
+			opbx_stopstream(chan);
+			res = opbx_app_getdata(chan, filename, tmp, maxdigits, to);
 			if (res > -1) {
-				pbx_builtin_setvar_helper(chan, argv[0], tmp);
-				if (!cw_strlen_zero(tmp)) {
+				pbx_builtin_setvar_helper(chan, varname, tmp);
+				if (!opbx_strlen_zero(tmp)) {
 					if (option_verbose > 2)
-						cw_verbose(VERBOSE_PREFIX_3 "User entered '%s'\n", tmp);
+						opbx_verbose(VERBOSE_PREFIX_3 "User entered '%s'\n", tmp);
 					tries = 0;
 				} else {
 					tries--;
 					if (option_verbose > 2) {
 						if (tries)
-							cw_verbose(VERBOSE_PREFIX_3 "User entered nothing, %d chance%s left\n", tries, (tries != 1) ? "s" : "");
+							opbx_verbose(VERBOSE_PREFIX_3 "User entered nothing, %d chance%s left\n", tries, (tries != 1) ? "s" : "");
 						else
-							cw_verbose(VERBOSE_PREFIX_3 "User entered nothing.\n");
+							opbx_verbose(VERBOSE_PREFIX_3 "User entered nothing.\n");
 					}
 				}
 				res = 0;
 			} else {
 				if (option_verbose > 2)
-					cw_verbose(VERBOSE_PREFIX_3 "User disconnected\n");
+					opbx_verbose(VERBOSE_PREFIX_3 "User disconnected\n");
 			}
 		}
 	}
@@ -167,16 +205,13 @@ static int read_exec(struct cw_channel *chan, int argc, char **argv)
 
 int unload_module(void)
 {
-	int res = 0;
 	STANDARD_HANGUP_LOCALUSERS;
-	res |= cw_unregister_application(read_app);
-	return res;
+	return opbx_unregister_application(app);
 }
 
 int load_module(void)
 {
-	read_app = cw_register_application(read_name, read_exec, read_synopsis, read_syntax, read_descrip);
-	return 0;
+	return opbx_register_application(app, read_exec, synopsis, descrip);
 }
 
 char *description(void)

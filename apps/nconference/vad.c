@@ -2,7 +2,7 @@
  * app_nconference
  *
  * NConference
- * A channel independent conference application for CallWeaver
+ * A channel independent conference application for Openpbx
  *
  * Copyright (C) 2002, 2003 Navynet SRL
  * http://www.navynet.it
@@ -22,7 +22,7 @@
 #include "common.h"
 #include "vad.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/apps/nconference/vad.c $", "$Revision: 4723 $");
+OPENPBX_FILE_VERSION(__FILE__, "$Revision: 2308 $");
 
 #define THRESH	200
 
@@ -37,7 +37,7 @@ static int detect_silence(char *buf, int len, int threshold)
 	    totover++;
 	}
     }
-    //cw_log(LOG_WARNING,"THR: %d %d\n", (max-min), threshold );
+    //opbx_log(LOG_WARNING,"THR: %d %d\n", (max-min), threshold );
     if( totover > len % 5)
 	return 0;
 

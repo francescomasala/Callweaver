@@ -1,12 +1,12 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  *
  * Copyright (C) 1999 - 2005, Digium, Inc.
  *
  * Mark Spencer <markster@digium.com>
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -22,7 +22,7 @@
  *
  * @file chan_agent.c
  * @brief This file is the implementation of Agents modules.
- * It is a dynamic module that is loaded by CallWeaver. At load time, load_module is run.
+ * It is a dynamic module that is loaded by OpenPBX. At load time, load_module is run.
  */
 #ifdef HAVE_CONFIG_H
 #include "confdefs.h"
@@ -40,55 +40,48 @@
 #include <arpa/inet.h>
 #include <sys/signal.h>
 
-#include "callweaver.h"
+#include "openpbx.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/channels/chan_agent.c $", "$Revision: 4723 $")
+OPENPBX_FILE_VERSION("$HeadURL$", "$Revision$")
 
-#include "callweaver/lock.h"
-#include "callweaver/channel.h"
-#include "callweaver/config.h"
-#include "callweaver/logger.h"
-#include "callweaver/module.h"
-#include "callweaver/pbx.h"
-#include "callweaver/options.h"
-#include "callweaver/lock.h"
-#include "callweaver/sched.h"
-#include "callweaver/io.h"
-#include "callweaver/acl.h"
-#include "callweaver/phone_no_utils.h"
-#include "callweaver/file.h"
-#include "callweaver/cli.h"
-#include "callweaver/app.h"
-#include "callweaver/musiconhold.h"
-#include "callweaver/manager.h"
-#include "callweaver/features.h"
-#include "callweaver/utils.h"
-#include "callweaver/causes.h"
-#include "callweaver/callweaver_db.h"
-#include "callweaver/devicestate.h"
+#include "openpbx/lock.h"
+#include "openpbx/channel.h"
+#include "openpbx/config.h"
+#include "openpbx/logger.h"
+#include "openpbx/module.h"
+#include "openpbx/pbx.h"
+#include "openpbx/options.h"
+#include "openpbx/lock.h"
+#include "openpbx/sched.h"
+#include "openpbx/io.h"
+#include "openpbx/acl.h"
+#include "openpbx/phone_no_utils.h"
+#include "openpbx/file.h"
+#include "openpbx/cli.h"
+#include "openpbx/app.h"
+#include "openpbx/musiconhold.h"
+#include "openpbx/manager.h"
+#include "openpbx/features.h"
+#include "openpbx/utils.h"
+#include "openpbx/causes.h"
+#include "openpbx/opbxdb.h"
+#include "openpbx/devicestate.h"
 
 static const char desc[] = "Agent Proxy Channel";
 static const char channeltype[] = "Agent";
 static const char tdesc[] = "Call Agent Proxy Channel";
 static const char config[] = "agents.conf";
 
-static void *agentlogin_app;
-static void *agentcallbacklogin_app;
-static void *agentmonitoroutgoing_app;
-
 static const char app[] = "AgentLogin";
 static const char app2[] = "AgentCallbackLogin";
 static const char app3[] = "AgentMonitorOutgoing";
-
-static const char syntax[] = "AgentLogin([AgentNo[, options]])";
-static const char syntax2[] = "AgentCallbackLogin([AgentNo[, options[, [exten]@context]]])";
-static const char syntax3[] = "AgentMonitorOutgoing([options])";
 
 static const char synopsis[] = "Call agent login";
 static const char synopsis2[] = "Call agent callback login";
 static const char synopsis3[] = "Record agent's outgoing call";
 
 static const char descrip[] =
+"  AgentLogin([AgentNo][|options]):\n"
 "Asks the agent to login to the system.  Always returns -1.  While\n"
 "logged in, the agent can receive calls and will hear a 'beep'\n"
 "when a new call comes in. The agent can dump the call by pressing\n"
@@ -97,6 +90,7 @@ static const char descrip[] =
 "      's' -- silent login - do not announce the login ok segment after agent logged in/off\n";
 
 static const char descrip2[] =
+"  AgentCallbackLogin([AgentNo][|[options][|[exten]@context]]):\n"
 "Asks the agent to login to the system with callback.\n"
 "The agent's callback extension is called (optionally with the specified\n"
 "context).\n"
@@ -104,13 +98,15 @@ static const char descrip2[] =
 "      's' -- silent login - do not announce the login ok segment agent logged in/off\n";
 
 static const char descrip3[] =
+"  AgentMonitorOutgoing([options]):\n"
 "Tries to figure out the id of the agent who is placing outgoing call based on\n"
 "comparision of the callerid of the current interface and the global variable \n"
 "placed by the AgentCallbackLogin application. That's why it should be used only\n"
 "with the AgentCallbackLogin app. Uses the monitoring functions in chan_agent \n"
 "instead of Monitor application. That have to be configured in the agents.conf file.\n"
-"If callerid or agent id aren't specified, or if other errors occur, set the\n"
-"variable AGENTSTATUS to FAIL. Otherwise set this to SUCCESS. Always return 0\n"
+"\nReturn value:\n"
+"Normally the app returns 0 unless the options are passed. Also if the callerid or\n"
+"the agentid are not specified it'll look for n+101 priority.\n"
 "\nOptions:\n"
 "	'd' - make the app return -1 if there is an error condition and there is\n"
 "	      no extension n+101\n"
@@ -133,18 +129,18 @@ static const char mandescr_agent_callback_login[] =
 "Description: Sets an agent as logged in with callback.\n"
 "Variables: (Names marked with * are required)\n"
 "	*Agent: Agent ID of the agent to login\n"
-"	*Exten: Extension to use for callback\n"
+"	*Extension: Extension to use for callback\n"
 "	Context: Context to use for callback\n"
 "	AckCall: Set to 'true' to require an acknowledgement by '#' when agent is called back\n"
 "	WrapupTime: the minimum amount of time after disconnecting before the caller can receive a new call\n";
 
 static char moh[80] = "default";
 
-#define CW_MAX_AGENT	80		/**< Agent ID or Password max length */
-#define CW_MAX_BUF	256
-#define CW_MAX_FILENAME_LEN	256
+#define OPBX_MAX_AGENT	80		/**< Agent ID or Password max length */
+#define OPBX_MAX_BUF	256
+#define OPBX_MAX_FILENAME_LEN	256
 
-/** Persistent Agents cwdb family */
+/** Persistent Agents opbxdb family */
 static const char pa_family[] = "/Agents";
 /** The maximum lengh of each persistent member agent database entry */
 #define PA_MAX_LEN 2048
@@ -152,28 +148,28 @@ static const char pa_family[] = "/Agents";
 static int persistent_agents = 0;
 static void dump_agents(void);
 
-static cw_group_t group;
+static opbx_group_t group;
 static int autologoff;
 static int wrapuptime;
 static int ackcall;
 
 static int maxlogintries = 3;
-static char agentgoodbye[CW_MAX_FILENAME_LEN] = "vm-goodbye";
+static char agentgoodbye[OPBX_MAX_FILENAME_LEN] = "vm-goodbye";
 
 static int usecnt =0;
-CW_MUTEX_DEFINE_STATIC(usecnt_lock);
+OPBX_MUTEX_DEFINE_STATIC(usecnt_lock);
 
 /* Protect the interface list (of pvt's) */
-CW_MUTEX_DEFINE_STATIC(agentlock);
+OPBX_MUTEX_DEFINE_STATIC(agentlock);
 
 static int recordagentcalls = 0;
-static char recordformat[CW_MAX_BUF] = "";
-static char recordformatext[CW_MAX_BUF] = "";
+static char recordformat[OPBX_MAX_BUF] = "";
+static char recordformatext[OPBX_MAX_BUF] = "";
 static int createlink = 0;
-static char urlprefix[CW_MAX_BUF] = "";
-static char savecallsin[CW_MAX_BUF] = "";
+static char urlprefix[OPBX_MAX_BUF] = "";
+static char savecallsin[OPBX_MAX_BUF] = "";
 static int updatecdr = 0;
-static char beep[CW_MAX_BUF] = "beep";
+static char beep[OPBX_MAX_BUF] = "beep";
 
 #define GETAGENTBYCALLERID	"AGENTBYCALLERID"
 
@@ -181,7 +177,7 @@ static char beep[CW_MAX_BUF] = "beep";
  * Structure representing an agent.
  */
 struct agent_pvt {
-	cw_mutex_t lock;              /**< Channel private lock */
+	opbx_mutex_t lock;              /**< Channel private lock */
 	int dead;                      /**< Poised for destruction? */
 	int pending;                   /**< Not a real agent -- just pending a match */
 	int abouttograb;               /**< About to grab */
@@ -191,19 +187,19 @@ struct agent_pvt {
 	time_t start;                  /**< When call started */
 	struct timeval lastdisc;       /**< When last disconnected */
 	int wrapuptime;                /**< Wrapup time in ms */
-	cw_group_t group;             /**< Group memberships */
+	opbx_group_t group;             /**< Group memberships */
 	int acknowledged;              /**< Acknowledged */
 	char moh[80];                  /**< Which music on hold */
-	char agent[CW_MAX_AGENT];     /**< Agent ID */
-	char password[CW_MAX_AGENT];  /**< Password for Agent login */
-	char name[CW_MAX_AGENT];
-	cw_mutex_t app_lock;          /**< Synchronization between owning applications */
+	char agent[OPBX_MAX_AGENT];     /**< Agent ID */
+	char password[OPBX_MAX_AGENT];  /**< Password for Agent login */
+	char name[OPBX_MAX_AGENT];
+	opbx_mutex_t app_lock;          /**< Synchronization between owning applications */
 	volatile pthread_t owning_app; /**< Owning application thread id */
 	volatile int app_sleep_cond;   /**< Sleep condition for the login app */
-	struct cw_channel *owner;     /**< Agent */
+	struct opbx_channel *owner;     /**< Agent */
 	char loginchan[80];            /**< channel they logged in from */
 	char logincallerid[80];        /**< Caller ID they had when they logged in */
-	struct cw_channel *chan;      /**< Channel we use */
+	struct opbx_channel *chan;      /**< Channel we use */
 	struct agent_pvt *next;        /**< Next Agent in the linked list. */
 };
 
@@ -212,17 +208,17 @@ static struct agent_pvt *agents = NULL;  /**< Holds the list of agents (loaded f
 #define CHECK_FORMATS(ast, p) do { \
 	if (p->chan) {\
 		if (ast->nativeformats != p->chan->nativeformats) { \
-			cw_log(LOG_DEBUG, "Native formats changing from %d to %d\n", ast->nativeformats, p->chan->nativeformats); \
+			opbx_log(LOG_DEBUG, "Native formats changing from %d to %d\n", ast->nativeformats, p->chan->nativeformats); \
 			/* Native formats changed, reset things */ \
 			ast->nativeformats = p->chan->nativeformats; \
-			cw_log(LOG_DEBUG, "Resetting read to %d and write to %d\n", ast->readformat, ast->writeformat);\
-			cw_set_read_format(ast, ast->readformat); \
-			cw_set_write_format(ast, ast->writeformat); \
+			opbx_log(LOG_DEBUG, "Resetting read to %d and write to %d\n", ast->readformat, ast->writeformat);\
+			opbx_set_read_format(ast, ast->readformat); \
+			opbx_set_write_format(ast, ast->writeformat); \
 		} \
 		if (p->chan->readformat != ast->rawreadformat)  \
-			cw_set_read_format(p->chan, ast->rawreadformat); \
+			opbx_set_read_format(p->chan, ast->rawreadformat); \
 		if (p->chan->writeformat != ast->rawwriteformat) \
-			cw_set_write_format(p->chan, ast->rawwriteformat); \
+			opbx_set_write_format(p->chan, ast->rawwriteformat); \
 	} \
 } while(0)
 
@@ -233,29 +229,29 @@ static struct agent_pvt *agents = NULL;  /**< Holds the list of agents (loaded f
 #define CLEANUP(ast, p) do { \
 	int x; \
 	if (p->chan) { \
-		for (x=0;x<CW_MAX_FDS;x++) {\
-			if (x != CW_MAX_FDS - 2) \
+		for (x=0;x<OPBX_MAX_FDS;x++) {\
+			if (x != OPBX_MAX_FDS - 2) \
 				ast->fds[x] = p->chan->fds[x]; \
 		} \
-		ast->fds[CW_MAX_FDS - 3] = p->chan->fds[CW_MAX_FDS - 2]; \
+		ast->fds[OPBX_MAX_FDS - 3] = p->chan->fds[OPBX_MAX_FDS - 2]; \
 	} \
 } while(0)
 
-static struct cw_channel *agent_request(const char *type, int format, void *data, int *cause);
+static struct opbx_channel *agent_request(const char *type, int format, void *data, int *cause);
 static int agent_devicestate(void *data);
-static int agent_digit(struct cw_channel *ast, char digit);
-static int agent_call(struct cw_channel *ast, char *dest, int timeout);
-static int agent_hangup(struct cw_channel *ast);
-static int agent_answer(struct cw_channel *ast);
-static struct cw_frame *agent_read(struct cw_channel *ast);
-static int agent_write(struct cw_channel *ast, struct cw_frame *f);
-static int agent_sendhtml(struct cw_channel *ast, int subclass, const char *data, int datalen);
-static int agent_sendtext(struct cw_channel *ast, const char *text);
-static int agent_indicate(struct cw_channel *ast, int condition);
-static int agent_fixup(struct cw_channel *oldchan, struct cw_channel *newchan);
-static struct cw_channel *agent_bridgedchannel(struct cw_channel *chan, struct cw_channel *bridge);
+static int agent_digit(struct opbx_channel *ast, char digit);
+static int agent_call(struct opbx_channel *ast, char *dest, int timeout);
+static int agent_hangup(struct opbx_channel *ast);
+static int agent_answer(struct opbx_channel *ast);
+static struct opbx_frame *agent_read(struct opbx_channel *ast);
+static int agent_write(struct opbx_channel *ast, struct opbx_frame *f);
+static int agent_sendhtml(struct opbx_channel *ast, int subclass, const char *data, int datalen);
+static int agent_sendtext(struct opbx_channel *ast, const char *text);
+static int agent_indicate(struct opbx_channel *ast, int condition);
+static int agent_fixup(struct opbx_channel *oldchan, struct opbx_channel *newchan);
+static struct opbx_channel *agent_bridgedchannel(struct opbx_channel *chan, struct opbx_channel *bridge);
 
-static const struct cw_channel_tech agent_tech = {
+static const struct opbx_channel_tech agent_tech = {
 	.type = channeltype,
 	.description = tdesc,
 	.capabilities = -1,
@@ -314,17 +310,17 @@ static void agent_unlink(struct agent_pvt *agent)
 static struct agent_pvt *add_agent(char *agent, int pending)
 {
 	int argc;
-	char *argv[3 + 1];
+	char *argv[3];
 	char *args;
 	char *password = NULL;
 	char *name = NULL;
 	char *agt = NULL;
 	struct agent_pvt *p, *prev;
 
-	args = cw_strdupa(agent);
+	args = opbx_strdupa(agent);
 
 	// Extract username (agt), password and name from agent (args).
-	if ((argc = cw_separate_app_args(args, ',', arraysize(argv), argv))) {
+	if ((argc = opbx_separate_app_args(args, ',', argv, sizeof(argv) / sizeof(argv[0])))) {
 		agt = argv[0];
 		if (argc > 1) {
 			password = argv[1];
@@ -335,7 +331,7 @@ static struct agent_pvt *add_agent(char *agent, int pending)
 			while (*name && *name < 33) name++;
 		}
 	} else {
-		cw_log(LOG_WARNING, "A blank agent line!\n");
+		opbx_log(LOG_WARNING, "A blank agent line!\n");
 	}
 	
 	// Are we searching for the agent here ? to see if it exists already ?
@@ -352,9 +348,9 @@ static struct agent_pvt *add_agent(char *agent, int pending)
 		p = malloc(sizeof(struct agent_pvt));
 		if (p) {
 			memset(p, 0, sizeof(struct agent_pvt));
-			cw_copy_string(p->agent, agt, sizeof(p->agent));
-			cw_mutex_init(&p->lock);
-			cw_mutex_init(&p->app_lock);
+			opbx_copy_string(p->agent, agt, sizeof(p->agent));
+			opbx_mutex_init(&p->lock);
+			opbx_mutex_init(&p->app_lock);
 			p->owning_app = (pthread_t) -1;
 			p->app_sleep_cond = 1;
 			p->group = group;
@@ -370,16 +366,16 @@ static struct agent_pvt *add_agent(char *agent, int pending)
 		}
 	}
 	
-	cw_copy_string(p->password, password ? password : "", sizeof(p->password));
-	cw_copy_string(p->name, name ? name : "", sizeof(p->name));
-	cw_copy_string(p->moh, moh, sizeof(p->moh));
+	opbx_copy_string(p->password, password ? password : "", sizeof(p->password));
+	opbx_copy_string(p->name, name ? name : "", sizeof(p->name));
+	opbx_copy_string(p->moh, moh, sizeof(p->moh));
 	p->ackcall = ackcall;
 	p->autologoff = autologoff;
 
 	/* If someone reduces the wrapuptime and reloads, we want it
 	 * to change the wrapuptime immediately on all calls */
 	if (p->wrapuptime > wrapuptime) {
-		struct timeval now = cw_tvnow();
+		struct timeval now = opbx_tvnow();
 		/* XXX check what is this exactly */
 
 		/* We won't be pedantic and check the tv_usec val */
@@ -405,18 +401,18 @@ static struct agent_pvt *add_agent(char *agent, int pending)
  */
 static int agent_cleanup(struct agent_pvt *p)
 {
-	struct cw_channel *chan = p->owner;
+	struct opbx_channel *chan = p->owner;
 	p->owner = NULL;
 	chan->tech_pvt = NULL;
 	p->app_sleep_cond = 1;
 	/* Release ownership of the agent to other threads (presumably running the login app). */
-	if (cw_strlen_zero(p->loginchan))
-	    cw_mutex_unlock(&p->app_lock);
+	if (opbx_strlen_zero(p->loginchan))
+	    opbx_mutex_unlock(&p->app_lock);
 	if (chan)
-		cw_channel_free(chan);
+		opbx_channel_free(chan);
 	if (p->dead) {
-		cw_mutex_destroy(&p->lock);
-		cw_mutex_destroy(&p->app_lock);
+		opbx_mutex_destroy(&p->lock);
+		opbx_mutex_destroy(&p->app_lock);
 		free(p);
         }
 	return 0;
@@ -424,16 +420,16 @@ static int agent_cleanup(struct agent_pvt *p)
 
 static int check_availability(struct agent_pvt *newlyavailable, int needlock);
 
-static int agent_answer(struct cw_channel *ast)
+static int agent_answer(struct opbx_channel *ast)
 {
-	cw_log(LOG_WARNING, "Huh?  Agent is being asked to answer?\n");
+	opbx_log(LOG_WARNING, "Huh?  Agent is being asked to answer?\n");
 	return -1;
 }
 
-static int __agent_start_monitoring(struct cw_channel *ast, struct agent_pvt *p, int needlock)
+static int __agent_start_monitoring(struct opbx_channel *ast, struct agent_pvt *p, int needlock)
 {
-	char tmp[CW_MAX_BUF],tmp2[CW_MAX_BUF], *pointer;
-	char filename[CW_MAX_BUF];
+	char tmp[OPBX_MAX_BUF],tmp2[OPBX_MAX_BUF], *pointer;
+	char filename[OPBX_MAX_BUF];
 	int res = -1;
 	if (!p)
 		return -1;
@@ -443,99 +439,99 @@ static int __agent_start_monitoring(struct cw_channel *ast, struct agent_pvt *p,
 		if ((pointer = strchr(filename, '.')))
 			*pointer = '-';
 		snprintf(tmp, sizeof(tmp), "%s%s",savecallsin ? savecallsin : "", filename);
-		cw_monitor_start(ast, recordformat, tmp, needlock);
-		cw_monitor_setjoinfiles(ast, 1);
+		opbx_monitor_start(ast, recordformat, tmp, needlock);
+		opbx_monitor_setjoinfiles(ast, 1);
 		snprintf(tmp2, sizeof(tmp2), "%s%s.%s", urlprefix ? urlprefix : "", filename, recordformatext);
 #if 0
-		cw_verbose("name is %s, link is %s\n",tmp, tmp2);
+		opbx_verbose("name is %s, link is %s\n",tmp, tmp2);
 #endif
 		if (!ast->cdr)
-			ast->cdr = cw_cdr_alloc();
-		cw_cdr_setuserfield(ast, tmp2);
+			ast->cdr = opbx_cdr_alloc();
+		opbx_cdr_setuserfield(ast, tmp2);
 		res = 0;
 	} else
-		cw_log(LOG_ERROR, "Recording already started on that call.\n");
+		opbx_log(LOG_ERROR, "Recording already started on that call.\n");
 	return res;
 }
 
-static int agent_start_monitoring(struct cw_channel *ast, int needlock)
+static int agent_start_monitoring(struct opbx_channel *ast, int needlock)
 {
 	return __agent_start_monitoring(ast, ast->tech_pvt, needlock);
 }
 
-static struct cw_frame *agent_read(struct cw_channel *ast)
+static struct opbx_frame *agent_read(struct opbx_channel *ast)
 {
 	struct agent_pvt *p = ast->tech_pvt;
-	struct cw_frame *f = NULL;
-	static struct cw_frame null_frame = { CW_FRAME_NULL, };
-	static struct cw_frame answer_frame = { CW_FRAME_CONTROL, CW_CONTROL_ANSWER };
-	cw_mutex_lock(&p->lock); 
+	struct opbx_frame *f = NULL;
+	static struct opbx_frame null_frame = { OPBX_FRAME_NULL, };
+	static struct opbx_frame answer_frame = { OPBX_FRAME_CONTROL, OPBX_CONTROL_ANSWER };
+	opbx_mutex_lock(&p->lock); 
 	CHECK_FORMATS(ast, p);
 	if (p->chan) {
-		cw_copy_flags(p->chan, ast, CW_FLAG_EXCEPTION);
-		if (ast->fdno == CW_MAX_FDS - 3)
-			p->chan->fdno = CW_MAX_FDS - 2;
+		opbx_copy_flags(p->chan, ast, OPBX_FLAG_EXCEPTION);
+		if (ast->fdno == OPBX_MAX_FDS - 3)
+			p->chan->fdno = OPBX_MAX_FDS - 2;
 		else
 			p->chan->fdno = ast->fdno;
-		f = cw_read(p->chan);
+		f = opbx_read(p->chan);
 	} else
 		f = &null_frame;
 	if (!f) {
 		/* If there's a channel, hang it up (if it's on a callback) make it NULL */
 		if (p->chan) {
 			p->chan->_bridge = NULL;
-			/* Note that we don't hangup if it's not a callback because CallWeaver will do it
+			/* Note that we don't hangup if it's not a callback because OpenPBX will do it
 			   for us when the PBX instance that called login finishes */
-			if (!cw_strlen_zero(p->loginchan)) {
+			if (!opbx_strlen_zero(p->loginchan)) {
 				if (p->chan)
-					cw_log(LOG_DEBUG, "Bridge on '%s' being cleared (2)\n", p->chan->name);
-				cw_hangup(p->chan);
+					opbx_log(LOG_DEBUG, "Bridge on '%s' being cleared (2)\n", p->chan->name);
+				opbx_hangup(p->chan);
 				if (p->wrapuptime && p->acknowledged)
-					p->lastdisc = cw_tvadd(cw_tvnow(), cw_samp2tv(p->wrapuptime, 1000));
+					p->lastdisc = opbx_tvadd(opbx_tvnow(), opbx_samp2tv(p->wrapuptime, 1000));
 			}
 			p->chan = NULL;
 			p->acknowledged = 0;
 		}
  	} else {
  		/* if acknowledgement is not required, and the channel is up, we may have missed
- 		   an CW_CONTROL_ANSWER (if there was one), so mark the call acknowledged anyway */
- 		if (!p->ackcall && !p->acknowledged && p->chan && (p->chan->_state == CW_STATE_UP))
+ 		   an OPBX_CONTROL_ANSWER (if there was one), so mark the call acknowledged anyway */
+ 		if (!p->ackcall && !p->acknowledged && p->chan && (p->chan->_state == OPBX_STATE_UP))
   			p->acknowledged = 1;
  		switch (f->frametype) {
- 		case CW_FRAME_CONTROL:
- 			if (f->subclass == CW_CONTROL_ANSWER) {
+ 		case OPBX_FRAME_CONTROL:
+ 			if (f->subclass == OPBX_CONTROL_ANSWER) {
  				if (p->ackcall) {
  					if (option_verbose > 2)
- 						cw_verbose(VERBOSE_PREFIX_3 "%s answered, waiting for '#' to acknowledge\n", p->chan->name);
+ 						opbx_verbose(VERBOSE_PREFIX_3 "%s answered, waiting for '#' to acknowledge\n", p->chan->name);
  					/* Don't pass answer along */
- 					cw_fr_free(f);
+ 					opbx_frfree(f);
  					f = &null_frame;
  				} else {
  					p->acknowledged = 1;
  					/* Use the builtin answer frame for the 
 					   recording start check below. */
- 					cw_fr_free(f);
+ 					opbx_frfree(f);
  					f = &answer_frame;
  				}
  			}
  			break;
- 		case CW_FRAME_DTMF:
+ 		case OPBX_FRAME_DTMF:
  			if (!p->acknowledged && (f->subclass == '#')) {
  				if (option_verbose > 2)
- 					cw_verbose(VERBOSE_PREFIX_3 "%s acknowledged\n", p->chan->name);
+ 					opbx_verbose(VERBOSE_PREFIX_3 "%s acknowledged\n", p->chan->name);
  				p->acknowledged = 1;
- 				cw_fr_free(f);
+ 				opbx_frfree(f);
  				f = &answer_frame;
  			} else if (f->subclass == '*') {
  				/* terminates call */
- 				cw_fr_free(f);
+ 				opbx_frfree(f);
  				f = NULL;
  			}
  			break;
- 		case CW_FRAME_VOICE:
+ 		case OPBX_FRAME_VOICE:
  			/* don't pass voice until the call is acknowledged */
  			if (!p->acknowledged) {
- 				cw_fr_free(f);
+ 				opbx_frfree(f);
  				f = &null_frame;
  			}
  			break;
@@ -547,161 +543,161 @@ static struct cw_frame *agent_read(struct cw_channel *ast)
 		if (strcasecmp(p->chan->type, "Local")) {
 			p->chan->_bridge = ast;
 			if (p->chan)
-				cw_log(LOG_DEBUG, "Bridge on '%s' being set to '%s' (3)\n", p->chan->name, p->chan->_bridge->name);
+				opbx_log(LOG_DEBUG, "Bridge on '%s' being set to '%s' (3)\n", p->chan->name, p->chan->_bridge->name);
 		}
 	}
-	cw_mutex_unlock(&p->lock);
+	opbx_mutex_unlock(&p->lock);
 	if (recordagentcalls && f == &answer_frame)
 		agent_start_monitoring(ast,0);
 	return f;
 }
 
-static int agent_sendhtml(struct cw_channel *ast, int subclass, const char *data, int datalen)
+static int agent_sendhtml(struct opbx_channel *ast, int subclass, const char *data, int datalen)
 {
 	struct agent_pvt *p = ast->tech_pvt;
 	int res = -1;
-	cw_mutex_lock(&p->lock);
+	opbx_mutex_lock(&p->lock);
 	if (p->chan) 
-		res = cw_channel_sendhtml(p->chan, subclass, data, datalen);
-	cw_mutex_unlock(&p->lock);
+		res = opbx_channel_sendhtml(p->chan, subclass, data, datalen);
+	opbx_mutex_unlock(&p->lock);
 	return res;
 }
 
-static int agent_sendtext(struct cw_channel *ast, const char *text)
+static int agent_sendtext(struct opbx_channel *ast, const char *text)
 {
 	struct agent_pvt *p = ast->tech_pvt;
 	int res = -1;
-	cw_mutex_lock(&p->lock);
+	opbx_mutex_lock(&p->lock);
 	if (p->chan) 
-		res = cw_sendtext(p->chan, text);
-	cw_mutex_unlock(&p->lock);
+		res = opbx_sendtext(p->chan, text);
+	opbx_mutex_unlock(&p->lock);
 	return res;
 }
 
-static int agent_write(struct cw_channel *ast, struct cw_frame *f)
+static int agent_write(struct opbx_channel *ast, struct opbx_frame *f)
 {
 	struct agent_pvt *p = ast->tech_pvt;
 	int res = -1;
 	CHECK_FORMATS(ast, p);
-	cw_mutex_lock(&p->lock);
+	opbx_mutex_lock(&p->lock);
 	if (p->chan) {
-		if ((f->frametype != CW_FRAME_VOICE) ||
+		if ((f->frametype != OPBX_FRAME_VOICE) ||
 		    (f->subclass == p->chan->writeformat)) {
-			res = cw_write(p->chan, f);
+			res = opbx_write(p->chan, f);
 		} else {
-			cw_log(LOG_DEBUG, "Dropping one incompatible voice frame on '%s' to '%s'\n", ast->name, p->chan->name);
+			opbx_log(LOG_DEBUG, "Dropping one incompatible voice frame on '%s' to '%s'\n", ast->name, p->chan->name);
 			res = 0;
 		}
 	} else
 		res = 0;
 	CLEANUP(ast, p);
-	cw_mutex_unlock(&p->lock);
+	opbx_mutex_unlock(&p->lock);
 	return res;
 }
 
-static int agent_fixup(struct cw_channel *oldchan, struct cw_channel *newchan)
+static int agent_fixup(struct opbx_channel *oldchan, struct opbx_channel *newchan)
 {
 	struct agent_pvt *p = newchan->tech_pvt;
-	cw_mutex_lock(&p->lock);
+	opbx_mutex_lock(&p->lock);
 	if (p->owner != oldchan) {
-		cw_log(LOG_WARNING, "old channel wasn't %p but was %p\n", oldchan, p->owner);
-		cw_mutex_unlock(&p->lock);
+		opbx_log(LOG_WARNING, "old channel wasn't %p but was %p\n", oldchan, p->owner);
+		opbx_mutex_unlock(&p->lock);
 		return -1;
 	}
 	p->owner = newchan;
-	cw_mutex_unlock(&p->lock);
+	opbx_mutex_unlock(&p->lock);
 	return 0;
 }
 
-static int agent_indicate(struct cw_channel *ast, int condition)
+static int agent_indicate(struct opbx_channel *ast, int condition)
 {
 	struct agent_pvt *p = ast->tech_pvt;
 	int res = -1;
-	cw_mutex_lock(&p->lock);
+	opbx_mutex_lock(&p->lock);
 	if (p->chan)
-		res = cw_indicate(p->chan, condition);
+		res = opbx_indicate(p->chan, condition);
 	else
 		res = 0;
-	cw_mutex_unlock(&p->lock);
+	opbx_mutex_unlock(&p->lock);
 	return res;
 }
 
-static int agent_digit(struct cw_channel *ast, char digit)
+static int agent_digit(struct opbx_channel *ast, char digit)
 {
 	struct agent_pvt *p = ast->tech_pvt;
 	int res = -1;
-	cw_mutex_lock(&p->lock);
+	opbx_mutex_lock(&p->lock);
 	if (p->chan)
 		res = p->chan->tech->send_digit(p->chan, digit);
 	else
 		res = 0;
-	cw_mutex_unlock(&p->lock);
+	opbx_mutex_unlock(&p->lock);
 	return res;
 }
 
-static int agent_call(struct cw_channel *ast, char *dest, int timeout)
+static int agent_call(struct opbx_channel *ast, char *dest, int timeout)
 {
 	struct agent_pvt *p = ast->tech_pvt;
 	int res = -1;
 	int newstate=0;
-	cw_mutex_lock(&p->lock);
+	opbx_mutex_lock(&p->lock);
 	p->acknowledged = 0;
 	if (!p->chan) {
 		if (p->pending) {
-			cw_log(LOG_DEBUG, "Pretending to dial on pending agent\n");
-			newstate = CW_STATE_DIALING;
+			opbx_log(LOG_DEBUG, "Pretending to dial on pending agent\n");
+			newstate = OPBX_STATE_DIALING;
 			res = 0;
 		} else {
-			cw_log(LOG_NOTICE, "Whoa, they hung up between alloc and call...  what are the odds of that?\n");
+			opbx_log(LOG_NOTICE, "Whoa, they hung up between alloc and call...  what are the odds of that?\n");
 			res = -1;
 		}
-		cw_mutex_unlock(&p->lock);
+		opbx_mutex_unlock(&p->lock);
 		if (newstate)
-			cw_setstate(ast, newstate);
+			opbx_setstate(ast, newstate);
 		return res;
-	} else if (!cw_strlen_zero(p->loginchan)) {
+	} else if (!opbx_strlen_zero(p->loginchan)) {
 		time(&p->start);
 		/* Call on this agent */
 		if (option_verbose > 2)
-			cw_verbose(VERBOSE_PREFIX_3 "outgoing agentcall, to agent '%s', on '%s'\n", p->agent, p->chan->name);
-		cw_set_callerid(p->chan, ast->cid.cid_num, ast->cid.cid_name, NULL);
-		cw_channel_inherit_variables(ast, p->chan);
-		res = cw_call(p->chan, p->loginchan, 0);
+			opbx_verbose(VERBOSE_PREFIX_3 "outgoing agentcall, to agent '%s', on '%s'\n", p->agent, p->chan->name);
+		opbx_set_callerid(p->chan, ast->cid.cid_num, ast->cid.cid_name, NULL);
+		opbx_channel_inherit_variables(ast, p->chan);
+		res = opbx_call(p->chan, p->loginchan, 0);
 		CLEANUP(ast,p);
-		cw_mutex_unlock(&p->lock);
+		opbx_mutex_unlock(&p->lock);
 		return res;
 	}
-	cw_verbose( VERBOSE_PREFIX_3 "agent_call, call to agent '%s' call on '%s'\n", p->agent, p->chan->name);
-	cw_log( LOG_DEBUG, "Playing beep, lang '%s'\n", p->chan->language);
-	res = cw_streamfile(p->chan, beep, p->chan->language);
-	cw_log( LOG_DEBUG, "Played beep, result '%d'\n", res);
+	opbx_verbose( VERBOSE_PREFIX_3 "agent_call, call to agent '%s' call on '%s'\n", p->agent, p->chan->name);
+	opbx_log( LOG_DEBUG, "Playing beep, lang '%s'\n", p->chan->language);
+	res = opbx_streamfile(p->chan, beep, p->chan->language);
+	opbx_log( LOG_DEBUG, "Played beep, result '%d'\n", res);
 	if (!res) {
-		res = cw_waitstream(p->chan, "");
-		cw_log( LOG_DEBUG, "Waited for stream, result '%d'\n", res);
+		res = opbx_waitstream(p->chan, "");
+		opbx_log( LOG_DEBUG, "Waited for stream, result '%d'\n", res);
 	}
 	if (!res) {
-		res = cw_set_read_format(p->chan, cw_best_codec(p->chan->nativeformats));
-		cw_log( LOG_DEBUG, "Set read format, result '%d'\n", res);
+		res = opbx_set_read_format(p->chan, opbx_best_codec(p->chan->nativeformats));
+		opbx_log( LOG_DEBUG, "Set read format, result '%d'\n", res);
 		if (res)
-			cw_log(LOG_WARNING, "Unable to set read format to %s\n", cw_getformatname(cw_best_codec(p->chan->nativeformats)));
+			opbx_log(LOG_WARNING, "Unable to set read format to %s\n", opbx_getformatname(opbx_best_codec(p->chan->nativeformats)));
 	} else {
 		/* Agent hung-up */
 		p->chan = NULL;
 	}
 
 	if (!res) {
-		cw_set_write_format(p->chan, cw_best_codec(p->chan->nativeformats));
-		cw_log( LOG_DEBUG, "Set write format, result '%d'\n", res);
+		opbx_set_write_format(p->chan, opbx_best_codec(p->chan->nativeformats));
+		opbx_log( LOG_DEBUG, "Set write format, result '%d'\n", res);
 		if (res)
-			cw_log(LOG_WARNING, "Unable to set write format to %s\n", cw_getformatname(cw_best_codec(p->chan->nativeformats)));
+			opbx_log(LOG_WARNING, "Unable to set write format to %s\n", opbx_getformatname(opbx_best_codec(p->chan->nativeformats)));
 	}
 	if( !res )
 	{
 		/* Call is immediately up, or might need ack */
 		if (p->ackcall > 1)
-			newstate = CW_STATE_RINGING;
+			newstate = OPBX_STATE_RINGING;
 		else {
-			newstate = CW_STATE_UP;
+			newstate = OPBX_STATE_UP;
 			if (recordagentcalls)
 				agent_start_monitoring(ast,0);
 			p->acknowledged = 1;
@@ -709,30 +705,30 @@ static int agent_call(struct cw_channel *ast, char *dest, int timeout)
 		res = 0;
 	}
 	CLEANUP(ast,p);
-	cw_mutex_unlock(&p->lock);
+	opbx_mutex_unlock(&p->lock);
 	if (newstate)
-		cw_setstate(ast, newstate);
+		opbx_setstate(ast, newstate);
 	return res;
 }
 
 /* store/clear the global variable that stores agentid based on the callerid */
 static void set_agentbycallerid(const char *callerid, const char *agent)
 {
-	char buf[CW_MAX_BUF];
+	char buf[OPBX_MAX_BUF];
 
 	/* if there is no Caller ID, nothing to do */
-	if (cw_strlen_zero(callerid))
+	if (opbx_strlen_zero(callerid))
 		return;
 
 	snprintf(buf, sizeof(buf), "%s_%s",GETAGENTBYCALLERID, callerid);
 	pbx_builtin_setvar_helper(NULL, buf, agent);
 }
 
-static int agent_hangup(struct cw_channel *ast)
+static int agent_hangup(struct opbx_channel *ast)
 {
 	struct agent_pvt *p = ast->tech_pvt;
 	int howlong = 0;
-	cw_mutex_lock(&p->lock);
+	opbx_mutex_lock(&p->lock);
 	p->owner = NULL;
 	ast->tech_pvt = NULL;
 	p->app_sleep_cond = 1;
@@ -745,38 +741,38 @@ static int agent_hangup(struct cw_channel *ast)
 	 * as in apps/app_chanisavail.c:chanavail_exec()
 	 */
 
-	cw_mutex_lock(&usecnt_lock);
+	opbx_mutex_lock(&usecnt_lock);
 	usecnt--;
-	cw_mutex_unlock(&usecnt_lock);
+	opbx_mutex_unlock(&usecnt_lock);
 
-	cw_log(LOG_DEBUG, "Hangup called for state %s\n", cw_state2str(ast->_state));
-	if (p->start && (ast->_state != CW_STATE_UP)) {
+	opbx_log(LOG_DEBUG, "Hangup called for state %s\n", opbx_state2str(ast->_state));
+	if (p->start && (ast->_state != OPBX_STATE_UP)) {
 		howlong = time(NULL) - p->start;
 		p->start = 0;
-	} else if (ast->_state == CW_STATE_RESERVED) {
+	} else if (ast->_state == OPBX_STATE_RESERVED) {
 		howlong = 0;
 	} else
 		p->start = 0; 
 	if (p->chan) {
 		p->chan->_bridge = NULL;
 		/* If they're dead, go ahead and hang up on the agent now */
-		if (!cw_strlen_zero(p->loginchan)) {
+		if (!opbx_strlen_zero(p->loginchan)) {
 			/* Store last disconnect time */
 			if (p->wrapuptime)
-				p->lastdisc = cw_tvadd(cw_tvnow(), cw_samp2tv(p->wrapuptime, 1000));
+				p->lastdisc = opbx_tvadd(opbx_tvnow(), opbx_samp2tv(p->wrapuptime, 1000));
 			else
-				p->lastdisc = cw_tv(0,0);
+				p->lastdisc = opbx_tv(0,0);
 			if (p->chan) {
 				/* Recognize the hangup and pass it along immediately */
-				cw_hangup(p->chan);
+				opbx_hangup(p->chan);
 				p->chan = NULL;
 			}
-			cw_log(LOG_DEBUG, "Hungup, howlong is %d, autologoff is %d\n", howlong, p->autologoff);
+			opbx_log(LOG_DEBUG, "Hungup, howlong is %d, autologoff is %d\n", howlong, p->autologoff);
 			if (howlong  && p->autologoff && (howlong > p->autologoff)) {
-				char agent[CW_MAX_AGENT] = "";
+				char agent[OPBX_MAX_AGENT] = "";
 				long logintime = time(NULL) - p->loginstart;
 				p->loginstart = 0;
-				cw_log(LOG_NOTICE, "Agent '%s' didn't answer/confirm within %d seconds (waited %d)\n", p->name, p->autologoff, howlong);
+				opbx_log(LOG_NOTICE, "Agent '%s' didn't answer/confirm within %d seconds (waited %d)\n", p->name, p->autologoff, howlong);
 				manager_event(EVENT_FLAG_AGENT, "Agentcallbacklogoff",
 					      "Agent: %s\r\n"
 					      "Loginchan: %s\r\n"
@@ -785,53 +781,52 @@ static int agent_hangup(struct cw_channel *ast)
 					      "Uniqueid: %s\r\n",
 					      p->agent, p->loginchan, logintime, ast->uniqueid);
 				snprintf(agent, sizeof(agent), "Agent/%s", p->agent);
-				cw_queue_log("NONE", ast->uniqueid, agent, "AGENTCALLBACKLOGOFF", "%s|%ld|%s", p->loginchan, logintime, "Autologoff");
+				opbx_queue_log("NONE", ast->uniqueid, agent, "AGENTCALLBACKLOGOFF", "%s|%ld|%s", p->loginchan, logintime, "Autologoff");
 				set_agentbycallerid(p->logincallerid, NULL);
-				cw_device_state_changed("Agent/%s", p->agent);
+				opbx_device_state_changed("Agent/%s", p->agent);
 				p->loginchan[0] = '\0';
 				p->logincallerid[0] = '\0';
 				if (persistent_agents)
 					dump_agents();
 			}
 		} else if (p->dead) {
-			cw_mutex_lock(&p->chan->lock);
-			cw_softhangup(p->chan, CW_SOFTHANGUP_EXPLICIT);
-			cw_mutex_unlock(&p->chan->lock);
+			opbx_mutex_lock(&p->chan->lock);
+			opbx_softhangup(p->chan, OPBX_SOFTHANGUP_EXPLICIT);
+			opbx_mutex_unlock(&p->chan->lock);
 		} else if (p->loginstart) {
-			cw_mutex_lock(&p->chan->lock);
-			cw_moh_start(p->chan, p->moh);
-			cw_mutex_unlock(&p->chan->lock);
+			opbx_mutex_lock(&p->chan->lock);
+			opbx_moh_start(p->chan, p->moh);
+			opbx_mutex_unlock(&p->chan->lock);
 		}
 	}
-	cw_mutex_unlock(&p->lock);
+	opbx_mutex_unlock(&p->lock);
 	/* Only register a device state change if the agent is still logged in */
 	if (p->loginstart)
-		cw_device_state_changed("Agent/%s", p->agent);
+		opbx_device_state_changed("Agent/%s", p->agent);
 
 	if (p->pending) {
-		cw_mutex_lock(&agentlock);
+		opbx_mutex_lock(&agentlock);
 		agent_unlink(p);
-		cw_mutex_unlock(&agentlock);
+		opbx_mutex_unlock(&agentlock);
 	}
 	if (p->abouttograb) {
 		/* Let the "about to grab" thread know this isn't valid anymore, and let it
 		   kill it later */
 		p->abouttograb = 0;
 	} else if (p->dead) {
-		cw_mutex_destroy(&p->lock);
-		cw_mutex_destroy(&p->app_lock);
+		opbx_mutex_destroy(&p->lock);
+		opbx_mutex_destroy(&p->app_lock);
 		free(p);
 	} else {
 		if (p->chan) {
 			/* Not dead -- check availability now */
-			cw_mutex_lock(&p->lock);
+			opbx_mutex_lock(&p->lock);
 			/* Store last disconnect time */
-			p->lastdisc = cw_tvnow();
-			cw_mutex_unlock(&p->lock);
+			p->lastdisc = opbx_tvnow();
+			opbx_mutex_unlock(&p->lock);
 		}
 		/* Release ownership of the agent to other threads (presumably running the login app). */
-		if (cw_strlen_zero(p->loginchan))
-			cw_mutex_unlock(&p->app_lock);
+		opbx_mutex_unlock(&p->app_lock);
 	}
 	return 0;
 }
@@ -843,16 +838,16 @@ static int agent_cont_sleep( void *data )
 
 	p = (struct agent_pvt *)data;
 
-	cw_mutex_lock(&p->lock);
+	opbx_mutex_lock(&p->lock);
 	res = p->app_sleep_cond;
 	if (p->lastdisc.tv_sec) {
-		if (cw_tvdiff_ms(cw_tvnow(), p->lastdisc) > p->wrapuptime) 
+		if (opbx_tvdiff_ms(opbx_tvnow(), p->lastdisc) > p->wrapuptime) 
 			res = 1;
 	}
-	cw_mutex_unlock(&p->lock);
+	opbx_mutex_unlock(&p->lock);
 #if 0
 	if( !res )
-		cw_log( LOG_DEBUG, "agent_cont_sleep() returning %d\n", res );
+		opbx_log( LOG_DEBUG, "agent_cont_sleep() returning %d\n", res );
 #endif		
 	return res;
 }
@@ -862,14 +857,14 @@ static int agent_ack_sleep( void *data )
 	struct agent_pvt *p;
 	int res=0;
 	int to = 1000;
-	struct cw_frame *f;
+	struct opbx_frame *f;
 
 	/* Wait a second and look for something */
 
 	p = (struct agent_pvt *)data;
 	if (p->chan) {
 		for(;;) {
-			to = cw_waitfor(p->chan, to);
+			to = opbx_waitfor(p->chan, to);
 			if (to < 0) {
 				res = -1;
 				break;
@@ -878,27 +873,27 @@ static int agent_ack_sleep( void *data )
 				res = 0;
 				break;
 			}
-			f = cw_read(p->chan);
+			f = opbx_read(p->chan);
 			if (!f) {
 				res = -1;
 				break;
 			}
-			if (f->frametype == CW_FRAME_DTMF)
+			if (f->frametype == OPBX_FRAME_DTMF)
 				res = f->subclass;
 			else
 				res = 0;
-			cw_fr_free(f);
-			cw_mutex_lock(&p->lock);
+			opbx_frfree(f);
+			opbx_mutex_lock(&p->lock);
 			if (!p->app_sleep_cond) {
-				cw_mutex_unlock(&p->lock);
+				opbx_mutex_unlock(&p->lock);
 				res = 0;
 				break;
 			} else if (res == '#') {
-				cw_mutex_unlock(&p->lock);
+				opbx_mutex_unlock(&p->lock);
 				res = 1;
 				break;
 			}
-			cw_mutex_unlock(&p->lock);
+			opbx_mutex_unlock(&p->lock);
 			res = 0;
 		}
 	} else
@@ -906,10 +901,10 @@ static int agent_ack_sleep( void *data )
 	return res;
 }
 
-static struct cw_channel *agent_bridgedchannel(struct cw_channel *chan, struct cw_channel *bridge)
+static struct opbx_channel *agent_bridgedchannel(struct opbx_channel *chan, struct opbx_channel *bridge)
 {
 	struct agent_pvt *p = bridge->tech_pvt;
-	struct cw_channel *ret=NULL;
+	struct opbx_channel *ret=NULL;
 	
 
 	if(p) {
@@ -920,22 +915,22 @@ static struct cw_channel *agent_bridgedchannel(struct cw_channel *chan, struct c
 	}
 
 	if (option_debug)
-		cw_log(LOG_DEBUG, "Asked for bridged channel on '%s'/'%s', returning '%s'\n", chan->name, bridge->name, ret ? ret->name : "<none>");
+		opbx_log(LOG_DEBUG, "Asked for bridged channel on '%s'/'%s', returning '%s'\n", chan->name, bridge->name, ret ? ret->name : "<none>");
 	return ret;
 }
 
 /*--- agent_new: Create new agent channel ---*/
-static struct cw_channel *agent_new(struct agent_pvt *p, int state)
+static struct opbx_channel *agent_new(struct agent_pvt *p, int state)
 {
-	struct cw_channel *tmp;
-	struct cw_frame null_frame = { CW_FRAME_NULL };
+	struct opbx_channel *tmp;
+	struct opbx_frame null_frame = { OPBX_FRAME_NULL };
 #if 0
 	if (!p->chan) {
-		cw_log(LOG_WARNING, "No channel? :(\n");
+		opbx_log(LOG_WARNING, "No channel? :(\n");
 		return NULL;
 	}
 #endif	
-	tmp = cw_channel_alloc(0);
+	tmp = opbx_channel_alloc(0);
 	if (tmp) {
 		tmp->tech = &agent_tech;
 		if (p->chan) {
@@ -944,81 +939,81 @@ static struct cw_channel *agent_new(struct agent_pvt *p, int state)
 			tmp->rawwriteformat = p->chan->writeformat;
 			tmp->readformat = p->chan->readformat;
 			tmp->rawreadformat = p->chan->readformat;
-			cw_copy_string(tmp->language, p->chan->language, sizeof(tmp->language));
-			cw_copy_string(tmp->context, p->chan->context, sizeof(tmp->context));
-			cw_copy_string(tmp->exten, p->chan->exten, sizeof(tmp->exten));
+			opbx_copy_string(tmp->language, p->chan->language, sizeof(tmp->language));
+			opbx_copy_string(tmp->context, p->chan->context, sizeof(tmp->context));
+			opbx_copy_string(tmp->exten, p->chan->exten, sizeof(tmp->exten));
 		} else {
-			tmp->nativeformats = CW_FORMAT_SLINEAR;
-			tmp->writeformat = CW_FORMAT_SLINEAR;
-			tmp->rawwriteformat = CW_FORMAT_SLINEAR;
-			tmp->readformat = CW_FORMAT_SLINEAR;
-			tmp->rawreadformat = CW_FORMAT_SLINEAR;
+			tmp->nativeformats = OPBX_FORMAT_SLINEAR;
+			tmp->writeformat = OPBX_FORMAT_SLINEAR;
+			tmp->rawwriteformat = OPBX_FORMAT_SLINEAR;
+			tmp->readformat = OPBX_FORMAT_SLINEAR;
+			tmp->rawreadformat = OPBX_FORMAT_SLINEAR;
 		}
 		if (p->pending)
-			snprintf(tmp->name, sizeof(tmp->name), "Agent/P%s-%ld", p->agent, cw_random() & 0xffff);
+			snprintf(tmp->name, sizeof(tmp->name), "Agent/P%s-%ld", p->agent, opbx_random() & 0xffff);
 		else
 			snprintf(tmp->name, sizeof(tmp->name), "Agent/%s", p->agent);
 		tmp->type = channeltype;
 		/* Safe, agentlock already held */
-		cw_setstate(tmp, state);
+		opbx_setstate(tmp, state);
 		tmp->tech_pvt = p;
 		p->owner = tmp;
-		cw_mutex_lock(&usecnt_lock);
+		opbx_mutex_lock(&usecnt_lock);
 		usecnt++;
-		cw_mutex_unlock(&usecnt_lock);
-		cw_update_use_count();
+		opbx_mutex_unlock(&usecnt_lock);
+		opbx_update_use_count();
 		tmp->priority = 1;
 		/* Wake up and wait for other applications (by definition the login app)
 		 * to release this channel). Takes ownership of the agent channel
 		 * to this thread only.
-		 * For signalling the other thread, cw_queue_frame is used until we
+		 * For signalling the other thread, opbx_queue_frame is used until we
 		 * can safely use signals for this purpose. The pselect() needs to be
 		 * implemented in the kernel for this.
 		 */
 		p->app_sleep_cond = 0;
-		if( cw_strlen_zero(p->loginchan) && cw_mutex_trylock(&p->app_lock) )
+		if( opbx_strlen_zero(p->loginchan) && opbx_mutex_trylock(&p->app_lock) )
 		{
 			if (p->chan) {
-				cw_queue_frame(p->chan, &null_frame);
-				cw_mutex_unlock(&p->lock);	/* For other thread to read the condition. */
-				cw_mutex_lock(&p->app_lock);
-				cw_mutex_lock(&p->lock);
+				opbx_queue_frame(p->chan, &null_frame);
+				opbx_mutex_unlock(&p->lock);	/* For other thread to read the condition. */
+				opbx_mutex_lock(&p->app_lock);
+				opbx_mutex_lock(&p->lock);
 			}
 			if( !p->chan )
 			{
-				cw_log(LOG_WARNING, "Agent disconnected while we were connecting the call\n");
+				opbx_log(LOG_WARNING, "Agent disconnected while we were connecting the call\n");
 				p->owner = NULL;
 				tmp->tech_pvt = NULL;
 				p->app_sleep_cond = 1;
-				cw_channel_free( tmp );
-				cw_mutex_unlock(&p->lock);	/* For other thread to read the condition. */
-				cw_mutex_unlock(&p->app_lock);
+				opbx_channel_free( tmp );
+				opbx_mutex_unlock(&p->lock);	/* For other thread to read the condition. */
+				opbx_mutex_unlock(&p->app_lock);
 				return NULL;
 			}
-		} else if (!cw_strlen_zero(p->loginchan)) {
+		} else if (!opbx_strlen_zero(p->loginchan)) {
 			if (p->chan)
-				cw_queue_frame(p->chan, &null_frame);
+				opbx_queue_frame(p->chan, &null_frame);
 			if (!p->chan) {
-				cw_log(LOG_WARNING, "Agent disconnected while we were connecting the call\n");
+				opbx_log(LOG_WARNING, "Agent disconnected while we were connecting the call\n");
 				p->owner = NULL;
 				tmp->tech_pvt = NULL;
 				p->app_sleep_cond = 1;
-				cw_channel_free( tmp );
-				cw_mutex_unlock(&p->lock);     /* For other thread to read the condition. */
+				opbx_channel_free( tmp );
+				opbx_mutex_unlock(&p->lock);     /* For other thread to read the condition. */
                                 return NULL;
 			}	
 		}
 		p->owning_app = pthread_self();
 		/* After the above step, there should not be any blockers. */
 		if (p->chan) {
-			if (cw_test_flag(p->chan, CW_FLAG_BLOCKING)) {
-				cw_log( LOG_ERROR, "A blocker exists after agent channel ownership acquired\n" );
+			if (opbx_test_flag(p->chan, OPBX_FLAG_BLOCKING)) {
+				opbx_log( LOG_ERROR, "A blocker exists after agent channel ownership acquired\n" );
 				CRASH;
 			}
-			cw_moh_stop(p->chan);
+			opbx_moh_stop(p->chan);
 		}
 	} else
-		cw_log(LOG_WARNING, "Unable to allocate agent channel structure\n");
+		opbx_log(LOG_WARNING, "Unable to allocate agent channel structure\n");
 	return tmp;
 }
 
@@ -1030,8 +1025,8 @@ static struct cw_channel *agent_new(struct agent_pvt *p, int state)
  */
 static int read_agent_config(void)
 {
-	struct cw_config *cfg;
-	struct cw_variable *v;
+	struct opbx_config *cfg;
+	struct opbx_variable *v;
 	struct agent_pvt *p, *pl, *pn;
 	char *general_val;
 
@@ -1039,12 +1034,12 @@ static int read_agent_config(void)
 	autologoff = 0;
 	wrapuptime = 0;
 	ackcall = 0;
-	cfg = cw_config_load(config);
+	cfg = opbx_config_load(config);
 	if (!cfg) {
-		cw_log(LOG_NOTICE, "No agent configuration found -- agent support disabled\n");
+		opbx_log(LOG_NOTICE, "No agent configuration found -- agent support disabled\n");
 		return 0;
 	}
-	cw_mutex_lock(&agentlock);
+	opbx_mutex_lock(&agentlock);
 	p = agents;
 	while(p) {
 		p->dead = 1;
@@ -1060,17 +1055,17 @@ static int read_agent_config(void)
 	savecallsin[0] = '\0';
 
 	/* Read in [general] section for persistance */
-	if ((general_val = cw_variable_retrieve(cfg, "general", "persistentagents")))
-		persistent_agents = cw_true(general_val);
+	if ((general_val = opbx_variable_retrieve(cfg, "general", "persistentagents")))
+		persistent_agents = opbx_true(general_val);
 
 	/* Read in the [agents] section */
-	v = cw_variable_browse(cfg, "agents");
+	v = opbx_variable_browse(cfg, "agents");
 	while(v) {
 		/* Create the interface list */
 		if (!strcasecmp(v->name, "agent")) {
 			add_agent(v->value, 0);
 		} else if (!strcasecmp(v->name, "group")) {
-			group = cw_get_group(v->value);
+			group = opbx_get_group(v->value);
 		} else if (!strcasecmp(v->name, "autologoff")) {
 			autologoff = atoi(v->value);
 			if (autologoff < 0)
@@ -1078,7 +1073,7 @@ static int read_agent_config(void)
 		} else if (!strcasecmp(v->name, "ackcall")) {
 			if (!strcasecmp(v->value, "always"))
 				ackcall = 2;
-			else if (cw_true(v->value))
+			else if (opbx_true(v->value))
 				ackcall = 1;
 			else
 				ackcall = 0;
@@ -1086,42 +1081,42 @@ static int read_agent_config(void)
 			wrapuptime = atoi(v->value);
 			if (wrapuptime < 0)
 				wrapuptime = 0;
-		} else if (!strcasecmp(v->name, "maxlogintries") && !cw_strlen_zero(v->value)) {
+		} else if (!strcasecmp(v->name, "maxlogintries") && !opbx_strlen_zero(v->value)) {
 			maxlogintries = atoi(v->value);
 			if (maxlogintries < 0)
 				maxlogintries = 0;
-		} else if (!strcasecmp(v->name, "goodbye") && !cw_strlen_zero(v->value)) {
+		} else if (!strcasecmp(v->name, "goodbye") && !opbx_strlen_zero(v->value)) {
 			strcpy(agentgoodbye,v->value);
 		} else if (!strcasecmp(v->name, "musiconhold")) {
-			cw_copy_string(moh, v->value, sizeof(moh));
+			opbx_copy_string(moh, v->value, sizeof(moh));
 		} else if (!strcasecmp(v->name, "updatecdr")) {
-			if (cw_true(v->value))
+			if (opbx_true(v->value))
 				updatecdr = 1;
 			else
 				updatecdr = 0;
 		} else if (!strcasecmp(v->name, "recordagentcalls")) {
-			recordagentcalls = cw_true(v->value);
+			recordagentcalls = opbx_true(v->value);
 		} else if (!strcasecmp(v->name, "createlink")) {
-			createlink = cw_true(v->value);
+			createlink = opbx_true(v->value);
 		} else if (!strcasecmp(v->name, "recordformat")) {
-			cw_copy_string(recordformat, v->value, sizeof(recordformat));
+			opbx_copy_string(recordformat, v->value, sizeof(recordformat));
 			if (!strcasecmp(v->value, "wav49"))
 				strcpy(recordformatext, "WAV");
 			else
-				cw_copy_string(recordformatext, v->value, sizeof(recordformatext));
+				opbx_copy_string(recordformatext, v->value, sizeof(recordformatext));
 		} else if (!strcasecmp(v->name, "urlprefix")) {
-			cw_copy_string(urlprefix, v->value, sizeof(urlprefix));
+			opbx_copy_string(urlprefix, v->value, sizeof(urlprefix));
 			if (urlprefix[strlen(urlprefix) - 1] != '/')
 				strncat(urlprefix, "/", sizeof(urlprefix) - strlen(urlprefix) - 1);
 		} else if (!strcasecmp(v->name, "savecallsin")) {
 			if (v->value[0] == '/')
-				cw_copy_string(savecallsin, v->value, sizeof(savecallsin));
+				opbx_copy_string(savecallsin, v->value, sizeof(savecallsin));
 			else
 				snprintf(savecallsin, sizeof(savecallsin) - 2, "/%s", v->value);
 			if (savecallsin[strlen(savecallsin) - 1] != '/')
 				strncat(savecallsin, "/", sizeof(savecallsin) - strlen(savecallsin) - 1);
 		} else if (!strcasecmp(v->name, "custom_beep")) {
-			cw_copy_string(beep, v->value, sizeof(beep));
+			opbx_copy_string(beep, v->value, sizeof(beep));
 		}
 		v = v->next;
 	}
@@ -1138,68 +1133,68 @@ static int read_agent_config(void)
 			/* Destroy if  appropriate */
 			if (!p->owner) {
 				if (!p->chan) {
-					cw_mutex_destroy(&p->lock);
-					cw_mutex_destroy(&p->app_lock);
+					opbx_mutex_destroy(&p->lock);
+					opbx_mutex_destroy(&p->app_lock);
 					free(p);
 				} else {
 					/* Cause them to hang up */
-					cw_softhangup(p->chan, CW_SOFTHANGUP_EXPLICIT);
+					opbx_softhangup(p->chan, OPBX_SOFTHANGUP_EXPLICIT);
 				}
 			}
 		} else
 			pl = p;
 		p = pn;
 	}
-	cw_mutex_unlock(&agentlock);
-	cw_config_destroy(cfg);
+	opbx_mutex_unlock(&agentlock);
+	opbx_config_destroy(cfg);
 	return 0;
 }
 
 static int check_availability(struct agent_pvt *newlyavailable, int needlock)
 {
-	struct cw_channel *chan=NULL, *parent=NULL;
+	struct opbx_channel *chan=NULL, *parent=NULL;
 	struct agent_pvt *p;
 	int res;
 
 	if (option_debug)
-		cw_log(LOG_DEBUG, "Checking availability of '%s'\n", newlyavailable->agent);
+		opbx_log(LOG_DEBUG, "Checking availability of '%s'\n", newlyavailable->agent);
 	if (needlock)
-		cw_mutex_lock(&agentlock);
+		opbx_mutex_lock(&agentlock);
 	p = agents;
 	while(p) {
 		if (p == newlyavailable) {
 			p = p->next;
 			continue;
 		}
-		cw_mutex_lock(&p->lock);
+		opbx_mutex_lock(&p->lock);
 		if (!p->abouttograb && p->pending && ((p->group && (newlyavailable->group & p->group)) || !strcmp(p->agent, newlyavailable->agent))) {
 			if (option_debug)
-				cw_log(LOG_DEBUG, "Call '%s' looks like a winner for agent '%s'\n", p->owner->name, newlyavailable->agent);
+				opbx_log(LOG_DEBUG, "Call '%s' looks like a winner for agent '%s'\n", p->owner->name, newlyavailable->agent);
 			/* We found a pending call, time to merge */
-			chan = agent_new(newlyavailable, CW_STATE_DOWN);
+			chan = agent_new(newlyavailable, OPBX_STATE_DOWN);
 			parent = p->owner;
 			p->abouttograb = 1;
-			cw_mutex_unlock(&p->lock);
+			opbx_mutex_unlock(&p->lock);
 			break;
 		}
-		cw_mutex_unlock(&p->lock);
+		opbx_mutex_unlock(&p->lock);
 		p = p->next;
 	}
 	if (needlock)
-		cw_mutex_unlock(&agentlock);
+		opbx_mutex_unlock(&agentlock);
 	if (parent && chan)  {
 		if (newlyavailable->ackcall > 1) {
 			/* Don't do beep here */
 			res = 0;
 		} else {
 			if (option_debug > 2)
-				cw_log( LOG_DEBUG, "Playing beep, lang '%s'\n", newlyavailable->chan->language);
-			res = cw_streamfile(newlyavailable->chan, beep, newlyavailable->chan->language);
+				opbx_log( LOG_DEBUG, "Playing beep, lang '%s'\n", newlyavailable->chan->language);
+			res = opbx_streamfile(newlyavailable->chan, beep, newlyavailable->chan->language);
 			if (option_debug > 2)
-				cw_log( LOG_DEBUG, "Played beep, result '%d'\n", res);
+				opbx_log( LOG_DEBUG, "Played beep, result '%d'\n", res);
 			if (!res) {
-				res = cw_waitstream(newlyavailable->chan, "");
-				cw_log( LOG_DEBUG, "Waited for stream, result '%d'\n", res);
+				res = opbx_waitstream(newlyavailable->chan, "");
+				opbx_log( LOG_DEBUG, "Waited for stream, result '%d'\n", res);
 			}
 		}
 		if (!res) {
@@ -1207,24 +1202,24 @@ static int check_availability(struct agent_pvt *newlyavailable, int needlock)
 			if (p->abouttograb) {
 				newlyavailable->acknowledged = 1;
 				/* Safe -- agent lock already held */
-				cw_setstate(parent, CW_STATE_UP);
-				cw_setstate(chan, CW_STATE_UP);
-				cw_copy_string(parent->context, chan->context, sizeof(parent->context));
+				opbx_setstate(parent, OPBX_STATE_UP);
+				opbx_setstate(chan, OPBX_STATE_UP);
+				opbx_copy_string(parent->context, chan->context, sizeof(parent->context));
 				/* Go ahead and mark the channel as a zombie so that masquerade will
-				   destroy it for us, and we need not call cw_hangup */
-				cw_mutex_lock(&parent->lock);
-				cw_set_flag(chan, CW_FLAG_ZOMBIE);
-				cw_channel_masquerade(parent, chan);
-				cw_mutex_unlock(&parent->lock);
+				   destroy it for us, and we need not call opbx_hangup */
+				opbx_mutex_lock(&parent->lock);
+				opbx_set_flag(chan, OPBX_FLAG_ZOMBIE);
+				opbx_channel_masquerade(parent, chan);
+				opbx_mutex_unlock(&parent->lock);
 				p->abouttograb = 0;
 			} else {
 				if (option_debug)
-					cw_log(LOG_DEBUG, "Sneaky, parent disappeared in the mean time...\n");
+					opbx_log(LOG_DEBUG, "Sneaky, parent disappeared in the mean time...\n");
 				agent_cleanup(newlyavailable);
 			}
 		} else {
 			if (option_debug)
-				cw_log(LOG_DEBUG, "Ugh...  Agent hung up at exactly the wrong time\n");
+				opbx_log(LOG_DEBUG, "Ugh...  Agent hung up at exactly the wrong time\n");
 			agent_cleanup(newlyavailable);
 		}
 	}
@@ -1236,51 +1231,51 @@ static int check_beep(struct agent_pvt *newlyavailable, int needlock)
 	struct agent_pvt *p;
 	int res=0;
 
-	cw_log(LOG_DEBUG, "Checking beep availability of '%s'\n", newlyavailable->agent);
+	opbx_log(LOG_DEBUG, "Checking beep availability of '%s'\n", newlyavailable->agent);
 	if (needlock)
-		cw_mutex_lock(&agentlock);
+		opbx_mutex_lock(&agentlock);
 	p = agents;
 	while(p) {
 		if (p == newlyavailable) {
 			p = p->next;
 			continue;
 		}
-		cw_mutex_lock(&p->lock);
+		opbx_mutex_lock(&p->lock);
 		if (!p->abouttograb && p->pending && ((p->group && (newlyavailable->group & p->group)) || !strcmp(p->agent, newlyavailable->agent))) {
 			if (option_debug)
-				cw_log(LOG_DEBUG, "Call '%s' looks like a would-be winner for agent '%s'\n", p->owner->name, newlyavailable->agent);
-			cw_mutex_unlock(&p->lock);
+				opbx_log(LOG_DEBUG, "Call '%s' looks like a would-be winner for agent '%s'\n", p->owner->name, newlyavailable->agent);
+			opbx_mutex_unlock(&p->lock);
 			break;
 		}
-		cw_mutex_unlock(&p->lock);
+		opbx_mutex_unlock(&p->lock);
 		p = p->next;
 	}
 	if (needlock)
-		cw_mutex_unlock(&agentlock);
+		opbx_mutex_unlock(&agentlock);
 	if (p) {
-		cw_mutex_unlock(&newlyavailable->lock);
+		opbx_mutex_unlock(&newlyavailable->lock);
 		if (option_debug > 2)
-			cw_log( LOG_DEBUG, "Playing beep, lang '%s'\n", newlyavailable->chan->language);
-		res = cw_streamfile(newlyavailable->chan, beep, newlyavailable->chan->language);
+			opbx_log( LOG_DEBUG, "Playing beep, lang '%s'\n", newlyavailable->chan->language);
+		res = opbx_streamfile(newlyavailable->chan, beep, newlyavailable->chan->language);
 		if (option_debug > 2)
-			cw_log( LOG_DEBUG, "Played beep, result '%d'\n", res);
+			opbx_log( LOG_DEBUG, "Played beep, result '%d'\n", res);
 		if (!res) {
-			res = cw_waitstream(newlyavailable->chan, "");
+			res = opbx_waitstream(newlyavailable->chan, "");
 			if (option_debug)
-				cw_log( LOG_DEBUG, "Waited for stream, result '%d'\n", res);
+				opbx_log( LOG_DEBUG, "Waited for stream, result '%d'\n", res);
 		}
-		cw_mutex_lock(&newlyavailable->lock);
+		opbx_mutex_lock(&newlyavailable->lock);
 	}
 	return res;
 }
 
-/*--- agent_request: Part of the CallWeaver interface ---*/
-static struct cw_channel *agent_request(const char *type, int format, void *data, int *cause)
+/*--- agent_request: Part of the OpenPBX interface ---*/
+static struct opbx_channel *agent_request(const char *type, int format, void *data, int *cause)
 {
 	struct agent_pvt *p;
-	struct cw_channel *chan = NULL;
+	struct opbx_channel *chan = NULL;
 	char *s;
-	cw_group_t groupmatch;
+	opbx_group_t groupmatch;
 	int groupoff;
 	int waitforagent=0;
 	int hasagent = 0;
@@ -1297,59 +1292,59 @@ static struct cw_channel *agent_request(const char *type, int format, void *data
 	}
 
 	/* Check actual logged in agents first */
-	cw_mutex_lock(&agentlock);
+	opbx_mutex_lock(&agentlock);
 	p = agents;
 	while(p) {
-		cw_mutex_lock(&p->lock);
+		opbx_mutex_lock(&p->lock);
 		if (!p->pending && ((groupmatch && (p->group & groupmatch)) || !strcmp(data, p->agent)) &&
-		    cw_strlen_zero(p->loginchan)) {
+		    opbx_strlen_zero(p->loginchan)) {
 			if (p->chan)
 				hasagent++;
 			if (!p->lastdisc.tv_sec) {
 				/* Agent must be registered, but not have any active call, and not be in a waiting state */
 				if (!p->owner && p->chan) {
 					/* Fixed agent */
-					chan = agent_new(p, CW_STATE_DOWN);
+					chan = agent_new(p, OPBX_STATE_DOWN);
 				}
 				if (chan) {
-					cw_mutex_unlock(&p->lock);
+					opbx_mutex_unlock(&p->lock);
 					break;
 				}
 			}
 		}
-		cw_mutex_unlock(&p->lock);
+		opbx_mutex_unlock(&p->lock);
 		p = p->next;
 	}
 	if (!p) {
 		p = agents;
 		while(p) {
-			cw_mutex_lock(&p->lock);
+			opbx_mutex_lock(&p->lock);
 			if (!p->pending && ((groupmatch && (p->group & groupmatch)) || !strcmp(data, p->agent))) {
-				if (p->chan || !cw_strlen_zero(p->loginchan))
+				if (p->chan || !opbx_strlen_zero(p->loginchan))
 					hasagent++;
-				tv = cw_tvnow();
+				tv = opbx_tvnow();
 #if 0
-				cw_log(LOG_NOTICE, "Time now: %ld, Time of lastdisc: %ld\n", tv.tv_sec, p->lastdisc.tv_sec);
+				opbx_log(LOG_NOTICE, "Time now: %ld, Time of lastdisc: %ld\n", tv.tv_sec, p->lastdisc.tv_sec);
 #endif
 				if (!p->lastdisc.tv_sec || (tv.tv_sec > p->lastdisc.tv_sec)) {
-					p->lastdisc = cw_tv(0, 0);
+					p->lastdisc = opbx_tv(0, 0);
 					/* Agent must be registered, but not have any active call, and not be in a waiting state */
 					if (!p->owner && p->chan) {
 						/* Could still get a fixed agent */
-						chan = agent_new(p, CW_STATE_DOWN);
-					} else if (!p->owner && !cw_strlen_zero(p->loginchan)) {
+						chan = agent_new(p, OPBX_STATE_DOWN);
+					} else if (!p->owner && !opbx_strlen_zero(p->loginchan)) {
 						/* Adjustable agent */
-						p->chan = cw_request("Local", format, p->loginchan, cause);
+						p->chan = opbx_request("Local", format, p->loginchan, cause);
 						if (p->chan)
-							chan = agent_new(p, CW_STATE_DOWN);
+							chan = agent_new(p, OPBX_STATE_DOWN);
 					}
 					if (chan) {
-						cw_mutex_unlock(&p->lock);
+						opbx_mutex_unlock(&p->lock);
 						break;
 					}
 				}
 			}
-			cw_mutex_unlock(&p->lock);
+			opbx_mutex_unlock(&p->lock);
 			p = p->next;
 		}
 	}
@@ -1359,21 +1354,21 @@ static struct cw_channel *agent_request(const char *type, int format, void *data
 		   Allocate a place holder */
 		if (hasagent) {
 			if (option_debug)
-				cw_log(LOG_DEBUG, "Creating place holder for '%s'\n", s);
+				opbx_log(LOG_DEBUG, "Creating place holder for '%s'\n", s);
 			p = add_agent(data, 1);
 			p->group = groupmatch;
-			chan = agent_new(p, CW_STATE_DOWN);
+			chan = agent_new(p, OPBX_STATE_DOWN);
 			if (!chan) {
-				cw_log(LOG_WARNING, "Weird...  Fix this to drop the unused pending agent\n");
+				opbx_log(LOG_WARNING, "Weird...  Fix this to drop the unused pending agent\n");
 			}
 		} else
-			cw_log(LOG_DEBUG, "Not creating place holder for '%s' since nobody logged in\n", s);
+			opbx_log(LOG_DEBUG, "Not creating place holder for '%s' since nobody logged in\n", s);
 	}
 	if (hasagent)
-		*cause = CW_CAUSE_BUSY;
+		*cause = OPBX_CAUSE_BUSY;
 	else
-		*cause = CW_CAUSE_UNREGISTERED;
-	cw_mutex_unlock(&agentlock);
+		*cause = OPBX_CAUSE_UNREGISTERED;
+	opbx_mutex_unlock(&agentlock);
 	return chan;
 }
 
@@ -1405,13 +1400,13 @@ static int action_agents(struct mansession *s, struct message *m)
 	char *talkingtoChan = NULL;
 	char *status = NULL;
 
-	if (!cw_strlen_zero(id))
+	if (!opbx_strlen_zero(id))
 		snprintf(idText, sizeof(idText) ,"ActionID: %s\r\n", id);
 	astman_send_ack(s, m, "Agents will follow");
-	cw_mutex_lock(&agentlock);
+	opbx_mutex_lock(&agentlock);
 	p = agents;
 	while(p) {
-        	cw_mutex_lock(&p->lock);
+        	opbx_mutex_lock(&p->lock);
 
 		/* Status Values:
 		   AGENT_LOGGEDOFF - Agent isn't logged in
@@ -1419,7 +1414,7 @@ static int action_agents(struct mansession *s, struct message *m)
 		   AGENT_ONCALL    - Agent is logged in, and on a call
 		   AGENT_UNKNOWN   - Don't know anything about agent. Shouldn't ever get this. */
 
-		if(!cw_strlen_zero(p->name)) {
+		if(!opbx_strlen_zero(p->name)) {
 			username = p->name;
 		} else {
 			username = "None";
@@ -1428,7 +1423,7 @@ static int action_agents(struct mansession *s, struct message *m)
 		/* Set a default status. It 'should' get changed. */
 		status = "AGENT_UNKNOWN";
 
-		if (!cw_strlen_zero(p->loginchan) && !p->chan) {
+		if (!opbx_strlen_zero(p->loginchan) && !p->chan) {
 			loginChan = p->loginchan;
 			talkingtoChan = "n/a";
 			status = "AGENT_IDLE";
@@ -1437,7 +1432,7 @@ static int action_agents(struct mansession *s, struct message *m)
 				loginChan = chanbuf;
 			}
 		} else if (p->chan) {
-			loginChan = cw_strdupa(p->chan->name);
+			loginChan = opbx_strdupa(p->chan->name);
 			if (p->owner && p->owner->_bridge) {
         			talkingtoChan = p->chan->cid.cid_num;
         			status = "AGENT_ONCALL";
@@ -1451,7 +1446,7 @@ static int action_agents(struct mansession *s, struct message *m)
 			status = "AGENT_LOGGEDOFF";
 		}
 
-		cw_cli(s->fd, "Event: Agents\r\n"
+		opbx_cli(s->fd, "Event: Agents\r\n"
 			"Agent: %s\r\n"
 			"Name: %s\r\n"
 			"Status: %s\r\n"
@@ -1461,11 +1456,11 @@ static int action_agents(struct mansession *s, struct message *m)
 			"%s"
 			"\r\n",
 			p->agent, username, status, loginChan, (long int)p->loginstart, talkingtoChan, idText);
-		cw_mutex_unlock(&p->lock);
+		opbx_mutex_unlock(&p->lock);
 		p = p->next;
 	}
-	cw_mutex_unlock(&agentlock);
-	cw_cli(s->fd, "Event: AgentsComplete\r\n"
+	opbx_mutex_unlock(&agentlock);
+	opbx_cli(s->fd, "Event: AgentsComplete\r\n"
 		"%s"
 		"\r\n",idText);
 	return 0;
@@ -1481,10 +1476,10 @@ static int agent_logoff(char *agent, int soft)
 		if (!strcasecmp(p->agent, agent)) {
 			if (!soft) {
 				if (p->owner) {
-					cw_softhangup(p->owner, CW_SOFTHANGUP_EXPLICIT);
+					opbx_softhangup(p->owner, OPBX_SOFTHANGUP_EXPLICIT);
 				}
 				if (p->chan) {
-					cw_softhangup(p->chan, CW_SOFTHANGUP_EXPLICIT);
+					opbx_softhangup(p->chan, OPBX_SOFTHANGUP_EXPLICIT);
 				}
 			}
 			ret = 0; /* found an agent => return 0 */
@@ -1496,11 +1491,11 @@ static int agent_logoff(char *agent, int soft)
 				      "Loginchan: %s\r\n"
 				      "Logintime: %ld\r\n",
 				      p->agent, p->loginchan, logintime);
-			cw_queue_log("NONE", "NONE", agent, "AGENTCALLBACKLOGOFF", "%s|%ld|%s", p->loginchan, logintime, "CommandLogoff");
+			opbx_queue_log("NONE", "NONE", agent, "AGENTCALLBACKLOGOFF", "%s|%ld|%s", p->loginchan, logintime, "CommandLogoff");
 			set_agentbycallerid(p->logincallerid, NULL);
 			p->loginchan[0] = '\0';
 			p->logincallerid[0] = '\0';
-			cw_device_state_changed("Agent/%s", p->agent);
+			opbx_device_state_changed("Agent/%s", p->agent);
 			if (persistent_agents)
 				dump_agents();
 			break;
@@ -1523,7 +1518,7 @@ static int agent_logoff_cmd(int fd, int argc, char **argv)
 	agent = argv[2] + 6;
 	ret = agent_logoff(agent, argc == 4);
 	if (ret == 0)
-		cw_cli(fd, "Logging out %s\n", agent);
+		opbx_cli(fd, "Logging out %s\n", agent);
 
 	return RESULT_SUCCESS;
 }
@@ -1543,12 +1538,12 @@ static int action_agent_logoff(struct mansession *s, struct message *m)
 	int soft;
 	int ret; /* return value of agent_logoff */
 
-	if (cw_strlen_zero(agent)) {
+	if (opbx_strlen_zero(agent)) {
 		astman_send_error(s, m, "No agent specified");
 		return 0;
 	}
 
-	if (cw_true(soft_s))
+	if (opbx_true(soft_s))
 		soft = 1;
 	else
 		soft = 0;
@@ -1565,7 +1560,7 @@ static int action_agent_logoff(struct mansession *s, struct message *m)
 static char *complete_agent_logoff_cmd(char *line, char *word, int pos, int state)
 {
 	struct agent_pvt *p;
-	char name[CW_MAX_AGENT];
+	char name[OPBX_MAX_AGENT];
 	int which = 0;
 
 	if (pos == 2) {
@@ -1589,39 +1584,39 @@ static char *complete_agent_logoff_cmd(char *line, char *word, int pos, int stat
 static int agents_show(int fd, int argc, char **argv)
 {
 	struct agent_pvt *p;
-	char username[CW_MAX_BUF];
-	char location[CW_MAX_BUF] = "";
-	char talkingto[CW_MAX_BUF] = "";
-	char moh[CW_MAX_BUF];
+	char username[OPBX_MAX_BUF];
+	char location[OPBX_MAX_BUF] = "";
+	char talkingto[OPBX_MAX_BUF] = "";
+	char moh[OPBX_MAX_BUF];
 	int count_agents = 0;		/* Number of agents configured */
 	int online_agents = 0;		/* Number of online agents */
 	int offline_agents = 0;		/* Number of offline agents */
 	if (argc != 2)
 		return RESULT_SHOWUSAGE;
-	cw_mutex_lock(&agentlock);
+	opbx_mutex_lock(&agentlock);
 	p = agents;
 	while(p) {
-		cw_mutex_lock(&p->lock);
+		opbx_mutex_lock(&p->lock);
 		if (p->pending) {
 			if (p->group)
-				cw_cli(fd, "-- Pending call to group %d\n", powerof(p->group));
+				opbx_cli(fd, "-- Pending call to group %d\n", powerof(p->group));
 			else
-				cw_cli(fd, "-- Pending call to agent %s\n", p->agent);
+				opbx_cli(fd, "-- Pending call to agent %s\n", p->agent);
 		} else {
-			if (!cw_strlen_zero(p->name))
+			if (!opbx_strlen_zero(p->name))
 				snprintf(username, sizeof(username), "(%s) ", p->name);
 			else
 				username[0] = '\0';
 			if (p->chan) {
 				snprintf(location, sizeof(location), "logged in on %s", p->chan->name);
-				if (p->owner && cw_bridged_channel(p->owner)) {
-					snprintf(talkingto, sizeof(talkingto), " talking to %s", cw_bridged_channel(p->owner)->name);
+				if (p->owner && opbx_bridged_channel(p->owner)) {
+					snprintf(talkingto, sizeof(talkingto), " talking to %s", opbx_bridged_channel(p->owner)->name);
 				} else {
 					strcpy(talkingto, " is idle");
 				}
 				online_agents++;
-			} else if (!cw_strlen_zero(p->loginchan)) {
-				if (cw_tvdiff_ms(cw_tvnow(), p->lastdisc) > 0 || !(p->lastdisc.tv_sec))
+			} else if (!opbx_strlen_zero(p->loginchan)) {
+				if (opbx_tvdiff_ms(opbx_tvnow(), p->lastdisc) > 0 || !(p->lastdisc.tv_sec))
 					snprintf(location, sizeof(location) - 20, "available at '%s'", p->loginchan);
 				else
 					snprintf(location, sizeof(location) - 20, "wrapping up at '%s'", p->loginchan);
@@ -1634,22 +1629,22 @@ static int agents_show(int fd, int argc, char **argv)
 				talkingto[0] = '\0';
 				offline_agents++;
 			}
-			if (!cw_strlen_zero(p->moh))
+			if (!opbx_strlen_zero(p->moh))
 				snprintf(moh, sizeof(moh), " (musiconhold is '%s')", p->moh);
-			cw_cli(fd, "%-12.12s %s%s%s%s\n", p->agent, 
+			opbx_cli(fd, "%-12.12s %s%s%s%s\n", p->agent, 
 				username, location, talkingto, moh);
 			count_agents++;
 		}
-		cw_mutex_unlock(&p->lock);
+		opbx_mutex_unlock(&p->lock);
 		p = p->next;
 	}
-	cw_mutex_unlock(&agentlock);
+	opbx_mutex_unlock(&agentlock);
 	if ( !count_agents ) {
-		cw_cli(fd, "No Agents are configured in %s\n",config);
+		opbx_cli(fd, "No Agents are configured in %s\n",config);
 	} else {
-		cw_cli(fd, "%d agents configured [%d online , %d offline]\n",count_agents, online_agents, offline_agents);
+		opbx_cli(fd, "%d agents configured [%d online , %d offline]\n",count_agents, online_agents, offline_agents);
 	}
-	cw_cli(fd, "\n");
+	opbx_cli(fd, "\n");
 	                
 	return RESULT_SUCCESS;
 }
@@ -1663,11 +1658,11 @@ static char agent_logoff_usage[] =
 "       Sets an agent as no longer logged in.\n"
 "       If 'soft' is specified, do not hangup existing calls.\n";
 
-static struct cw_cli_entry cli_show_agents = {
+static struct opbx_cli_entry cli_show_agents = {
 	{ "show", "agents", NULL }, agents_show, 
 	"Show status of agents", show_agents_usage, NULL };
 
-static struct cw_cli_entry cli_agent_logoff = {
+static struct opbx_cli_entry cli_agent_logoff = {
 	{ "agent", "logoff", NULL }, agent_logoff_cmd, 
 	"Sets an agent offline", agent_logoff_usage, complete_agent_logoff_cmd };
 
@@ -1682,7 +1677,7 @@ LOCAL_USER_DECL;
  * @param callbackmode
  * @returns 
  */
-static int __login_exec(struct cw_channel *chan, int argc, char **argv, int callbackmode)
+static int __login_exec(struct opbx_channel *chan, void *data, int callbackmode)
 {
 	int res=0;
 	int tries = 0;
@@ -1690,21 +1685,36 @@ static int __login_exec(struct cw_channel *chan, int argc, char **argv, int call
 	struct agent_pvt *p;
 	struct localuser *u;
 	int login_state = 0;
-	char user[CW_MAX_AGENT] = "";
-	char pass[CW_MAX_AGENT];
-	char agent[CW_MAX_AGENT] = "";
-	char xpass[CW_MAX_AGENT] = "";
+	char user[OPBX_MAX_AGENT] = "";
+	char pass[OPBX_MAX_AGENT];
+	char agent[OPBX_MAX_AGENT] = "";
+	char xpass[OPBX_MAX_AGENT] = "";
 	char *errmsg;
+	char *parse;
+	char *opts;
+	OPBX_DECLARE_APP_ARGS(args,
+			     OPBX_APP_ARG(agent_id);
+			     OPBX_APP_ARG(options);
+			     OPBX_APP_ARG(extension);
+		);
 	char *tmpoptions = NULL;
 	char *context = NULL;
 	int play_announcement = 1;
-	char agent_goodbye[CW_MAX_FILENAME_LEN];
+	char agent_goodbye[OPBX_MAX_FILENAME_LEN];
 	int update_cdr = updatecdr;
 	char *filename = "agent-loginok";
 
 	LOCAL_USER_ADD(u);
 
-	cw_copy_string(agent_goodbye, agentgoodbye, sizeof(agent_goodbye));
+	if (!(parse = opbx_strdupa(data))) {
+		opbx_log(LOG_ERROR, "Out of memory!\n");
+		LOCAL_USER_REMOVE(u);
+		return -1;
+	}
+
+	OPBX_STANDARD_APP_ARGS(args, parse);
+
+	opbx_copy_string(agent_goodbye, agentgoodbye, sizeof(agent_goodbye));
 
 	/* Set Channel Specific Login Overrides */
 	if (pbx_builtin_getvar_helper(chan, "AGENTLMAXLOGINTRIES") && strlen(pbx_builtin_getvar_helper(chan, "AGENTLMAXLOGINTRIES"))) {
@@ -1713,74 +1723,74 @@ static int __login_exec(struct cw_channel *chan, int argc, char **argv, int call
 			max_login_tries = 0;
 		tmpoptions=pbx_builtin_getvar_helper(chan, "AGENTMAXLOGINTRIES");
 		if (option_verbose > 2)
-			cw_verbose(VERBOSE_PREFIX_3 "Saw variable AGENTMAXLOGINTRIES=%s, setting max_login_tries to: %d on Channel '%s'.\n",tmpoptions,max_login_tries,chan->name);
+			opbx_verbose(VERBOSE_PREFIX_3 "Saw variable AGENTMAXLOGINTRIES=%s, setting max_login_tries to: %d on Channel '%s'.\n",tmpoptions,max_login_tries,chan->name);
 	}
-	if (pbx_builtin_getvar_helper(chan, "AGENTUPDATECDR") && !cw_strlen_zero(pbx_builtin_getvar_helper(chan, "AGENTUPDATECDR"))) {
-		if (cw_true(pbx_builtin_getvar_helper(chan, "AGENTUPDATECDR")))
+	if (pbx_builtin_getvar_helper(chan, "AGENTUPDATECDR") && !opbx_strlen_zero(pbx_builtin_getvar_helper(chan, "AGENTUPDATECDR"))) {
+		if (opbx_true(pbx_builtin_getvar_helper(chan, "AGENTUPDATECDR")))
 			update_cdr = 1;
 		else
 			update_cdr = 0;
 		tmpoptions=pbx_builtin_getvar_helper(chan, "AGENTUPDATECDR");
 		if (option_verbose > 2)
-			cw_verbose(VERBOSE_PREFIX_3 "Saw variable AGENTUPDATECDR=%s, setting update_cdr to: %d on Channel '%s'.\n",tmpoptions,update_cdr,chan->name);
+			opbx_verbose(VERBOSE_PREFIX_3 "Saw variable AGENTUPDATECDR=%s, setting update_cdr to: %d on Channel '%s'.\n",tmpoptions,update_cdr,chan->name);
 	}
-	if (pbx_builtin_getvar_helper(chan, "AGENTGOODBYE") && !cw_strlen_zero(pbx_builtin_getvar_helper(chan, "AGENTGOODBYE"))) {
+	if (pbx_builtin_getvar_helper(chan, "AGENTGOODBYE") && !opbx_strlen_zero(pbx_builtin_getvar_helper(chan, "AGENTGOODBYE"))) {
 		strcpy(agent_goodbye, pbx_builtin_getvar_helper(chan, "AGENTGOODBYE"));
 		tmpoptions=pbx_builtin_getvar_helper(chan, "AGENTGOODBYE");
 		if (option_verbose > 2)
-			cw_verbose(VERBOSE_PREFIX_3 "Saw variable AGENTGOODBYE=%s, setting agent_goodbye to: %s on Channel '%s'.\n",tmpoptions,agent_goodbye,chan->name);
+			opbx_verbose(VERBOSE_PREFIX_3 "Saw variable AGENTGOODBYE=%s, setting agent_goodbye to: %s on Channel '%s'.\n",tmpoptions,agent_goodbye,chan->name);
 	}
 	/* End Channel Specific Login Overrides */
 	
-	if (callbackmode && argc > 2) {
-		if ((context = strchr(argv[2], '@')))
-			*(context++) = '\0';
+	if (callbackmode && args.extension) {
+		parse = args.extension;
+		args.extension = strsep(&parse, "@");
+		context = parse;
 	}
 
-	if (argc > 1) {
-		for (; argv[1][0]; argv[1]++) {
-			switch (argv[1][0]) {
-				case 's': play_announcement = 0; break;
-			}
+	opts = args.options;
+	if (!opbx_strlen_zero(opts)) {
+		if (strchr(opts, 's')) {
+			play_announcement = 0;
 		}
 	}
 
-	if (chan->_state != CW_STATE_UP)
-		res = cw_answer(chan);
+	if (chan->_state != OPBX_STATE_UP)
+		res = opbx_answer(chan);
 	if (!res) {
-		if (argc > 1 && argv[0][0])
-			cw_copy_string(user, argv[0], CW_MAX_AGENT);
+		if (!opbx_strlen_zero(args.agent_id))
+			opbx_copy_string(user, args.agent_id, OPBX_MAX_AGENT);
 		else
-			res = cw_app_getdata(chan, "agent-user", user, sizeof(user) - 1, 0);
+			res = opbx_app_getdata(chan, "agent-user", user, sizeof(user) - 1, 0);
 	}
 	while (!res && (max_login_tries==0 || tries < max_login_tries)) {
 		tries++;
 		/* Check for password */
-		cw_mutex_lock(&agentlock);
+		opbx_mutex_lock(&agentlock);
 		p = agents;
 		while(p) {
 			if (!strcmp(p->agent, user) && !p->pending)
-				cw_copy_string(xpass, p->password, sizeof(xpass));
+				opbx_copy_string(xpass, p->password, sizeof(xpass));
 			p = p->next;
 		}
-		cw_mutex_unlock(&agentlock);
+		opbx_mutex_unlock(&agentlock);
 		if (!res) {
-			if (!cw_strlen_zero(xpass))
-				res = cw_app_getdata(chan, "agent-pass", pass, sizeof(pass) - 1, 0);
+			if (!opbx_strlen_zero(xpass))
+				res = opbx_app_getdata(chan, "agent-pass", pass, sizeof(pass) - 1, 0);
 			else
 				pass[0] = '\0';
 		}
 		errmsg = "agent-incorrect";
 
 #if 0
-		cw_log(LOG_NOTICE, "user: %s, pass: %s\n", user, pass);
+		opbx_log(LOG_NOTICE, "user: %s, pass: %s\n", user, pass);
 #endif		
 
 		/* Check again for accuracy */
-		cw_mutex_lock(&agentlock);
+		opbx_mutex_lock(&agentlock);
 		p = agents;
 		while(p) {
-			cw_mutex_lock(&p->lock);
+			opbx_mutex_lock(&p->lock);
 			if (!strcmp(p->agent, user) &&
 			    !strcmp(p->password, pass) && !p->pending) {
 				login_state = 1; /* Successful Login */
@@ -1793,13 +1803,13 @@ static int __login_exec(struct cw_channel *chan, int argc, char **argv, int call
 				if (pbx_builtin_getvar_helper(chan, "AGENTACKCALL") && strlen(pbx_builtin_getvar_helper(chan, "AGENTACKCALL"))) {
 					if (!strcasecmp(pbx_builtin_getvar_helper(chan, "AGENTACKCALL"), "always"))
 						p->ackcall = 2;
-					else if (cw_true(pbx_builtin_getvar_helper(chan, "AGENTACKCALL")))
+					else if (opbx_true(pbx_builtin_getvar_helper(chan, "AGENTACKCALL")))
 						p->ackcall = 1;
 					else
 						p->ackcall = 0;
 					tmpoptions=pbx_builtin_getvar_helper(chan, "AGENTACKCALL");
 					if (option_verbose > 2)
-						cw_verbose(VERBOSE_PREFIX_3 "Saw variable AGENTACKCALL=%s, setting ackcall to: %d for Agent '%s'.\n",tmpoptions,p->ackcall,p->agent);
+						opbx_verbose(VERBOSE_PREFIX_3 "Saw variable AGENTACKCALL=%s, setting ackcall to: %d for Agent '%s'.\n",tmpoptions,p->ackcall,p->agent);
 				}
 				if (pbx_builtin_getvar_helper(chan, "AGENTAUTOLOGOFF") && strlen(pbx_builtin_getvar_helper(chan, "AGENTAUTOLOGOFF"))) {
 					p->autologoff = atoi(pbx_builtin_getvar_helper(chan, "AGENTAUTOLOGOFF"));
@@ -1807,7 +1817,7 @@ static int __login_exec(struct cw_channel *chan, int argc, char **argv, int call
 						p->autologoff = 0;
 					tmpoptions=pbx_builtin_getvar_helper(chan, "AGENTAUTOLOGOFF");
 					if (option_verbose > 2)
-						cw_verbose(VERBOSE_PREFIX_3 "Saw variable AGENTAUTOLOGOFF=%s, setting autologff to: %d for Agent '%s'.\n",tmpoptions,p->autologoff,p->agent);
+						opbx_verbose(VERBOSE_PREFIX_3 "Saw variable AGENTAUTOLOGOFF=%s, setting autologff to: %d for Agent '%s'.\n",tmpoptions,p->autologoff,p->agent);
 				}
 				if (pbx_builtin_getvar_helper(chan, "AGENTWRAPUPTIME") && strlen(pbx_builtin_getvar_helper(chan, "AGENTWRAPUPTIME"))) {
 					p->wrapuptime = atoi(pbx_builtin_getvar_helper(chan, "AGENTWRAPUPTIME"));
@@ -1815,37 +1825,36 @@ static int __login_exec(struct cw_channel *chan, int argc, char **argv, int call
 						p->wrapuptime = 0;
 					tmpoptions=pbx_builtin_getvar_helper(chan, "AGENTWRAPUPTIME");
 					if (option_verbose > 2)
-						cw_verbose(VERBOSE_PREFIX_3 "Saw variable AGENTWRAPUPTIME=%s, setting wrapuptime to: %d for Agent '%s'.\n",tmpoptions,p->wrapuptime,p->agent);
+						opbx_verbose(VERBOSE_PREFIX_3 "Saw variable AGENTWRAPUPTIME=%s, setting wrapuptime to: %d for Agent '%s'.\n",tmpoptions,p->wrapuptime,p->agent);
 				}
 				/* End Channel Specific Agent Overides */
 				if (!p->chan) {
-					char last_loginchan[80] = "";
+					char lopbx_loginchan[80] = "";
 					long logintime;
 					snprintf(agent, sizeof(agent), "Agent/%s", p->agent);
 
 					if (callbackmode) {
-						char tmpchan[CW_MAX_BUF] = "";
-						char *extension = (argc > 2 ? argv[2] : NULL);
+						char tmpchan[OPBX_MAX_BUF] = "";
 						int pos = 0;
 						/* Retrieve login chan */
-						while (!extension || extension[0] != '#') {
-							if (!cw_strlen_zero(extension)) {
-								cw_copy_string(tmpchan, extension, sizeof(tmpchan));
+						while (!args.extension || args.extension[0] != '#') {
+							if (!opbx_strlen_zero(args.extension)) {
+								opbx_copy_string(tmpchan, args.extension, sizeof(tmpchan));
 								res = 0;
 							} else
-								res = cw_app_getdata(chan, "agent-newlocation", tmpchan+pos, sizeof(tmpchan) - 2, 0);
-							if (cw_strlen_zero(tmpchan) || cw_exists_extension(chan, !cw_strlen_zero(context) ? context : "default", tmpchan,
+								res = opbx_app_getdata(chan, "agent-newlocation", tmpchan+pos, sizeof(tmpchan) - 2, 0);
+							if (opbx_strlen_zero(tmpchan) || opbx_exists_extension(chan, !opbx_strlen_zero(context) ? context : "default", tmpchan,
 													     1, NULL))
 								break;
-							if (extension) {
-								cw_log(LOG_WARNING, "Extension '%s' is not valid for automatic login of agent '%s'\n", extension, p->agent);
-								extension = NULL;
+							if (args.extension) {
+								opbx_log(LOG_WARNING, "Extension '%s' is not valid for automatic login of agent '%s'\n", args.extension, p->agent);
+								args.extension = NULL;
 								pos = 0;
 							} else {
-								cw_log(LOG_WARNING, "Extension '%s@%s' is not valid for automatic login of agent '%s'\n", tmpchan, !cw_strlen_zero(context) ? context : "default", p->agent);
-								res = cw_streamfile(chan, "invalid", chan->language);
+								opbx_log(LOG_WARNING, "Extension '%s@%s' is not valid for automatic login of agent '%s'\n", tmpchan, !opbx_strlen_zero(context) ? context : "default", p->agent);
+								res = opbx_streamfile(chan, "invalid", chan->language);
 								if (!res)
-									res = cw_waitstream(chan, CW_DIGIT_ANY);
+									res = opbx_waitstream(chan, OPBX_DIGIT_ANY);
 								if (res > 0) {
 									tmpchan[0] = res;
 									tmpchan[1] = '\0';
@@ -1856,22 +1865,22 @@ static int __login_exec(struct cw_channel *chan, int argc, char **argv, int call
 								}
 							}
 						}
-						extension = tmpchan;
+						args.extension = tmpchan;
 						if (!res) {
 							set_agentbycallerid(p->logincallerid, NULL);
-							if (!cw_strlen_zero(context) && !cw_strlen_zero(tmpchan))
+							if (!opbx_strlen_zero(context) && !opbx_strlen_zero(tmpchan))
 								snprintf(p->loginchan, sizeof(p->loginchan), "%s@%s", tmpchan, context);
 							else {
-								cw_copy_string(last_loginchan, p->loginchan, sizeof(last_loginchan));
-								cw_copy_string(p->loginchan, tmpchan, sizeof(p->loginchan));
+								opbx_copy_string(lopbx_loginchan, p->loginchan, sizeof(lopbx_loginchan));
+								opbx_copy_string(p->loginchan, tmpchan, sizeof(p->loginchan));
 							}
 							p->acknowledged = 0;
-							if (cw_strlen_zero(p->loginchan)) {
+							if (opbx_strlen_zero(p->loginchan)) {
 								login_state = 2;
 								filename = "agent-loggedoff";
 							} else {
 								if (chan->cid.cid_num) {
-									cw_copy_string(p->logincallerid, chan->cid.cid_num, sizeof(p->logincallerid));
+									opbx_copy_string(p->logincallerid, chan->cid.cid_num, sizeof(p->logincallerid));
 									set_agentbycallerid(p->logincallerid, p->agent);
 								} else
 									p->logincallerid[0] = '\0';
@@ -1886,30 +1895,30 @@ static int __login_exec(struct cw_channel *chan, int argc, char **argv, int call
 						p->logincallerid[0] = '\0';
 						p->acknowledged = 0;
 					}
-					cw_mutex_unlock(&p->lock);
-					cw_mutex_unlock(&agentlock);
+					opbx_mutex_unlock(&p->lock);
+					opbx_mutex_unlock(&agentlock);
 					if( !res && play_announcement==1 )
-						res = cw_streamfile(chan, filename, chan->language);
+						res = opbx_streamfile(chan, filename, chan->language);
 					if (!res)
-						cw_waitstream(chan, "");
-					cw_mutex_lock(&agentlock);
-					cw_mutex_lock(&p->lock);
+						opbx_waitstream(chan, "");
+					opbx_mutex_lock(&agentlock);
+					opbx_mutex_lock(&p->lock);
 					if (!res) {
-						res = cw_set_read_format(chan, cw_best_codec(chan->nativeformats));
+						res = opbx_set_read_format(chan, opbx_best_codec(chan->nativeformats));
 						if (res)
-							cw_log(LOG_WARNING, "Unable to set read format to %d\n", cw_best_codec(chan->nativeformats));
+							opbx_log(LOG_WARNING, "Unable to set read format to %d\n", opbx_best_codec(chan->nativeformats));
 					}
 					if (!res) {
-						res = cw_set_write_format(chan, cw_best_codec(chan->nativeformats));
+						res = opbx_set_write_format(chan, opbx_best_codec(chan->nativeformats));
 						if (res)
-							cw_log(LOG_WARNING, "Unable to set write format to %d\n", cw_best_codec(chan->nativeformats));
+							opbx_log(LOG_WARNING, "Unable to set write format to %d\n", opbx_best_codec(chan->nativeformats));
 					}
 					/* Check once more just in case */
 					if (p->chan)
 						res = -1;
 					if (callbackmode && !res) {
 						/* Just say goodbye and be done with it */
-						if (!cw_strlen_zero(p->loginchan)) {
+						if (!opbx_strlen_zero(p->loginchan)) {
 							if (p->loginstart == 0)
 								time(&p->loginstart);
 							manager_event(EVENT_FLAG_AGENT, "Agentcallbacklogin",
@@ -1917,10 +1926,10 @@ static int __login_exec(struct cw_channel *chan, int argc, char **argv, int call
 								      "Loginchan: %s\r\n"
 								      "Uniqueid: %s\r\n",
 								      p->agent, p->loginchan, chan->uniqueid);
-							cw_queue_log("NONE", chan->uniqueid, agent, "AGENTCALLBACKLOGIN", "%s", p->loginchan);
+							opbx_queue_log("NONE", chan->uniqueid, agent, "AGENTCALLBACKLOGIN", "%s", p->loginchan);
 							if (option_verbose > 1)
-								cw_verbose(VERBOSE_PREFIX_2 "Callback Agent '%s' logged in on %s\n", p->agent, p->loginchan);
-							cw_device_state_changed("Agent/%s", p->agent);
+								opbx_verbose(VERBOSE_PREFIX_2 "Callback Agent '%s' logged in on %s\n", p->agent, p->loginchan);
+							opbx_device_state_changed("Agent/%s", p->agent);
 						} else {
 							logintime = time(NULL) - p->loginstart;
 							p->loginstart = 0;
@@ -1929,25 +1938,25 @@ static int __login_exec(struct cw_channel *chan, int argc, char **argv, int call
 								      "Loginchan: %s\r\n"
 								      "Logintime: %ld\r\n"
 								      "Uniqueid: %s\r\n",
-								      p->agent, last_loginchan, logintime, chan->uniqueid);
-							cw_queue_log("NONE", chan->uniqueid, agent, "AGENTCALLBACKLOGOFF", "%s|%ld|", last_loginchan, logintime);
+								      p->agent, lopbx_loginchan, logintime, chan->uniqueid);
+							opbx_queue_log("NONE", chan->uniqueid, agent, "AGENTCALLBACKLOGOFF", "%s|%ld|", lopbx_loginchan, logintime);
 							if (option_verbose > 1)
-								cw_verbose(VERBOSE_PREFIX_2 "Callback Agent '%s' logged out\n", p->agent);
-							cw_device_state_changed("Agent/%s", p->agent);
+								opbx_verbose(VERBOSE_PREFIX_2 "Callback Agent '%s' logged out\n", p->agent);
+							opbx_device_state_changed("Agent/%s", p->agent);
 						}
-						cw_mutex_unlock(&agentlock);
+						opbx_mutex_unlock(&agentlock);
 						if (!res)
-							res = cw_safe_sleep(chan, 500);
-						cw_mutex_unlock(&p->lock);
+							res = opbx_safe_sleep(chan, 500);
+						opbx_mutex_unlock(&p->lock);
 						if (persistent_agents)
 							dump_agents();
 					} else if (!res) {
 #ifdef HONOR_MUSIC_CLASS
 						/* check if the moh class was changed with setmusiconhold */
 						if (*(chan->musicclass))
-							cw_copy_string(p->moh, chan->musicclass, sizeof(p->moh));
+							opbx_copy_string(p->moh, chan->musicclass, sizeof(p->moh));
 #endif								
-						cw_moh_start(chan, p->moh);
+						opbx_moh_start(chan, p->moh);
 						if (p->loginstart == 0)
 							time(&p->loginstart);
 						manager_event(EVENT_FLAG_AGENT, "Agentlogin",
@@ -1957,10 +1966,10 @@ static int __login_exec(struct cw_channel *chan, int argc, char **argv, int call
 							      p->agent, chan->name, chan->uniqueid);
 						if (update_cdr && chan->cdr)
 							snprintf(chan->cdr->channel, sizeof(chan->cdr->channel), "Agent/%s", p->agent);
-						cw_queue_log("NONE", chan->uniqueid, agent, "AGENTLOGIN", "%s", chan->name);
+						opbx_queue_log("NONE", chan->uniqueid, agent, "AGENTLOGIN", "%s", chan->name);
 						if (option_verbose > 1)
-							cw_verbose(VERBOSE_PREFIX_2 "Agent '%s' logged in (format %s/%s)\n", p->agent,
-								    cw_getformatname(chan->readformat), cw_getformatname(chan->writeformat));
+							opbx_verbose(VERBOSE_PREFIX_2 "Agent '%s' logged in (format %s/%s)\n", p->agent,
+								    opbx_getformatname(chan->readformat), opbx_getformatname(chan->writeformat));
 						/* Login this channel and wait for it to
 						   go away */
 						p->chan = chan;
@@ -1968,105 +1977,105 @@ static int __login_exec(struct cw_channel *chan, int argc, char **argv, int call
 							check_beep(p, 0);
 						else
 							check_availability(p, 0);
-						cw_mutex_unlock(&p->lock);
-						cw_mutex_unlock(&agentlock);
-						cw_device_state_changed("Agent/%s", p->agent);
+						opbx_mutex_unlock(&p->lock);
+						opbx_mutex_unlock(&agentlock);
+						opbx_device_state_changed("Agent/%s", p->agent);
 						while (res >= 0) {
-							cw_mutex_lock(&p->lock);
+							opbx_mutex_lock(&p->lock);
 							if (p->chan != chan)
 								res = -1;
-							cw_mutex_unlock(&p->lock);
+							opbx_mutex_unlock(&p->lock);
 							/* Yield here so other interested threads can kick in. */
 							sched_yield();
 							if (res)
 								break;
 
-							cw_mutex_lock(&agentlock);
-							cw_mutex_lock(&p->lock);
+							opbx_mutex_lock(&agentlock);
+							opbx_mutex_lock(&p->lock);
 							if (p->lastdisc.tv_sec) {
-								if (cw_tvdiff_ms(cw_tvnow(), p->lastdisc) > p->wrapuptime) {
+								if (opbx_tvdiff_ms(opbx_tvnow(), p->lastdisc) > p->wrapuptime) {
 									if (option_debug)
-										cw_log(LOG_DEBUG, "Wrapup time for %s expired!\n", p->agent);
-									p->lastdisc = cw_tv(0, 0);
+										opbx_log(LOG_DEBUG, "Wrapup time for %s expired!\n", p->agent);
+									p->lastdisc = opbx_tv(0, 0);
 									if (p->ackcall > 1)
 										check_beep(p, 0);
 									else
 										check_availability(p, 0);
 								}
 							}
-							cw_mutex_unlock(&p->lock);
-							cw_mutex_unlock(&agentlock);
+							opbx_mutex_unlock(&p->lock);
+							opbx_mutex_unlock(&agentlock);
 							/*	Synchronize channel ownership between call to agent and itself. */
-							cw_mutex_lock( &p->app_lock );
-							cw_mutex_lock(&p->lock);
+							opbx_mutex_lock( &p->app_lock );
+							opbx_mutex_lock(&p->lock);
 							p->owning_app = pthread_self();
-							cw_mutex_unlock(&p->lock);
+							opbx_mutex_unlock(&p->lock);
 							if (p->ackcall > 1) 
 								res = agent_ack_sleep(p);
 							else
-								res = cw_safe_sleep_conditional( chan, 1000,
+								res = opbx_safe_sleep_conditional( chan, 1000,
 												  agent_cont_sleep, p );
-							cw_mutex_unlock( &p->app_lock );
+							opbx_mutex_unlock( &p->app_lock );
 							if ((p->ackcall > 1)  && (res == 1)) {
-								cw_mutex_lock(&agentlock);
-								cw_mutex_lock(&p->lock);
+								opbx_mutex_lock(&agentlock);
+								opbx_mutex_lock(&p->lock);
 								check_availability(p, 0);
-								cw_mutex_unlock(&p->lock);
-								cw_mutex_unlock(&agentlock);
+								opbx_mutex_unlock(&p->lock);
+								opbx_mutex_unlock(&agentlock);
 								res = 0;
 							}
 							sched_yield();
 						}
-						cw_mutex_lock(&p->lock);
+						opbx_mutex_lock(&p->lock);
 						if (res && p->owner) 
-							cw_log(LOG_WARNING, "Huh?  We broke out when there was still an owner?\n");
+							opbx_log(LOG_WARNING, "Huh?  We broke out when there was still an owner?\n");
 						/* Log us off if appropriate */
 						if (p->chan == chan)
 							p->chan = NULL;
 						p->acknowledged = 0;
 						logintime = time(NULL) - p->loginstart;
 						p->loginstart = 0;
-						cw_mutex_unlock(&p->lock);
+						opbx_mutex_unlock(&p->lock);
 						manager_event(EVENT_FLAG_AGENT, "Agentlogoff",
 							      "Agent: %s\r\n"
 							      "Logintime: %ld\r\n"
 							      "Uniqueid: %s\r\n",
 							      p->agent, logintime, chan->uniqueid);
-						cw_queue_log("NONE", chan->uniqueid, agent, "AGENTLOGOFF", "%s|%ld", chan->name, logintime);
+						opbx_queue_log("NONE", chan->uniqueid, agent, "AGENTLOGOFF", "%s|%ld", chan->name, logintime);
 						if (option_verbose > 1)
-							cw_verbose(VERBOSE_PREFIX_2 "Agent '%s' logged out\n", p->agent);
+							opbx_verbose(VERBOSE_PREFIX_2 "Agent '%s' logged out\n", p->agent);
 						/* If there is no owner, go ahead and kill it now */
-						cw_device_state_changed("Agent/%s", p->agent);
+						opbx_device_state_changed("Agent/%s", p->agent);
 						if (p->dead && !p->owner) {
-							cw_mutex_destroy(&p->lock);
-							cw_mutex_destroy(&p->app_lock);
+							opbx_mutex_destroy(&p->lock);
+							opbx_mutex_destroy(&p->app_lock);
 							free(p);
 						}
 					}
 					else {
-						cw_mutex_unlock(&p->lock);
+						opbx_mutex_unlock(&p->lock);
 						p = NULL;
 					}
 					res = -1;
 				} else {
-					cw_mutex_unlock(&p->lock);
+					opbx_mutex_unlock(&p->lock);
 					errmsg = "agent-alreadyon";
 					p = NULL;
 				}
 				break;
 			}
-			cw_mutex_unlock(&p->lock);
+			opbx_mutex_unlock(&p->lock);
 			p = p->next;
 		}
 		if (!p)
-			cw_mutex_unlock(&agentlock);
+			opbx_mutex_unlock(&agentlock);
 
 		if (!res && (max_login_tries==0 || tries < max_login_tries))
-			res = cw_app_getdata(chan, errmsg, user, sizeof(user) - 1, 0);
+			res = opbx_app_getdata(chan, errmsg, user, sizeof(user) - 1, 0);
 	}
 		
 	if (!res)
-		res = cw_safe_sleep(chan, 500);
+		res = opbx_safe_sleep(chan, 500);
 
 	/* AgentLogin() exit */
 	if (!callbackmode) {
@@ -2080,7 +2089,7 @@ static int __login_exec(struct cw_channel *chan, int argc, char **argv, int call
 			pbx_builtin_setvar_helper(chan, "AGENTNUMBER", user);
 			if (login_state==1) {
 				pbx_builtin_setvar_helper(chan, "AGENTSTATUS", "on");
-				pbx_builtin_setvar_helper(chan, "AGENTEXTEN", argv[0]);
+				pbx_builtin_setvar_helper(chan, "AGENTEXTEN", args.extension);
 			}
 			else {
 				pbx_builtin_setvar_helper(chan, "AGENTSTATUS", "off");
@@ -2089,19 +2098,19 @@ static int __login_exec(struct cw_channel *chan, int argc, char **argv, int call
 		else {
 			pbx_builtin_setvar_helper(chan, "AGENTSTATUS", "fail");
 		}
-		if (cw_exists_extension(chan, chan->context, chan->exten, chan->priority + 1, chan->cid.cid_num)) {
+		if (opbx_exists_extension(chan, chan->context, chan->exten, chan->priority + 1, chan->cid.cid_num)) {
 			LOCAL_USER_REMOVE(u);
 			return 0;
 		}
 		/* Do we need to play agent-goodbye now that we will be hanging up? */
 		if (play_announcement) {
 			if (!res)
-				res = cw_safe_sleep(chan, 1000);
-			res = cw_streamfile(chan, agent_goodbye, chan->language);
+				res = opbx_safe_sleep(chan, 1000);
+			res = opbx_streamfile(chan, agent_goodbye, chan->language);
 			if (!res)
-				res = cw_waitstream(chan, "");
+				res = opbx_waitstream(chan, "");
 			if (!res)
-				res = cw_safe_sleep(chan, 1000);
+				res = opbx_safe_sleep(chan, 1000);
 		}
 	}
 
@@ -2119,9 +2128,9 @@ static int __login_exec(struct cw_channel *chan, int argc, char **argv, int call
  * @returns
  * @sa callback_login_exec(), agentmonitoroutgoing_exec(), load_module().
  */
-static int login_exec(struct cw_channel *chan, int argc, char **argv)
+static int login_exec(struct opbx_channel *chan, void *data)
 {
-	return __login_exec(chan, argc, argv, 0);
+	return __login_exec(chan, data, 0);
 }
 
 /**
@@ -2132,9 +2141,9 @@ static int login_exec(struct cw_channel *chan, int argc, char **argv)
  * @returns
  * @sa login_exec(), agentmonitoroutgoing_exec(), load_module().
  */
-static int callback_exec(struct cw_channel *chan, int argc, char **argv)
+static int callback_exec(struct opbx_channel *chan, void *data)
 {
-	return __login_exec(chan, argc, argv, 1);
+	return __login_exec(chan, data, 1);
 }
 
 /**
@@ -2155,17 +2164,17 @@ static int action_agent_callback_login(struct mansession *s, struct message *m)
 	struct agent_pvt *p;
 	int login_state = 0;
 
-	if (cw_strlen_zero(agent)) {
+	if (opbx_strlen_zero(agent)) {
 		astman_send_error(s, m, "No agent specified");
 		return 0;
 	}
 
-	if (cw_strlen_zero(exten)) {
+	if (opbx_strlen_zero(exten)) {
 		astman_send_error(s, m, "No extension specified");
 		return 0;
 	}
 
-	cw_mutex_lock(&agentlock);
+	opbx_mutex_lock(&agentlock);
 	p = agents;
 	while(p) {
 		if (strcmp(p->agent, agent) || p->pending) {
@@ -2176,21 +2185,21 @@ static int action_agent_callback_login(struct mansession *s, struct message *m)
 			login_state = 2; /* already logged in (and on the phone)*/
 			break;
 		}
-		cw_mutex_lock(&p->lock);
+		opbx_mutex_lock(&p->lock);
 		login_state = 1; /* Successful Login */
 		
-		if (cw_strlen_zero(context))
-			cw_copy_string(p->loginchan, exten, sizeof(p->loginchan));
+		if (opbx_strlen_zero(context))
+			opbx_copy_string(p->loginchan, exten, sizeof(p->loginchan));
 		else
 			snprintf(p->loginchan, sizeof(p->loginchan), "%s@%s", exten, context);
 
-		if (!cw_strlen_zero(wrapuptime_s)) {
+		if (!opbx_strlen_zero(wrapuptime_s)) {
 			p->wrapuptime = atoi(wrapuptime_s);
 			if (p->wrapuptime < 0)
 				p->wrapuptime = 0;
 		}
 
-		if (cw_true(ackcall_s))
+		if (opbx_true(ackcall_s))
 			p->ackcall = 1;
 		else
 			p->ackcall = 0;
@@ -2201,16 +2210,16 @@ static int action_agent_callback_login(struct mansession *s, struct message *m)
 			      "Agent: %s\r\n"
 			      "Loginchan: %s\r\n",
 			      p->agent, p->loginchan);
-		cw_queue_log("NONE", "NONE", agent, "AGENTCALLBACKLOGIN", "%s", p->loginchan);
+		opbx_queue_log("NONE", "NONE", agent, "AGENTCALLBACKLOGIN", "%s", p->loginchan);
 		if (option_verbose > 1)
-			cw_verbose(VERBOSE_PREFIX_2 "Callback Agent '%s' logged in on %s\n", p->agent, p->loginchan);
-		cw_device_state_changed("Agent/%s", p->agent);
-		cw_mutex_unlock(&p->lock);
+			opbx_verbose(VERBOSE_PREFIX_2 "Callback Agent '%s' logged in on %s\n", p->agent, p->loginchan);
+		opbx_device_state_changed("Agent/%s", p->agent);
+		opbx_mutex_unlock(&p->lock);
 		p = p->next;
 		if (persistent_agents)
 			dump_agents();
 	}
-	cw_mutex_unlock(&agentlock);
+	opbx_mutex_unlock(&agentlock);
 
 	if (login_state == 1)
 		astman_send_ack(s, m, "Agent logged in");
@@ -2230,31 +2239,29 @@ static int action_agent_callback_login(struct mansession *s, struct message *m)
  * @returns
  * @sa login_exec(), callback_login_exec(), load_module().
  */
-static int agentmonitoroutgoing_exec(struct cw_channel *chan, int argc, char **argv)
+static int agentmonitoroutgoing_exec(struct opbx_channel *chan, void *data)
 {
 	int exitifnoagentid = 0;
 	int nowarnings = 0;
 	int changeoutgoing = 0;
 	int res = 0;
-	char agent[CW_MAX_AGENT], *tmp;
+	char agent[OPBX_MAX_AGENT], *tmp;
 
-	if (argc > 1) {
-		for (; argv[0][0]; argv[0]++) {
-			switch (argv[0][0]) {
-				case 'c': changeoutgoing = 1; break;
-				case 'd': exitifnoagentid = 1; break;
-				case 'n': nowarnings = 1; break;
-			}
-		}
+	if (data) {
+		if (strchr(data, 'd'))
+			exitifnoagentid = 1;
+		if (strchr(data, 'n'))
+			nowarnings = 1;
+		if (strchr(data, 'c'))
+			changeoutgoing = 1;
 	}
-
 	if (chan->cid.cid_num) {
-		char agentvar[CW_MAX_BUF];
+		char agentvar[OPBX_MAX_BUF];
 		snprintf(agentvar, sizeof(agentvar), "%s_%s", GETAGENTBYCALLERID, chan->cid.cid_num);
 		if ((tmp = pbx_builtin_getvar_helper(NULL, agentvar))) {
 			struct agent_pvt *p = agents;
-			cw_copy_string(agent, tmp, sizeof(agent));
-			cw_mutex_lock(&agentlock);
+			opbx_copy_string(agent, tmp, sizeof(agent));
+			opbx_mutex_lock(&agentlock);
 			while (p) {
 				if (!strcasecmp(p->agent, tmp)) {
 					if (changeoutgoing) snprintf(chan->cdr->channel, sizeof(chan->cdr->channel), "Agent/%s", p->agent);
@@ -2263,22 +2270,27 @@ static int agentmonitoroutgoing_exec(struct cw_channel *chan, int argc, char **a
 				}
 				p = p->next;
 			}
-			cw_mutex_unlock(&agentlock);
+			opbx_mutex_unlock(&agentlock);
 			
 		} else {
 			res = -1;
 			if (!nowarnings)
-				cw_log(LOG_WARNING, "Couldn't find the global variable %s, so I can't figure out which agent (if it's an agent) is placing outgoing call.\n", agentvar);
+				opbx_log(LOG_WARNING, "Couldn't find the global variable %s, so I can't figure out which agent (if it's an agent) is placing outgoing call.\n", agentvar);
 		}
 	} else {
 		res = -1;
 		if (!nowarnings)
-			cw_log(LOG_WARNING, "There is no callerid on that call, so I can't figure out which agent (if it's an agent) is placing outgoing call.\n");
+			opbx_log(LOG_WARNING, "There is no callerid on that call, so I can't figure out which agent (if it's an agent) is placing outgoing call.\n");
 	}
+	/* check if there is n + 101 priority */
 	if (res) {
-		pbx_builtin_setvar_helper(chan, "AGENTSTATUS", "FAIL");
-	} else {
-		pbx_builtin_setvar_helper(chan, "AGENTSTATUS", "SUCCESS");
+		if (opbx_exists_extension(chan, chan->context, chan->exten, chan->priority + 101, chan->cid.cid_num)) {
+			chan->priority+=100;
+			if (option_verbose > 2)
+				opbx_verbose(VERBOSE_PREFIX_3 "Going to %d priority because there is no callerid or the agentid cannot be found.\n",chan->priority);
+		}
+		else if (exitifnoagentid)
+			return res;
 	}
 	return 0;
 }
@@ -2295,36 +2307,36 @@ static void dump_agents(void)
 		if (cur_agent->chan)
 			continue;
 
-		if (!cw_strlen_zero(cur_agent->loginchan)) {
+		if (!opbx_strlen_zero(cur_agent->loginchan)) {
 			snprintf(buf, sizeof(buf), "%s;%s", cur_agent->loginchan, cur_agent->logincallerid);
-			if (cw_db_put(pa_family, cur_agent->agent, buf))
-				cw_log(LOG_WARNING, "failed to create persistent entry!\n");
+			if (opbx_db_put(pa_family, cur_agent->agent, buf))
+				opbx_log(LOG_WARNING, "failed to create persistent entry!\n");
 			else if (option_debug)
-				cw_log(LOG_DEBUG, "Saved Agent: %s on %s\n", cur_agent->agent, cur_agent->loginchan);
+				opbx_log(LOG_DEBUG, "Saved Agent: %s on %s\n", cur_agent->agent, cur_agent->loginchan);
 		} else {
 			/* Delete -  no agent or there is an error */
-			cw_db_del(pa_family, cur_agent->agent);
+			opbx_db_del(pa_family, cur_agent->agent);
 		}
 	}
 }
 
 /**
- * Reload the persistent agents from cwdb.
+ * Reload the persistent agents from opbxdb.
  */
 static void reload_agents(void)
 {
 	char *agent_num;
-	struct cw_db_entry *db_tree;
-	struct cw_db_entry *entry;
+	struct opbx_db_entry *db_tree;
+	struct opbx_db_entry *entry;
 	struct agent_pvt *cur_agent;
 	char agent_data[256];
 	char *parse;
 	char *agent_chan;
 	char *agent_callerid;
 
-	db_tree = cw_db_gettree(pa_family, NULL);
+	db_tree = opbx_db_gettree(pa_family, NULL);
 
-	cw_mutex_lock(&agentlock);
+	opbx_mutex_lock(&agentlock);
 	for (entry = db_tree; entry; entry = entry->next) {
         	if (!strncmp(entry->key, pa_family, strlen(pa_family))){
                        agent_num = entry->key + strlen(pa_family) + 2;
@@ -2333,38 +2345,38 @@ static void reload_agents(void)
 	        }
 		cur_agent = agents;
 		while (cur_agent) {
-			cw_mutex_lock(&cur_agent->lock);
+			opbx_mutex_lock(&cur_agent->lock);
 			if (strcmp(agent_num, cur_agent->agent) == 0)
 				break;
-			cw_mutex_unlock(&cur_agent->lock);
+			opbx_mutex_unlock(&cur_agent->lock);
 			cur_agent = cur_agent->next;
 		}
 		if (!cur_agent) {
-			cw_db_del(pa_family, agent_num);
+			opbx_db_del(pa_family, agent_num);
 			continue;
 		} else
-			cw_mutex_unlock(&cur_agent->lock);
-		if (!cw_db_get(pa_family, agent_num, agent_data, sizeof(agent_data)-1)) {
+			opbx_mutex_unlock(&cur_agent->lock);
+		if (!opbx_db_get(pa_family, agent_num, agent_data, sizeof(agent_data)-1)) {
 			if (option_debug)
-				cw_log(LOG_DEBUG, "Reload Agent: %s on %s\n", cur_agent->agent, agent_data);
+				opbx_log(LOG_DEBUG, "Reload Agent: %s on %s\n", cur_agent->agent, agent_data);
 			parse = agent_data;
 			agent_chan = strsep(&parse, ";");
 			agent_callerid = strsep(&parse, ";");
-			cw_copy_string(cur_agent->loginchan, agent_chan, sizeof(cur_agent->loginchan));
+			opbx_copy_string(cur_agent->loginchan, agent_chan, sizeof(cur_agent->loginchan));
 			if (agent_callerid) {
-				cw_copy_string(cur_agent->logincallerid, agent_callerid, sizeof(cur_agent->logincallerid));
+				opbx_copy_string(cur_agent->logincallerid, agent_callerid, sizeof(cur_agent->logincallerid));
 				set_agentbycallerid(cur_agent->logincallerid, cur_agent->agent);
 			} else
 				cur_agent->logincallerid[0] = '\0';
 			if (cur_agent->loginstart == 0)
 				time(&cur_agent->loginstart);
-			cw_device_state_changed("Agent/%s", cur_agent->agent);	
+			opbx_device_state_changed("Agent/%s", cur_agent->agent);	
 		}
 	}
-	cw_mutex_unlock(&agentlock);
+	opbx_mutex_unlock(&agentlock);
 	if (db_tree) {
-		cw_log(LOG_NOTICE, "Agents sucessfully reloaded from database.\n");
-		cw_db_freetree(db_tree);
+		opbx_log(LOG_NOTICE, "Agents sucessfully reloaded from database.\n");
+		opbx_db_freetree(db_tree);
 	}
 }
 
@@ -2373,10 +2385,10 @@ static int agent_devicestate(void *data)
 {
 	struct agent_pvt *p;
 	char *s;
-	cw_group_t groupmatch;
+	opbx_group_t groupmatch;
 	int groupoff;
 	int waitforagent=0;
-	int res = CW_DEVICE_INVALID;
+	int res = OPBX_DEVICE_INVALID;
 	
 	s = data;
 	if ((s[0] == '@') && (sscanf(s + 1, "%d", &groupoff) == 1)) {
@@ -2389,59 +2401,59 @@ static int agent_devicestate(void *data)
 	}
 
 	/* Check actual logged in agents first */
-	cw_mutex_lock(&agentlock);
+	opbx_mutex_lock(&agentlock);
 	p = agents;
 	while(p) {
-		cw_mutex_lock(&p->lock);
+		opbx_mutex_lock(&p->lock);
 		if (!p->pending && ((groupmatch && (p->group & groupmatch)) || !strcmp(data, p->agent))) {
 			if (p->owner) {
-				if (res != CW_DEVICE_INUSE)
-					res = CW_DEVICE_BUSY;
+				if (res != OPBX_DEVICE_INUSE)
+					res = OPBX_DEVICE_BUSY;
 			} else {
-				if (res == CW_DEVICE_BUSY)
-					res = CW_DEVICE_INUSE;
-				if (p->chan || !cw_strlen_zero(p->loginchan)) {
-					if (res == CW_DEVICE_INVALID)
-						res = CW_DEVICE_UNKNOWN;
-				} else if (res == CW_DEVICE_INVALID)	
-					res = CW_DEVICE_UNAVAILABLE;
+				if (res == OPBX_DEVICE_BUSY)
+					res = OPBX_DEVICE_INUSE;
+				if (p->chan || !opbx_strlen_zero(p->loginchan)) {
+					if (res == OPBX_DEVICE_INVALID)
+						res = OPBX_DEVICE_UNKNOWN;
+				} else if (res == OPBX_DEVICE_INVALID)	
+					res = OPBX_DEVICE_UNAVAILABLE;
 			}
 			if (!strcmp(data, p->agent)) {
-				cw_mutex_unlock(&p->lock);
+				opbx_mutex_unlock(&p->lock);
 				break;
 			}
 		}
-		cw_mutex_unlock(&p->lock);
+		opbx_mutex_unlock(&p->lock);
 		p = p->next;
 	}
-	cw_mutex_unlock(&agentlock);
+	opbx_mutex_unlock(&agentlock);
 	return res;
 }
 
 /**
  * Initialize the Agents module.
- * This funcion is being called by CallWeaver when loading the module. Among other thing it registers applications, cli commands and reads the cofiguration file.
+ * This funcion is being called by OpenPBX when loading the module. Among other thing it registers applications, cli commands and reads the cofiguration file.
  *
  * @returns int Always 0.
  */
 int load_module()
 {
 	/* Make sure we can register our agent channel type */
-	if (cw_channel_register(&agent_tech)) {
-		cw_log(LOG_ERROR, "Unable to register channel class %s\n", channeltype);
+	if (opbx_channel_register(&agent_tech)) {
+		opbx_log(LOG_ERROR, "Unable to register channel class %s\n", channeltype);
 		return -1;
 	}
 	/* Dialplan applications */
-	agentlogin_app = cw_register_application(app, login_exec, synopsis, syntax, descrip);
-	agentcallbacklogin_app = cw_register_application(app2, callback_exec, synopsis2, syntax2, descrip2);
-	agentmonitoroutgoing_app = cw_register_application(app3, agentmonitoroutgoing_exec, synopsis3, syntax3, descrip3);
+	opbx_register_application(app, login_exec, synopsis, descrip);
+	opbx_register_application(app2, callback_exec, synopsis2, descrip2);
+	opbx_register_application(app3, agentmonitoroutgoing_exec, synopsis3, descrip3);
 	/* Manager commands */
-	cw_manager_register2("Agents", EVENT_FLAG_AGENT, action_agents, "Lists agents and their status", mandescr_agents);
-	cw_manager_register2("AgentLogoff", EVENT_FLAG_AGENT, action_agent_logoff, "Sets an agent as no longer logged in", mandescr_agent_logoff);
-	cw_manager_register2("AgentCallbackLogin", EVENT_FLAG_AGENT, action_agent_callback_login, "Sets an agent as logged in by callback", mandescr_agent_callback_login);
+	opbx_manager_register2("Agents", EVENT_FLAG_AGENT, action_agents, "Lists agents and their status", mandescr_agents);
+	opbx_manager_register2("AgentLogoff", EVENT_FLAG_AGENT, action_agent_logoff, "Sets an agent as no longer logged in", mandescr_agent_logoff);
+	opbx_manager_register2("AgentCallbackLogin", EVENT_FLAG_AGENT, action_agent_callback_login, "Sets an agent as logged in by callback", mandescr_agent_callback_login);
 	/* CLI Application */
-	cw_cli_register(&cli_show_agents);
-	cw_cli_register(&cli_agent_logoff);
+	opbx_cli_register(&cli_show_agents);
+	opbx_cli_register(&cli_agent_logoff);
 	/* Read in the config */
 	read_agent_config();
 	if (persistent_agents)
@@ -2460,37 +2472,35 @@ int reload()
 int unload_module()
 {
 	struct agent_pvt *p;
-	int res = 0;
-
 	/* First, take us out of the channel loop */
 	/* Unregister CLI application */
-	cw_cli_unregister(&cli_show_agents);
-	cw_cli_unregister(&cli_agent_logoff);
+	opbx_cli_unregister(&cli_show_agents);
+	opbx_cli_unregister(&cli_agent_logoff);
 	/* Unregister dialplan applications */
-	res |= cw_unregister_application(agentlogin_app);
-	res |= cw_unregister_application(agentcallbacklogin_app);
-	res |= cw_unregister_application(agentmonitoroutgoing_app);
+	opbx_unregister_application(app);
+	opbx_unregister_application(app2);
+	opbx_unregister_application(app3);
 	/* Unregister manager command */
-	cw_manager_unregister("Agents");
-	cw_manager_unregister("AgentLogoff");
-	cw_manager_unregister("AgentCallbackLogin");
+	opbx_manager_unregister("Agents");
+	opbx_manager_unregister("AgentLogoff");
+	opbx_manager_unregister("AgentCallbackLogin");
 	/* Unregister channel */
-	cw_channel_unregister(&agent_tech);
-	if (!cw_mutex_lock(&agentlock)) {
+	opbx_channel_unregister(&agent_tech);
+	if (!opbx_mutex_lock(&agentlock)) {
 		/* Hangup all interfaces if they have an owner */
 		p = agents;
 		while(p) {
 			if (p->owner)
-				cw_softhangup(p->owner, CW_SOFTHANGUP_APPUNLOAD);
+				opbx_softhangup(p->owner, OPBX_SOFTHANGUP_APPUNLOAD);
 			p = p->next;
 		}
 		agents = NULL;
-		cw_mutex_unlock(&agentlock);
+		opbx_mutex_unlock(&agentlock);
 	} else {
-		cw_log(LOG_WARNING, "Unable to lock the monitor\n");
+		opbx_log(LOG_WARNING, "Unable to lock the monitor\n");
 		return -1;
 	}		
-	return res;
+	return 0;
 }
 
 int usecount()

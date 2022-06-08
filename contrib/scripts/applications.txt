@@ -1,6 +1,4 @@
 AGI=OGI
-DeadAGI=DeadOGI
-EAGI=EOGI
 Macro=Proc
 NVBackgroundDetect=BackgroundDetect
 VoiceMailMain2=VoiceMailMain
@@ -38,14 +36,14 @@ DBget
 DBput
 DISA
 DateTime
-DeadOGI
+DeadAGI
 DevState
 Dial
 Dictate
 DigitTimeout
 Directory
 DumpChan
-EOGI
+EAGI
 Echo
 EndWhile
 Eval
@@ -112,7 +110,6 @@ SendText
 Set
 SetAMAFlags
 SetAccount
-SetCallerPres
 SetCDRUserField
 SetGlobalVar
 SetGroup
@@ -148,4 +145,5 @@ WaitForRing
 WaitForSilence
 WaitMusicOnHold
 While
+WhiteNoise
 Zapateller

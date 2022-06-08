@@ -2,7 +2,7 @@
  * app_nconference
  *
  * NConference
- * A channel independent conference application for CallWeaver
+ * A channel independent conference application for Openpbx
  *
  * Copyright (C) 2002, 2003 Navynet SRL
  * http://www.navynet.it
@@ -24,9 +24,9 @@
 #include "frame.h"
 #include "sounds.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/apps/nconference/sounds.c $", "$Revision: 4723 $");
+OPENPBX_FILE_VERSION(__FILE__, "$Revision: 2308 $");
 
-static int conf_play_soundfile( struct cw_conf_member *member, char * file ) 
+static int conf_play_soundfile( struct opbx_conf_member *member, char * file ) 
 {
     int res = 0;
 
@@ -36,42 +36,42 @@ static int conf_play_soundfile( struct cw_conf_member *member, char * file )
     if ( !member->chan ) 
 	return 0;
 
-    cw_stopstream(member->chan);
+    opbx_stopstream(member->chan);
 
     queue_incoming_silent_frame(member,3);
 
     if (
-	    ( strrchr(file,'/')!=NULL ) || (cw_fileexists(file, NULL, member->chan->language) > 0) 
+	    ( strrchr(file,'/')!=NULL ) || (opbx_fileexists(file, NULL, member->chan->language) > 0) 
        )
     {
-	res = cw_streamfile(member->chan, file, member->chan->language);
+	res = opbx_streamfile(member->chan, file, member->chan->language);
 	if (!res) { 
-	    res = cw_waitstream(member->chan, CW_DIGIT_ANY);	
-	    cw_stopstream(member->chan);
+	    res = opbx_waitstream(member->chan, OPBX_DIGIT_ANY);	
+	    opbx_stopstream(member->chan);
 	}
-	//cw_log(LOG_DEBUG, "Soundfile found %s - %d\n", file, cw_fileexists(file, NULL,  member->chan->language) );
+	//opbx_log(LOG_DEBUG, "Soundfile found %s - %d\n", file, opbx_fileexists(file, NULL,  member->chan->language) );
     } else 
-	cw_log(LOG_DEBUG, "Soundfile not found %s - lang: %s\n", file, member->chan->language );
+	opbx_log(LOG_DEBUG, "Soundfile not found %s - lang: %s\n", file, member->chan->language );
 
 
-    cw_set_write_format( member->chan, CW_FORMAT_SLINEAR );
-    cw_generator_activate(member->chan,&membergen,member);
+    opbx_set_write_format( member->chan, OPBX_FORMAT_SLINEAR );
+    opbx_generator_activate(member->chan,&membergen,member);
 
     return res;
 }
 
 
 
-int conf_play_soundqueue( struct cw_conf_member *member ) 
+int conf_play_soundqueue( struct opbx_conf_member *member ) 
 {
     int res = 0;
 
-    cw_stopstream(member->chan);
+    opbx_stopstream(member->chan);
     queue_incoming_silent_frame(member,3);
 
-    struct cw_conf_soundq *toplay, *delitem;
+    struct opbx_conf_soundq *toplay, *delitem;
 
-    cw_mutex_lock(&member->lock);
+    opbx_mutex_lock(&member->lock);
 
     toplay = member->soundq;
     while (  ( toplay != NULL) && ( res == 0 )  ) {
@@ -93,7 +93,7 @@ int conf_play_soundqueue( struct cw_conf_member *member )
 	member->soundq = toplay;
 	free(delitem);
     }
-    cw_mutex_unlock(&member->lock);
+    opbx_mutex_unlock(&member->lock);
 
     if (res != 0)
         conference_stop_sounds( member );
@@ -105,18 +105,18 @@ int conf_play_soundqueue( struct cw_conf_member *member )
 
 
 
-int conference_queue_sound( struct cw_conf_member *member, char *soundfile )
+int conference_queue_sound( struct opbx_conf_member *member, char *soundfile )
 {
-	struct cw_conf_soundq *newsound;
-	struct cw_conf_soundq **q;
+	struct opbx_conf_soundq *newsound;
+	struct opbx_conf_soundq **q;
 
 	if( member == NULL ) {
-	    cw_log(LOG_WARNING, "Member is null. Cannot play\n");
+	    opbx_log(LOG_WARNING, "Member is null. Cannot play\n");
 	    return 0;
 	}
 
 	if( soundfile == NULL ) {
-	    cw_log(LOG_WARNING, "Soundfile is null. Cannot play\n");
+	    opbx_log(LOG_WARNING, "Soundfile is null. Cannot play\n");
 	    return 0;
 	}
 
@@ -128,35 +128,35 @@ int conference_queue_sound( struct cw_conf_member *member, char *soundfile )
 	    return 0;
 	}
 
-	newsound = calloc(1,sizeof(struct cw_conf_soundq));
+	newsound = calloc(1,sizeof(struct opbx_conf_soundq));
 
-	cw_copy_string(newsound->name, soundfile, sizeof(newsound->name));
+	opbx_copy_string(newsound->name, soundfile, sizeof(newsound->name));
 
 	// append sound to the end of the list.
 
-	cw_mutex_lock(&member->lock);
+	opbx_mutex_lock(&member->lock);
 
 	for( q = &member->soundq; *q; q = &((*q)->next) ) ;;
 	*q = newsound;
 
-	cw_mutex_unlock(&member->lock);
+	opbx_mutex_unlock(&member->lock);
 
 	return 0 ;
 }
 
 
-int conference_queue_number( struct cw_conf_member *member, char *str )
+int conference_queue_number( struct opbx_conf_member *member, char *str )
 {
-	struct cw_conf_soundq *newsound;
-	struct cw_conf_soundq **q;
+	struct opbx_conf_soundq *newsound;
+	struct opbx_conf_soundq **q;
 
 	if( member == NULL ) {
-	    cw_log(LOG_WARNING, "Member is null. Cannot play\n");
+	    opbx_log(LOG_WARNING, "Member is null. Cannot play\n");
 	    return 0;
 	}
 
 	if( str == NULL ) {
-	    cw_log(LOG_WARNING, "STRING is null. Cannot play\n");
+	    opbx_log(LOG_WARNING, "STRING is null. Cannot play\n");
 	    return 0;
 	}
 
@@ -203,16 +203,16 @@ int conference_queue_number( struct cw_conf_member *member, char *str )
 		num++;
 
 	    if (fn) {
-		newsound = calloc(1,sizeof(struct cw_conf_soundq));
-		cw_copy_string(newsound->name, fn, sizeof(newsound->name));
+		newsound = calloc(1,sizeof(struct opbx_conf_soundq));
+		opbx_copy_string(newsound->name, fn, sizeof(newsound->name));
 
 		// append sound to the end of the list.
-		cw_mutex_lock(&member->lock);
+		opbx_mutex_lock(&member->lock);
 
 		for( q = &member->soundq; *q; q = &((*q)->next) ) ;;
 		*q = newsound;
 
-		cw_mutex_unlock(&member->lock);
+		opbx_mutex_unlock(&member->lock);
 
 	    }
 	}
@@ -221,20 +221,20 @@ int conference_queue_number( struct cw_conf_member *member, char *str )
 }
 
 
-int conference_stop_sounds( struct cw_conf_member *member )
+int conference_stop_sounds( struct opbx_conf_member *member )
 {
-	struct cw_conf_soundq *sound;
-	struct cw_conf_soundq *next;
+	struct opbx_conf_soundq *sound;
+	struct opbx_conf_soundq *next;
 
 
 	if( member == NULL ) {
-	    cw_log(LOG_WARNING, "Member is null. Cannot play\n");
+	    opbx_log(LOG_WARNING, "Member is null. Cannot play\n");
 	    return 0;
 	}
 
 	// clear all sounds
 
-	cw_mutex_lock(&member->lock);
+	opbx_mutex_lock(&member->lock);
 
 	sound = member->soundq;
 	member->soundq = NULL;
@@ -245,9 +245,9 @@ int conference_stop_sounds( struct cw_conf_member *member )
 	    sound = next;
 	}
 
-	cw_mutex_unlock(&member->lock);
+	opbx_mutex_unlock(&member->lock);
 
-	cw_log(CW_CONF_DEBUG,"Stopped sounds to member %s\n", member->chan->name);	
+	opbx_log(OPBX_CONF_DEBUG,"Stopped sounds to member %s\n", member->chan->name);	
 	
 	return 0 ;
 }

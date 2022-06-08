@@ -24,12 +24,13 @@
 #include "sccp_actions.h"
 #include "sccp_utils.h"
 
+
 void sccp_indicate_lock(sccp_channel_t * c, uint8_t state) {
 	if (!c)
 		return;
-	cw_mutex_lock(&c->lock);
+	opbx_mutex_lock(&c->lock);
 	sccp_indicate_nolock(c, state);
-	cw_mutex_unlock(&c->lock);
+	opbx_mutex_unlock(&c->lock);
 }
 
 void sccp_indicate_nolock(sccp_channel_t * c, uint8_t state) {
@@ -38,18 +39,18 @@ void sccp_indicate_nolock(sccp_channel_t * c, uint8_t state) {
 	uint8_t oldstate;
 
 	if (!c) {
-		cw_log(LOG_ERROR, "SCCP: No channel, nothing to indicate?\n");
+		opbx_log(LOG_ERROR, "SCCP: No channel, nothing to indicate?\n");
 		return;
 	}
 	if (!c->device) {
-		cw_log(LOG_ERROR, "SCCP: The channel %d does not have a device\n",c->callid);
+		opbx_log(LOG_ERROR, "SCCP: The channel %d does not have a device\n",c->callid);
 		return;
 	}
 
 	d = c->device;
 
 	if (!c->line) {
-		cw_log(LOG_ERROR, "SCCP: The channel %d does not have a line\n",c->callid);
+		opbx_log(LOG_ERROR, "SCCP: The channel %d does not have a line\n",c->callid);
 		return;
 	}
 
@@ -63,7 +64,7 @@ void sccp_indicate_nolock(sccp_channel_t * c, uint8_t state) {
 
 	switch (state) {
 	case SCCP_CHANNELSTATE_DOWN:
-/*		sccp_cw_setstate(c, CW_STATE_DOWN); */
+/*		sccp_opbx_setstate(c, OPBX_STATE_DOWN); */
 		break;
 	case SCCP_CHANNELSTATE_OFFHOOK:
 		/* clear all the display buffers */
@@ -81,7 +82,7 @@ void sccp_indicate_nolock(sccp_channel_t * c, uint8_t state) {
 		sccp_dev_set_keyset(d,l->instance,c->callid, KEYMODE_OFFHOOK);
 		sccp_dev_set_cplane(l,1);
 		sccp_dev_starttone(d, SKINNY_TONE_INSIDEDIALTONE, l->instance, c->callid, 0);
-		sccp_cw_setstate(c, CW_STATE_OFFHOOK);
+		sccp_opbx_setstate(c, OPBX_STATE_OFFHOOK);
 		/* for earlyrtp take a look at sccp_channel_newcall because we have no c->owner here */
 		break;
 	case SCCP_CHANNELSTATE_ONHOOK:
@@ -98,7 +99,7 @@ void sccp_indicate_nolock(sccp_channel_t * c, uint8_t state) {
 			sccp_dev_set_ringer(d, SKINNY_STATION_RINGOFF, l->instance, c->callid);
 		sccp_handle_time_date_req(d->session, NULL);
 		c->state = SCCP_CHANNELSTATE_DOWN;
-		sccp_cw_setstate(c, CW_STATE_DOWN);
+		sccp_opbx_setstate(c, OPBX_STATE_DOWN);
 		break;
 	case SCCP_CHANNELSTATE_RINGOUT:
 		sccp_channel_set_callstate(c, SKINNY_CALLSTATE_RINGOUT);
@@ -111,7 +112,7 @@ void sccp_indicate_nolock(sccp_channel_t * c, uint8_t state) {
 			sccp_dev_starttone(d, SKINNY_TONE_ALERTINGTONE, l->instance, c->callid, 0);
 		sccp_dev_set_keyset(d, l->instance, c->callid, KEYMODE_RINGOUT);
 		sccp_dev_displayprompt(d, l->instance, c->callid, SKINNY_DISP_RING_OUT, 0);
-		sccp_cw_setstate(c, CW_STATE_RING);
+		sccp_opbx_setstate(c, OPBX_STATE_RING);
 		break;
 	case SCCP_CHANNELSTATE_RINGIN:
 		/* clear all the display buffers */
@@ -125,7 +126,7 @@ void sccp_indicate_nolock(sccp_channel_t * c, uint8_t state) {
 		sccp_dev_set_lamp(d, SKINNY_STIMULUS_LINE, l->instance, SKINNY_LAMP_BLINK);
 		sccp_dev_set_ringer(d, c->ringermode, l->instance, c->callid);
 		sccp_dev_set_keyset(d, l->instance, c->callid, KEYMODE_RINGIN);
-		sccp_cw_setstate(c, CW_STATE_RINGING);
+		sccp_opbx_setstate(c, OPBX_STATE_RINGING);
 		break;
 	case SCCP_CHANNELSTATE_CONNECTED:
 		sccp_dev_set_ringer(d, SKINNY_STATION_RINGOFF, l->instance, c->callid);
@@ -141,15 +142,15 @@ void sccp_indicate_nolock(sccp_channel_t * c, uint8_t state) {
 		if (!c->rtp) {
 			sccp_channel_openreceivechannel(c);
 		}
-		/* callweaver wants rtp open before CW_STATE_UP */
-		sccp_cw_setstate(c, CW_STATE_UP);
+		/* openpbx wants rtp open before OPBX_STATE_UP */
+		sccp_opbx_setstate(c, OPBX_STATE_UP);
 		break;
 	case SCCP_CHANNELSTATE_BUSY:
 		/* it will be emulated if the rtp audio stream is open */
 		if (!c->rtp)
 			sccp_dev_starttone(d, SKINNY_TONE_LINEBUSYTONE, l->instance, c->callid, 0);
 		sccp_dev_displayprompt(d, l->instance, c->callid, SKINNY_DISP_BUSY, 0);
-		sccp_cw_setstate(c, CW_STATE_BUSY);
+		sccp_opbx_setstate(c, OPBX_STATE_BUSY);
 		break;
 	case SCCP_CHANNELSTATE_PROCEED:
 		sccp_dev_stoptone(d, l->instance, c->callid);
@@ -159,7 +160,7 @@ void sccp_indicate_nolock(sccp_channel_t * c, uint8_t state) {
 		if (!c->rtp) {
 			sccp_channel_openreceivechannel(c);
 		}
-		/* sccp_cw_setstate(c, CW_STATE_UP); */
+		/* sccp_opbx_setstate(c, OPBX_STATE_UP); */
 		break;
 	case SCCP_CHANNELSTATE_HOLD:
 		sccp_channel_closereceivechannel(c);
@@ -184,7 +185,7 @@ void sccp_indicate_nolock(sccp_channel_t * c, uint8_t state) {
 		sccp_channel_send_callinfo(c);
 		sccp_dev_displayprompt(d, l->instance, c->callid, SKINNY_DISP_CALL_WAITING, 0);
 		sccp_dev_set_keyset(d, l->instance, c->callid, KEYMODE_RINGIN);
-		sccp_cw_setstate(c, CW_STATE_RINGING);
+		sccp_opbx_setstate(c, OPBX_STATE_RINGING);
 		break;
 	case SCCP_CHANNELSTATE_CALLTRANSFER:
 		sccp_dev_displayprompt(d, l->instance, c->callid, SKINNY_DISP_TRANSFER, 0);
@@ -203,7 +204,7 @@ void sccp_indicate_nolock(sccp_channel_t * c, uint8_t state) {
 		sccp_channel_set_callstate(c, SKINNY_CALLSTATE_INVALIDNUMBER);
 		sccp_channel_send_callinfo(c);
 		sccp_dev_displayprompt(d, l->instance, c->callid, SKINNY_DISP_UNKNOWN_NUMBER, 0);
-		/* don't set CW_STATE_DOWN. we hangup only on onhook and endcall softkey */
+		/* don't set OPBX_STATE_DOWN. we hangup only on onhook and endcall softkey */
 		break;
 	case SCCP_CHANNELSTATE_DIALING:
 		sccp_dev_stoptone(d, l->instance, c->callid);
@@ -213,7 +214,7 @@ void sccp_indicate_nolock(sccp_channel_t * c, uint8_t state) {
 		if (d->earlyrtp == SCCP_CHANNELSTATE_DIALING && !c->rtp) {
 			sccp_channel_openreceivechannel(c);
 		}
-		sccp_cw_setstate(c, CW_STATE_DIALING);
+		sccp_opbx_setstate(c, OPBX_STATE_DIALING);
 		break;
 	}
 	sccp_log(10)(VERBOSE_PREFIX_3 "%s: Finish to indicate state SCCP (%s), SKINNY (%s) on call %s-%d\n",d->id, sccp_indicate2str(state), sccp_callstate2str(c->callstate), l->name, c->callid);

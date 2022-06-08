@@ -1,10 +1,10 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  *
  * Copyright (C) 1999 - 2005, Digium, Inc.
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -39,24 +39,24 @@
 #include <arpa/inet.h>
 #include <openssl/evp.h>
 
-#include "callweaver.h"
+#include "openpbx.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/corelib/utils.c $", "$Revision: 4741 $")
+OPENPBX_FILE_VERSION("$HeadURL$", "$Revision$")
 
-#include "callweaver/lock.h"
-#include "callweaver/io.h"
-#include "callweaver/logger.h"
-#include "callweaver/options.h"
-#include "callweaver/config.h"
+#include "openpbx/lock.h"
+#include "openpbx/io.h"
+#include "openpbx/logger.h"
+#include "openpbx/options.h"
+#include "openpbx/config.h"
 
-#define CW_API_MODULE		/* ensure that inlinable API functions will be built in this module if required */
-#include "callweaver/strings.h"
+#define OPBX_API_MODULE		/* ensure that inlinable API functions will be built in this module if required */
+#include "openpbx/strings.h"
 
-#define CW_API_MODULE		/* ensure that inlinable API functions will be built in this module if required */
-#include "callweaver/time.h"
+#define OPBX_API_MODULE		/* ensure that inlinable API functions will be built in this module if required */
+#include "openpbx/time.h"
 
-#define CW_API_MODULE		/* ensure that inlinable API functions will be built in this module if required */
-#include "callweaver/utils.h"
+#define OPBX_API_MODULE		/* ensure that inlinable API functions will be built in this module if required */
+#include "openpbx/utils.h"
 
 static char base64[64];
 static char b2a[256];
@@ -67,7 +67,7 @@ static char b2a[256];
 #define ERANGE 34
 #undef gethostbyname
 
-CW_MUTEX_DEFINE_STATIC(__mutex);
+OPBX_MUTEX_DEFINE_STATIC(__mutex);
 
 /* Recursive replacement for gethostbyname for BSD-based systems.  This
 routine is derived from code originally written and placed in the public 
@@ -79,7 +79,7 @@ static int gethostbyname_r (const char *name, struct hostent *ret, char *buf,
 {
 	int hsave;
 	struct hostent *ph;
-	cw_mutex_lock(&__mutex); /* begin critical area */
+	opbx_mutex_lock(&__mutex); /* begin critical area */
 	hsave = h_errno;
 
 	ph = gethostbyname(name);
@@ -113,7 +113,7 @@ static int gethostbyname_r (const char *name, struct hostent *ret, char *buf,
 		/* as a terminator must be there, the minimum value is ph->h_length */
 		if(nbytes > buflen) {
 			*result = NULL;
-			cw_mutex_unlock(&__mutex); /* end critical area */
+			opbx_mutex_unlock(&__mutex); /* end critical area */
 			return ERANGE; /* not enough space in buf!! */
 		}
 
@@ -162,7 +162,7 @@ static int gethostbyname_r (const char *name, struct hostent *ret, char *buf,
 
 	}
 	h_errno = hsave;  /* restore h_errno */
-	cw_mutex_unlock(&__mutex); /* end critical area */
+	opbx_mutex_unlock(&__mutex); /* end critical area */
 
 	return (*result == NULL); /* return 0 on success, non-zero on error */
 }
@@ -173,7 +173,7 @@ static int gethostbyname_r (const char *name, struct hostent *ret, char *buf,
 /*! \brief Re-entrant (thread safe) version of gethostbyname that replaces the 
    standard gethostbyname (which is not thread safe)
 */
-struct hostent *cw_gethostbyname(const char *host, struct cw_hostent *hp)
+struct hostent *opbx_gethostbyname(const char *host, struct opbx_hostent *hp)
 {
 	int res;
 	int herrno;
@@ -197,7 +197,7 @@ struct hostent *cw_gethostbyname(const char *host, struct cw_hostent *hp)
 		/* Forge a reply for IP's to avoid octal IP's being interpreted as octal */
 		if (dots != 3)
 			return NULL;
-		memset(hp, 0, sizeof(struct cw_hostent));
+		memset(hp, 0, sizeof(struct opbx_hostent));
 		hp->hp.h_addr_list = (void *) hp->buf;
 		hp->hp.h_addr = hp->buf + sizeof(void *);
 		if (inet_pton(AF_INET, host, hp->hp.h_addr) > 0)
@@ -221,8 +221,8 @@ struct hostent *cw_gethostbyname(const char *host, struct cw_hostent *hp)
 
 
 
-CW_MUTEX_DEFINE_STATIC(test_lock);
-CW_MUTEX_DEFINE_STATIC(test_lock2);
+OPBX_MUTEX_DEFINE_STATIC(test_lock);
+OPBX_MUTEX_DEFINE_STATIC(test_lock2);
 static pthread_t test_thread; 
 static int lock_count = 0;
 static int test_errors = 0;
@@ -232,22 +232,22 @@ static int test_errors = 0;
    working properly, and non-zero if they are not working properly. */
 static void *test_thread_body(void *data) 
 { 
-	cw_mutex_lock(&test_lock);
+	opbx_mutex_lock(&test_lock);
 	lock_count += 10;
 	if (lock_count != 10) 
 		test_errors++;
-	cw_mutex_lock(&test_lock);
+	opbx_mutex_lock(&test_lock);
 	lock_count += 10;
 	if (lock_count != 20) 
 		test_errors++;
-	cw_mutex_lock(&test_lock2);
-	cw_mutex_unlock(&test_lock);
+	opbx_mutex_lock(&test_lock2);
+	opbx_mutex_unlock(&test_lock);
 	lock_count -= 10;
 	if (lock_count != 10) 
 		test_errors++;
-	cw_mutex_unlock(&test_lock);
+	opbx_mutex_unlock(&test_lock);
 	lock_count -= 10;
-	cw_mutex_unlock(&test_lock2);
+	opbx_mutex_unlock(&test_lock2);
 	if (lock_count != 0) 
 		test_errors++;
 	return NULL;
@@ -255,25 +255,25 @@ static void *test_thread_body(void *data)
 
 int test_for_thread_safety(void)
 { 
-	cw_mutex_lock(&test_lock2);
-	cw_mutex_lock(&test_lock);
+	opbx_mutex_lock(&test_lock2);
+	opbx_mutex_lock(&test_lock);
 	lock_count += 1;
-	cw_mutex_lock(&test_lock);
+	opbx_mutex_lock(&test_lock);
 	lock_count += 1;
-	cw_pthread_create(&test_thread, NULL, test_thread_body, NULL); 
+	opbx_pthread_create(&test_thread, NULL, test_thread_body, NULL); 
 	usleep(100);
 	if (lock_count != 2) 
 		test_errors++;
-	cw_mutex_unlock(&test_lock);
+	opbx_mutex_unlock(&test_lock);
 	lock_count -= 1;
 	usleep(100); 
 	if (lock_count != 1) 
 		test_errors++;
-	cw_mutex_unlock(&test_lock);
+	opbx_mutex_unlock(&test_lock);
 	lock_count -= 1;
 	if (lock_count != 0) 
 		test_errors++;
-	cw_mutex_unlock(&test_lock2);
+	opbx_mutex_unlock(&test_lock2);
 	usleep(100);
 	if (lock_count != 0) 
 		test_errors++;
@@ -281,7 +281,7 @@ int test_for_thread_safety(void)
 	return(test_errors);          /* return 0 on success. */
 }
 
-void cw_hash_to_hex(char *output, unsigned char *md_value, unsigned int md_len)
+void opbx_hash_to_hex(char *output, unsigned char *md_value, unsigned int md_len)
 {
 	int x;
 	int len = 0;
@@ -290,8 +290,8 @@ void cw_hash_to_hex(char *output, unsigned char *md_value, unsigned int md_len)
 		len += sprintf(output + len, "%2.2x", md_value[x]);
 }
 
-/*! \Brief cw_md5_hash_bin: Produce 16 char MD5 hash of value. ---*/
-int cw_md5_hash_bin(unsigned char *md_value, unsigned char *input, unsigned int input_len)
+/*! \Brief opbx_md5_hash_bin: Produce 16 char MD5 hash of value. ---*/
+int opbx_md5_hash_bin(unsigned char *md_value, unsigned char *input, unsigned int input_len)
 {
 	EVP_MD_CTX mdctx;
 	unsigned int md_len;
@@ -303,17 +303,17 @@ int cw_md5_hash_bin(unsigned char *md_value, unsigned char *input, unsigned int 
 	return md_len;
 }
 
-void cw_md5_hash(char *output, char *input)
+void opbx_md5_hash(char *output, char *input)
 {
 	unsigned int md_len;
-	unsigned char md_value[CW_MAX_BINARY_MD_SIZE];
+	unsigned char md_value[OPBX_MAX_BINARY_MD_SIZE];
 	
-	md_len = cw_md5_hash_bin(md_value, (unsigned char *) input, strlen(input));
+	md_len = opbx_md5_hash_bin(md_value, (unsigned char *) input, strlen(input));
 
-	cw_hash_to_hex(output, md_value, md_len);
+	opbx_hash_to_hex(output, md_value, md_len);
 }
 
-int cw_md5_hash_two_bin(unsigned char *md_value,
+int opbx_md5_hash_two_bin(unsigned char *md_value,
 			  unsigned char *input1, unsigned int input1_len,
 			  unsigned char *input2, unsigned int input2_len)
 {
@@ -328,18 +328,18 @@ int cw_md5_hash_two_bin(unsigned char *md_value,
 	return md_len;
 }
 
-void cw_md5_hash_two(char *output, char *input1, char *input2)
+void opbx_md5_hash_two(char *output, char *input1, char *input2)
 {
 	unsigned int md_len;
-	unsigned char md_value[CW_MAX_BINARY_MD_SIZE];
+	unsigned char md_value[OPBX_MAX_BINARY_MD_SIZE];
 	
-	md_len = cw_md5_hash_two_bin(md_value, (unsigned char *) input1, strlen(input1),
+	md_len = opbx_md5_hash_two_bin(md_value, (unsigned char *) input1, strlen(input1),
 				       (unsigned char *) input2, strlen(input2));
 
-	cw_hash_to_hex(output, md_value, md_len);
+	opbx_hash_to_hex(output, md_value, md_len);
 }
 
-int cw_base64decode(unsigned char *dst, const char *src, int max)
+int opbx_base64decode(unsigned char *dst, const char *src, int max)
 {
 	int cnt = 0;
 	unsigned int byte = 0;
@@ -373,7 +373,7 @@ int cw_base64decode(unsigned char *dst, const char *src, int max)
 	return cnt;
 }
 
-int cw_base64encode(char *dst, const unsigned char *src, int srclen, int max)
+int opbx_base64encode(char *dst, const unsigned char *src, int srclen, int max)
 {
 	int cnt = 0;
 	unsigned int byte = 0;
@@ -438,7 +438,7 @@ static void base64_init(void)
 	b2a[(int)'/'] = 63;
 }
 
-/*! \brief  cw_uri_encode: Turn text string to URI-encoded %XX version ---*/
+/*! \brief  opbx_uri_encode: Turn text string to URI-encoded %XX version ---*/
 /* 	At this point, we're converting from ISO-8859-x (8-bit), not UTF8
 	as in the SIP protocol spec 
 	If doreserved == 1 we will convert reserved characters also.
@@ -450,9 +450,9 @@ static void base64_init(void)
 	Note: The doreserved option is needed for replaces header in
 	SIP transfers.
 */
-char *cw_uri_encode(char *string, char *outbuf, int buflen, int doreserved) 
+char *opbx_uri_encode(char *string, char *outbuf, int buflen, int doreserved) 
 {
-	char *reserved = ";/?:@&=+$,# ";	/* Reserved chars */
+	char *reserved = ";/?:@&=+$, ";	/* Reserved chars */
 
  	char *ptr  = string;	/* Start with the string */
 	char *out = NULL;
@@ -480,8 +480,8 @@ char *cw_uri_encode(char *string, char *outbuf, int buflen, int doreserved)
 	return outbuf;
 }
 
-/*! \brief  cw_uri_decode: Decode SIP URI, URN, URL (overwrite the string)  ---*/
-void cw_uri_decode(char *s) 
+/*! \brief  opbx_uri_decode: Decode SIP URI, URN, URL (overwrite the string)  ---*/
+void opbx_uri_decode(char *s) 
 {
 	char *o;
 	unsigned int tmp;
@@ -497,23 +497,23 @@ void cw_uri_decode(char *s)
 	*o = '\0';
 }
 
-/*! \brief  cw_inet_ntoa: Recursive thread safe replacement of inet_ntoa */
-const char *cw_inet_ntoa(char *buf, int bufsiz, struct in_addr ia)
+/*! \brief  opbx_inet_ntoa: Recursive thread safe replacement of inet_ntoa */
+const char *opbx_inet_ntoa(char *buf, int bufsiz, struct in_addr ia)
 {
 	return inet_ntop(AF_INET, &ia, buf, bufsiz);
 }
 
-int cw_utils_init(void)
+int opbx_utils_init(void)
 {
 	base64_init();
 	return 0;
 }
 
 #ifndef __linux__
-#undef pthread_create /* For cw_pthread_create function only */
+#undef pthread_create /* For opbx_pthread_create function only */
 #endif /* !__linux__ */
 
-int cw_pthread_create_stack(pthread_t *thread, pthread_attr_t *attr, void *(*start_routine)(void *), void *data, size_t stacksize)
+int opbx_pthread_create_stack(pthread_t *thread, pthread_attr_t *attr, void *(*start_routine)(void *), void *data, size_t stacksize)
 {
 	pthread_attr_t lattr;
 	if (!attr) {
@@ -530,18 +530,18 @@ int cw_pthread_create_stack(pthread_t *thread, pthread_attr_t *attr, void *(*sta
 	   the priority afterwards with pthread_setschedparam(). */
 	errno = pthread_attr_setinheritsched(attr, PTHREAD_INHERIT_SCHED);
 	if (errno)
-		cw_log(LOG_WARNING, "pthread_attr_setinheritsched returned non-zero: %s\n", strerror(errno));
+		opbx_log(LOG_WARNING, "pthread_attr_setinheritsched returned non-zero: %s\n", strerror(errno));
 #endif
 
 	if (!stacksize)
-		stacksize = CW_STACKSIZE;
+		stacksize = OPBX_STACKSIZE;
 	errno = pthread_attr_setstacksize(attr, stacksize);
 	if (errno)
-		cw_log(LOG_WARNING, "pthread_attr_setstacksize returned non-zero: %s\n", strerror(errno));
-	return pthread_create(thread, attr, start_routine, data); /* We're in cw_pthread_create, so it's okay */
+		opbx_log(LOG_WARNING, "pthread_attr_setstacksize returned non-zero: %s\n", strerror(errno));
+	return pthread_create(thread, attr, start_routine, data); /* We're in opbx_pthread_create, so it's okay */
 }
 
-int cw_wait_for_input(int fd, int ms)
+int opbx_wait_for_input(int fd, int ms)
 {
 	struct pollfd pfd[1];
 	memset(pfd, 0, sizeof(pfd));
@@ -550,7 +550,24 @@ int cw_wait_for_input(int fd, int ms)
 	return poll(pfd, 1, ms);
 }
 
-int cw_build_string_va(char **buffer, size_t *space, const char *fmt, va_list ap)
+char *opbx_strip_quoted(char *s, const char *beg_quotes, const char *end_quotes)
+{
+	char *e;
+	char *q;
+
+	s = opbx_strip(s);
+	if ((q = strchr(beg_quotes, *s))) {
+		e = s + strlen(s) - 1;
+		if (*e == *(end_quotes + (q - beg_quotes))) {
+			s++;
+			*e = '\0';
+		}
+	}
+
+	return s;
+}
+
+int opbx_build_string_va(char **buffer, size_t *space, const char *fmt, va_list ap)
 {
 	int result;
 
@@ -569,21 +586,21 @@ int cw_build_string_va(char **buffer, size_t *space, const char *fmt, va_list ap
 	return 0;
 }
 
-int cw_build_string(char **buffer, size_t *space, const char *fmt, ...)
+int opbx_build_string(char **buffer, size_t *space, const char *fmt, ...)
 {
 	va_list ap;
 	int result;
 
 	va_start(ap, fmt);
-	result = cw_build_string_va(buffer, space, fmt, ap);
+	result = opbx_build_string_va(buffer, space, fmt, ap);
 	va_end(ap);
 
 	return result;
 }
 
-int cw_true(const char *s)
+int opbx_true(const char *s)
 {
-	if (cw_strlen_zero(s))
+	if (opbx_strlen_zero(s))
 		return 0;
 
 	/* Determine if this is a true value */
@@ -598,9 +615,9 @@ int cw_true(const char *s)
 	return 0;
 }
 
-int cw_false(const char *s)
+int opbx_false(const char *s)
 {
-	if (cw_strlen_zero(s))
+	if (opbx_strlen_zero(s))
 		return 0;
 
 	/* Determine if this is a false value */
@@ -623,19 +640,19 @@ int cw_false(const char *s)
 static struct timeval tvfix(struct timeval a)
 {
 	if (a.tv_usec >= ONE_MILLION) {
-		cw_log(LOG_WARNING, "warning too large timestamp %ld.%ld\n",
+		opbx_log(LOG_WARNING, "warning too large timestamp %ld.%ld\n",
 			a.tv_sec, (long int) a.tv_usec);
 		a.tv_sec += a.tv_usec % ONE_MILLION;
 		a.tv_usec %= ONE_MILLION;
 	} else if (a.tv_usec < 0) {
-		cw_log(LOG_WARNING, "warning negative timestamp %ld.%ld\n",
+		opbx_log(LOG_WARNING, "warning negative timestamp %ld.%ld\n",
 				a.tv_sec, (long int) a.tv_usec);
 		a.tv_usec = 0;
 	}
 	return a;
 }
 
-struct timeval cw_tvadd(struct timeval a, struct timeval b)
+struct timeval opbx_tvadd(struct timeval a, struct timeval b)
 {
 	/* consistency checks to guarantee usec in 0..999999 */
 	a = tvfix(a);
@@ -649,7 +666,7 @@ struct timeval cw_tvadd(struct timeval a, struct timeval b)
 	return a;
 }
 
-struct timeval cw_tvsub(struct timeval a, struct timeval b)
+struct timeval opbx_tvsub(struct timeval a, struct timeval b)
 {
 	/* consistency checks to guarantee usec in 0..999999 */
 	a = tvfix(a);
@@ -681,21 +698,26 @@ static char *upper(const char *orig, char *buf, int bufsize)
 
 char *strcasestr(const char *haystack, const char *needle)
 {
-	char *offset;
 	char *u1, *u2;
 	int u1len = strlen(haystack) + 1, u2len = strlen(needle) + 1;
 
-	if (u2len > u1len) {
-		/* Needle bigger than haystack */
-		return NULL;
-	}
 	u1 = alloca(u1len);
 	u2 = alloca(u2len);
-	offset = strstr(upper(haystack, u1, u1len), upper(needle, u2, u2len));
-	if (offset) {
-		/* Return the offset into the original string */
-		return ((char *)((unsigned long)haystack + (unsigned long)(offset - u1)));
+	if (u1 && u2) {
+		char *offset;
+		if (u2len > u1len) {
+			/* Needle bigger than haystack */
+			return NULL;
+		}
+		offset = strstr(upper(haystack, u1, u1len), upper(needle, u2, u2len));
+		if (offset) {
+			/* Return the offset into the original string */
+			return ((char *)((unsigned long)haystack + (unsigned long)(offset - u1)));
+		} else {
+			return NULL;
+		}
 	} else {
+		opbx_log(LOG_ERROR, "Out of memory\n");
 		return NULL;
 	}
 }
@@ -714,7 +736,7 @@ size_t strnlen(const char *s, size_t n)
 }
 #endif /* !HAVE_STRNLEN */
 
-#if !defined(HAVE_STRNDUP) && !defined(__CW_DEBUG_MALLOC)
+#if !defined(HAVE_STRNDUP) && !defined(__OPBX_DEBUG_MALLOC)
 char *strndup(const char *s, size_t n)
 {
 	size_t len = strnlen(s, n);
@@ -726,9 +748,9 @@ char *strndup(const char *s, size_t n)
 	new[len] = '\0';
 	return memcpy(new, s, len);
 }
-#endif /* !defined(HAVE_STRNDUP) && !defined(__CW_DEBUG_MALLOC) */
+#endif /* !defined(HAVE_STRNDUP) && !defined(__OPBX_DEBUG_MALLOC) */
 
-#if !defined(HAVE_VASPRINTF) && !defined(__CW_DEBUG_MALLOC)
+#if !defined(HAVE_VASPRINTF) && !defined(__OPBX_DEBUG_MALLOC)
 int vasprintf(char **strp, const char *fmt, va_list ap)
 {
 	int size;
@@ -746,7 +768,7 @@ int vasprintf(char **strp, const char *fmt, va_list ap)
 
 	return size;
 }
-#endif /* !defined(HAVE_VASPRINTF) && !defined(__CW_DEBUG_MALLOC) */
+#endif /* !defined(HAVE_VASPRINTF) && !defined(__OPBX_DEBUG_MALLOC) */
 
 #ifndef HAVE_STRTOQ
 #ifndef LONG_MIN
@@ -889,25 +911,25 @@ int getloadavg(double *list, int nelem)
  * BSD libc (and others) do not. */
 #ifndef linux
 
-CW_MUTEX_DEFINE_STATIC(randomlock);
+OPBX_MUTEX_DEFINE_STATIC(randomlock);
 
-long int cw_random(void)
+long int opbx_random(void)
 {
 	long int res;
-	cw_mutex_lock(&randomlock);
+	opbx_mutex_lock(&randomlock);
 	res = random();
-	cw_mutex_unlock(&randomlock);
+	opbx_mutex_unlock(&randomlock);
 	return res;
 }
 #endif
 
-void cw_enable_packet_fragmentation(int sock)
+void opbx_enable_packet_fragmentation(int sock)
 {
 #ifdef __linux__
 	int val = IP_PMTUDISC_DONT;
 	
 	if (setsockopt(sock, IPPROTO_IP, IP_MTU_DISCOVER, &val, sizeof(val)))
-		cw_log(LOG_WARNING, "Unable to disable PMTU discovery. Large UDP packets may fail to be delivered when sent from this socket.\n");
+		opbx_log(LOG_WARNING, "Unable to disable PMTU discovery. Large UDP packets may fail to be delivered when sent from this socket.\n");
 #endif
 }
 

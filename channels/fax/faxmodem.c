@@ -1,5 +1,5 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  *
  * Fax Channel Driver
  * 
@@ -49,14 +49,14 @@ static struct faxmodem_state FAXMODEM_STATE[] = {
 static int t31_at_tx_handler(at_state_t *s, void *user_data, const uint8_t *buf, size_t len)
 {
 	struct faxmodem *fm = user_data;
-	ssize_t wrote = write(fm->master, buf, len);
-	if (wrote != len) {
+    ssize_t wrote = write(fm->master, buf, len);
+    if (wrote != len) {
 		do_log(LOGGER.err, "Unable to pass the full buffer onto the device file. %d bytes of %d written.", wrote, len);
-	}
-	return wrote;
+    }
+    return wrote;
 }
 
-static int modem_control_handler(t31_state_t *s, void *user_data, int op, 
+static int modem_control_handler(at_state_t *s, void *user_data, int op, 
 				 const char *num)
 {
 	struct faxmodem *fm = user_data;
@@ -68,7 +68,7 @@ static int modem_control_handler(t31_state_t *s, void *user_data, int op,
 		do_log(LOGGER.err, "DOH! NO CONTROL HANDLER INSTALLED\n");
 	}
 
-	return ret;
+    return ret;
 }
 
 char *faxmodem_state2name(int state) 
@@ -118,48 +118,48 @@ int faxmodem_close(volatile struct faxmodem *fm)
 
 int faxmodem_init(struct faxmodem *fm, faxmodem_control_handler_t control_handler, const char *device_prefix)
 {
-	char buf[256];
-
+	
 	memset(fm, 0, sizeof(*fm));
 
 	fm->master = -1;
 	fm->slave = -1;
 
-	if (openpty(&fm->master, &fm->slave, NULL, NULL, NULL)) {
+    if (openpty(&fm->master, &fm->slave, NULL, NULL, NULL)) {
 		do_log(LOGGER.err, "Fatal error: failed to initialize pty\n");
 		return -1;
-	}
+    }
 
-	ptsname_r(fm->master, buf, sizeof(buf));
+	fm->stty = ttyname(fm->slave);
 
-	do_log(LOGGER.info, "Opened pty, slave device: %s\n", buf);
+    do_log(LOGGER.info, "Opened pty, slave device: %s\n", fm->stty);
 
 	snprintf(fm->devlink, sizeof(fm->devlink), "%s%d", device_prefix, NEXT_ID++);
 
-	if (!unlink(fm->devlink)) {
+    if (!unlink(fm->devlink)) {
 		do_log(LOGGER.warn, "Removed old %s\n", fm->devlink);
-	}
+    }
 
-	if (symlink(buf, fm->devlink)) {
+    if (symlink(fm->stty, fm->devlink)) {
 		do_log(LOGGER.err, "Fatal error: failed to create %s symbolic link\n", fm->devlink);
 		faxmodem_close(fm);
 		return -1;
-	}
+    }
 
-	do_log(LOGGER.info, "Created %s symbolic link\n", fm->devlink);
+    do_log(LOGGER.info, "Created %s symbolic link\n", fm->devlink);
 
-	if (fcntl(fm->master, F_SETFL, fcntl(fm->master, F_GETFL, 0) | O_NONBLOCK)) {
+    if (fcntl(fm->master, F_SETFL, fcntl(fm->master, F_GETFL, 0) | O_NONBLOCK)) {
 		do_log(LOGGER.err, "Cannot set up non-blocking read on %s\n", ttyname(fm->master));
 		faxmodem_close(fm);
-		return -1;
-	}
+        return -1;
+    }
 	
-	if (t31_init(&fm->t31_state, t31_at_tx_handler, fm, modem_control_handler, fm, 0, 0) < 0) {
+    if (t31_init(&fm->t31_state, t31_at_tx_handler, fm, modem_control_handler,
+		 fm, 0, 0) < 0) {
 		do_log(LOGGER.err, "Cannot initialize the T.31 modem\n");
 		faxmodem_close(fm);
         return -1;
 
-	}
+    }
 
 	fm->control_handler = control_handler;
 	faxmodem_set_flag(fm, FAXMODEM_FLAG_RUNNING);

@@ -21,7 +21,7 @@
 <anthm> anyway whatever jabberid is defined  as master will get a message when that call comes in
 <anthm> you can start a pm with that id that sent you the message and control the call
 <anthm> tell it answer<cr> for instance
-*** huslage (n=huslage@c-67-169-200-122.hsd1.or.comcast.net) has joined channel #callweaver
+*** huslage (n=huslage@c-67-169-200-122.hsd1.or.comcast.net) has joined channel #openpbx
 <anthm> then tell it stuff like streamfile
 *** Signoff: fanguin (Read error: 110 (Connection timed out))
 <anthm> if you dial any dtmf during all this you will get them all as msgs
@@ -46,14 +46,14 @@
 > what about
 > like
 <anthm> though that was not the real point
-> exec: JavaScript /opt/callweaver/js/vociemail.js ?
+> exec: JavaScript /opt/openpbx/js/vociemail.js ?
 <anthm> exec anything
 > is it stable?
 <anthm> *shrug*
 > is there a list of commands that I can do like exec: ?
 <anthm> i'm not really selling it =D
 > huh...
-<anthm> cypromis is the one who tossed it into the callweaver
+<anthm> cypromis is the one who tossed it into the openpbx
 <anthm> hence why there is no docs or anything
 > how does the ICD jabber differ from res_jabber?
 *** Signoff: factoryjoe ()

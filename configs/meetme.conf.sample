@@ -1,5 +1,5 @@
 ;
-; Configuration file for MeetMe simple conference rooms for CallWeaver of course.
+; Configuration file for MeetMe simple conference rooms for OpenPBX of course.
 ;
 ; This configuration file is read every time you call app meetme()
 ;

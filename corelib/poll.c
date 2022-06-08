@@ -80,7 +80,7 @@
 #include <assert.h>                          /* assertion macros */
 #include <string.h>                          /* string functions */
 
-#include "callweaver/poll-compat.h"                            /* this package */
+#include "openpbx/poll-compat.h"                            /* this package */
 
 /*---------------------------------------------------------------------------*\
 				  Macros

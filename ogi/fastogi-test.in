@@ -63,7 +63,7 @@ for(;;) {
 	&checkresult($result);
 
 	print STDERR "3.  Testing 'sendimage'...";
-	print CLIENT "SEND IMAGE callweaver-image\n";
+	print CLIENT "SEND IMAGE openpbx-image\n";
 	my $result = <CLIENT>;
 	&checkresult($result);
 

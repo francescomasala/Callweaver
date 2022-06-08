@@ -1,5 +1,5 @@
 /*
- * CallWeaver -- An open source telephony toolkit.
+ * OpenPBX -- An open source telephony toolkit.
  *
  * Copyright (C) 1999 - 2005, Digium, Inc.
  *
@@ -7,8 +7,8 @@
  *
  * Copyright (C) 2004 - 2005 Anthony Minessale II <anthmct@yahoo.com>
  *
- * See http://www.callweaver.org for more information about
- * the CallWeaver project. Please do not directly contact
+ * See http://www.openpbx.org for more information about
+ * the OpenPBX project. Please do not directly contact
  * any of the maintainers of this project for assistance;
  * the project provides a web site, mailing lists and IRC
  * channels for your use.
@@ -32,27 +32,27 @@
 #include <unistd.h>
 #include <string.h>
 
-#include "callweaver.h"
+#include "openpbx.h"
 
-CALLWEAVER_FILE_VERSION("$HeadURL: https://svn.callweaver.org/callweaver/branches/rel/1.2/res/res_config_odbc.c $", "$Revision: 4723 $")
+OPENPBX_FILE_VERSION("$HeadURL$", "$Revision$")
 
-#include "callweaver/file.h"
-#include "callweaver/logger.h"
-#include "callweaver/channel.h"
-#include "callweaver/pbx.h"
-#include "callweaver/config.h"
-#include "callweaver/module.h"
-#include "callweaver/lock.h"
-#include "callweaver/options.h"
-#include "callweaver/res_odbc.h"
-#include "callweaver/utils.h"
+#include "openpbx/file.h"
+#include "openpbx/logger.h"
+#include "openpbx/channel.h"
+#include "openpbx/pbx.h"
+#include "openpbx/config.h"
+#include "openpbx/module.h"
+#include "openpbx/lock.h"
+#include "openpbx/options.h"
+#include "openpbx/res_odbc.h"
+#include "openpbx/utils.h"
 
 static char *tdesc = "ODBC Configuration";
 STANDARD_LOCAL_USER;
 
 LOCAL_USER_DECL;
 
-static struct cw_variable *realtime_odbc(const char *database, const char *table, va_list ap)
+static struct opbx_variable *realtime_odbc(const char *database, const char *table, va_list ap)
 {
 	odbc_obj *obj;
 	SQLHSTMT stmt;
@@ -66,7 +66,7 @@ static struct cw_variable *realtime_odbc(const char *database, const char *table
 	SQLSMALLINT collen;
 	int res;
 	int x;
-	struct cw_variable *var=NULL, *prev=NULL;
+	struct opbx_variable *var=NULL, *prev=NULL;
 	SQLULEN colsize;
 	SQLSMALLINT colcount=0;
 	SQLSMALLINT datatype;
@@ -87,7 +87,7 @@ static struct cw_variable *realtime_odbc(const char *database, const char *table
 
 	res = SQLAllocHandle (SQL_HANDLE_STMT, obj->con, &stmt);
 	if ((res != SQL_SUCCESS) && (res != SQL_SUCCESS_WITH_INFO)) {
-		cw_log(LOG_WARNING, "SQL Alloc Handle failed!\n");
+		opbx_log(LOG_WARNING, "SQL Alloc Handle failed!\n");
 		return NULL;
 	}
 
@@ -105,9 +105,9 @@ static struct cw_variable *realtime_odbc(const char *database, const char *table
 		newval = va_arg(aq, const char *);
 	}
 	va_end(aq);
-	res = SQLPrepare(stmt, (unsigned char *) sql, SQL_NTS);
+	res = SQLPrepare(stmt, sql, SQL_NTS);
 	if ((res != SQL_SUCCESS) && (res != SQL_SUCCESS_WITH_INFO)) {
-		cw_log(LOG_WARNING, "SQL Prepare failed![%s]\n", sql);
+		opbx_log(LOG_WARNING, "SQL Prepare failed![%s]\n", sql);
 		SQLFreeHandle (SQL_HANDLE_STMT, stmt);
 		return NULL;
 	}
@@ -123,14 +123,14 @@ static struct cw_variable *realtime_odbc(const char *database, const char *table
 	res = odbc_smart_execute(obj, stmt);
 
 	if ((res != SQL_SUCCESS) && (res != SQL_SUCCESS_WITH_INFO)) {
-		cw_log(LOG_WARNING, "SQL Execute error!\n[%s]\n\n", sql);
+		opbx_log(LOG_WARNING, "SQL Execute error!\n[%s]\n\n", sql);
 		SQLFreeHandle (SQL_HANDLE_STMT, stmt);
 		return NULL;
 	}
 
 	res = SQLNumResultCols(stmt, &colcount);
 	if ((res != SQL_SUCCESS) && (res != SQL_SUCCESS_WITH_INFO)) {
-		cw_log(LOG_WARNING, "SQL Column Count error!\n[%s]\n\n", sql);
+		opbx_log(LOG_WARNING, "SQL Column Count error!\n[%s]\n\n", sql);
 		SQLFreeHandle (SQL_HANDLE_STMT, stmt);
 		return NULL;
 	}
@@ -141,19 +141,19 @@ static struct cw_variable *realtime_odbc(const char *database, const char *table
 		return NULL;
 	}
 	if ((res != SQL_SUCCESS) && (res != SQL_SUCCESS_WITH_INFO)) {
-		cw_log(LOG_WARNING, "SQL Fetch error!\n[%s]\n\n", sql);
+		opbx_log(LOG_WARNING, "SQL Fetch error!\n[%s]\n\n", sql);
 		SQLFreeHandle (SQL_HANDLE_STMT, stmt);
 		return NULL;
 	}
 	for (x=0;x<colcount;x++) {
 		rowdata[0] = '\0';
 		collen = sizeof(coltitle);
-		res = SQLDescribeCol(stmt, x + 1, (unsigned char *) coltitle, sizeof(coltitle), &collen, 
+		res = SQLDescribeCol(stmt, x + 1, coltitle, sizeof(coltitle), &collen, 
 					&datatype, &colsize, &decimaldigits, &nullable);
 		if ((res != SQL_SUCCESS) && (res != SQL_SUCCESS_WITH_INFO)) {
-			cw_log(LOG_WARNING, "SQL Describe Column error!\n[%s]\n\n", sql);
+			opbx_log(LOG_WARNING, "SQL Describe Column error!\n[%s]\n\n", sql);
 			if (var)
-				cw_variables_destroy(var);
+				opbx_variables_destroy(var);
 			return NULL;
 		}
 
@@ -163,21 +163,21 @@ static struct cw_variable *realtime_odbc(const char *database, const char *table
 			continue;
 
 		if ((res != SQL_SUCCESS) && (res != SQL_SUCCESS_WITH_INFO)) {
-			cw_log(LOG_WARNING, "SQL Get Data error!\n[%s]\n\n", sql);
+			opbx_log(LOG_WARNING, "SQL Get Data error!\n[%s]\n\n", sql);
 			if (var)
-				cw_variables_destroy(var);
+				opbx_variables_destroy(var);
 			return NULL;
 		}
 		stringp = rowdata;
 		while(stringp) {
 			chunk = strsep(&stringp, ";");
-			if (chunk && !cw_strlen_zero(cw_strip(chunk))) {
+			if (chunk && !opbx_strlen_zero(opbx_strip(chunk))) {
 				if (prev) {
-					prev->next = cw_variable_new(coltitle, chunk);
+					prev->next = opbx_variable_new(coltitle, chunk);
 					if (prev->next)
 						prev = prev->next;
 				} else 
-					prev = var = cw_variable_new(coltitle, chunk);
+					prev = var = opbx_variable_new(coltitle, chunk);
 
 			}
 		}
@@ -188,7 +188,7 @@ static struct cw_variable *realtime_odbc(const char *database, const char *table
 	return var;
 }
 
-static struct cw_config *realtime_multi_odbc(const char *database, const char *table, va_list ap)
+static struct opbx_config *realtime_multi_odbc(const char *database, const char *table, va_list ap)
 {
 	odbc_obj *obj;
 	SQLHSTMT stmt;
@@ -203,10 +203,10 @@ static struct cw_config *realtime_multi_odbc(const char *database, const char *t
 	SQLSMALLINT collen;
 	int res;
 	int x;
-	struct cw_variable *var=NULL;
-	struct cw_config *cfg=NULL;
-	struct cw_category *cat=NULL;
-	struct cw_realloca ra;
+	struct opbx_variable *var=NULL;
+	struct opbx_config *cfg=NULL;
+	struct opbx_category *cat=NULL;
+	struct opbx_realloca ra;
 	SQLULEN colsize;
 	SQLSMALLINT colcount=0;
 	SQLSMALLINT datatype;
@@ -228,7 +228,7 @@ static struct cw_config *realtime_multi_odbc(const char *database, const char *t
 
 	res = SQLAllocHandle (SQL_HANDLE_STMT, obj->con, &stmt);
 	if ((res != SQL_SUCCESS) && (res != SQL_SUCCESS_WITH_INFO)) {
-		cw_log(LOG_WARNING, "SQL Alloc Handle failed!\n");
+		opbx_log(LOG_WARNING, "SQL Alloc Handle failed!\n");
 		return NULL;
 	}
 
@@ -237,8 +237,8 @@ static struct cw_config *realtime_multi_odbc(const char *database, const char *t
 		SQLFreeHandle (SQL_HANDLE_STMT, stmt);
 		return NULL;
 	}
-	initfield = cw_strdupa(newparam);
-	if ((op = strchr(initfield, ' '))) 
+	initfield = opbx_strdupa(newparam);
+	if (initfield && (op = strchr(initfield, ' '))) 
 		*op = '\0';
 	newval = va_arg(aq, const char *);
 	if (!strchr(newparam, ' ')) op = " ="; else op = "";
@@ -251,9 +251,9 @@ static struct cw_config *realtime_multi_odbc(const char *database, const char *t
 	if (initfield)
 		snprintf(sql + strlen(sql), sizeof(sql) - strlen(sql), " ORDER BY %s", initfield);
 	va_end(aq);
-	res = SQLPrepare(stmt, (unsigned char *) sql, SQL_NTS);
+	res = SQLPrepare(stmt, sql, SQL_NTS);
 	if ((res != SQL_SUCCESS) && (res != SQL_SUCCESS_WITH_INFO)) {
-		cw_log(LOG_WARNING, "SQL Prepare failed![%s]\n", sql);
+		opbx_log(LOG_WARNING, "SQL Prepare failed![%s]\n", sql);
 		SQLFreeHandle (SQL_HANDLE_STMT, stmt);
 		return NULL;
 	}
@@ -269,21 +269,21 @@ static struct cw_config *realtime_multi_odbc(const char *database, const char *t
 	res = odbc_smart_execute(obj, stmt);
 
 	if ((res != SQL_SUCCESS) && (res != SQL_SUCCESS_WITH_INFO)) {
-		cw_log(LOG_WARNING, "SQL Execute error!\n[%s]\n\n", sql);
+		opbx_log(LOG_WARNING, "SQL Execute error!\n[%s]\n\n", sql);
 		SQLFreeHandle (SQL_HANDLE_STMT, stmt);
 		return NULL;
 	}
 
 	res = SQLNumResultCols(stmt, &colcount);
 	if ((res != SQL_SUCCESS) && (res != SQL_SUCCESS_WITH_INFO)) {
-		cw_log(LOG_WARNING, "SQL Column Count error!\n[%s]\n\n", sql);
+		opbx_log(LOG_WARNING, "SQL Column Count error!\n[%s]\n\n", sql);
 		SQLFreeHandle (SQL_HANDLE_STMT, stmt);
 		return NULL;
 	}
 
-	cfg = cw_config_new();
+	cfg = opbx_config_new();
 	if (!cfg) {
-		cw_log(LOG_WARNING, "Out of memory!\n");
+		opbx_log(LOG_WARNING, "Out of memory!\n");
 		SQLFreeHandle (SQL_HANDLE_STMT, stmt);
 		return NULL;
 	}
@@ -291,22 +291,22 @@ static struct cw_config *realtime_multi_odbc(const char *database, const char *t
 	while ((res=SQLFetch(stmt)) != SQL_NO_DATA) {
 		var = NULL;
 		if ((res != SQL_SUCCESS) && (res != SQL_SUCCESS_WITH_INFO)) {
-			cw_log(LOG_WARNING, "SQL Fetch error!\n[%s]\n\n", sql);
+			opbx_log(LOG_WARNING, "SQL Fetch error!\n[%s]\n\n", sql);
 			continue;
 		}
-		cat = cw_category_new("");
+		cat = opbx_category_new("");
 		if (!cat) {
-			cw_log(LOG_WARNING, "Out of memory!\n");
+			opbx_log(LOG_WARNING, "Out of memory!\n");
 			continue;
 		}
 		for (x=0;x<colcount;x++) {
 			rowdata[0] = '\0';
 			collen = sizeof(coltitle);
-			res = SQLDescribeCol(stmt, x + 1, (unsigned char *) coltitle, sizeof(coltitle), &collen, 
+			res = SQLDescribeCol(stmt, x + 1, coltitle, sizeof(coltitle), &collen, 
 						&datatype, &colsize, &decimaldigits, &nullable);
 			if ((res != SQL_SUCCESS) && (res != SQL_SUCCESS_WITH_INFO)) {
-				cw_log(LOG_WARNING, "SQL Describe Column error!\n[%s]\n\n", sql);
-				cw_category_destroy(cat);
+				opbx_log(LOG_WARNING, "SQL Describe Column error!\n[%s]\n\n", sql);
+				opbx_category_destroy(cat);
 				continue;
 			}
 
@@ -316,22 +316,22 @@ static struct cw_config *realtime_multi_odbc(const char *database, const char *t
 				continue;
 
 			if ((res != SQL_SUCCESS) && (res != SQL_SUCCESS_WITH_INFO)) {
-				cw_log(LOG_WARNING, "SQL Get Data error!\n[%s]\n\n", sql);
-				cw_category_destroy(cat);
+				opbx_log(LOG_WARNING, "SQL Get Data error!\n[%s]\n\n", sql);
+				opbx_category_destroy(cat);
 				continue;
 			}
 			stringp = rowdata;
 			while(stringp) {
 				chunk = strsep(&stringp, ";");
-				if (chunk && !cw_strlen_zero(cw_strip(chunk))) {
+				if (chunk && !opbx_strlen_zero(opbx_strip(chunk))) {
 					if (initfield && !strcmp(initfield, coltitle))
-						cw_category_rename(cat, chunk);
-					var = cw_variable_new(coltitle, chunk);
-					cw_variable_append(cat, var);
+						opbx_category_rename(cat, chunk);
+					var = opbx_variable_new(coltitle, chunk);
+					opbx_variable_append(cat, var);
 				}
 			}
 		}
-		cw_category_append(cfg, cat);
+		opbx_category_append(cfg, cat);
 	}
 
 	SQLFreeHandle (SQL_HANDLE_STMT, stmt);
@@ -360,7 +360,7 @@ static int update_odbc(const char *database, const char *table, const char *keyf
 
 	res = SQLAllocHandle (SQL_HANDLE_STMT, obj->con, &stmt);
 	if ((res != SQL_SUCCESS) && (res != SQL_SUCCESS_WITH_INFO)) {
-		cw_log(LOG_WARNING, "SQL Alloc Handle failed!\n");
+		opbx_log(LOG_WARNING, "SQL Alloc Handle failed!\n");
 		return -1;
 	}
 
@@ -378,9 +378,9 @@ static int update_odbc(const char *database, const char *table, const char *keyf
 	va_end(aq);
 	snprintf(sql + strlen(sql), sizeof(sql) - strlen(sql), " WHERE %s=?", keyfield);
 	
-	res = SQLPrepare(stmt, (unsigned char *) sql, SQL_NTS);
+	res = SQLPrepare(stmt, sql, SQL_NTS);
 	if ((res != SQL_SUCCESS) && (res != SQL_SUCCESS_WITH_INFO)) {
-		cw_log(LOG_WARNING, "SQL Prepare failed![%s]\n", sql);
+		opbx_log(LOG_WARNING, "SQL Prepare failed![%s]\n", sql);
 		SQLFreeHandle (SQL_HANDLE_STMT, stmt);
 		return -1;
 	}
@@ -398,7 +398,7 @@ static int update_odbc(const char *database, const char *table, const char *keyf
 	res = odbc_smart_execute(obj, stmt);
 
 	if ((res != SQL_SUCCESS) && (res != SQL_SUCCESS_WITH_INFO)) {
-		cw_log(LOG_WARNING, "SQL Execute error!\n[%s]\n\n", sql);
+		opbx_log(LOG_WARNING, "SQL Execute error!\n[%s]\n\n", sql);
 		SQLFreeHandle (SQL_HANDLE_STMT, stmt);
 		return -1;
 	}
@@ -407,7 +407,7 @@ static int update_odbc(const char *database, const char *table, const char *keyf
 	SQLFreeHandle (SQL_HANDLE_STMT, stmt);
 
 	if ((res != SQL_SUCCESS) && (res != SQL_SUCCESS_WITH_INFO)) {
-		cw_log(LOG_WARNING, "SQL Row Count error!\n[%s]\n\n", sql);
+		opbx_log(LOG_WARNING, "SQL Row Count error!\n[%s]\n\n", sql);
 		return -1;
 	}
 
@@ -417,13 +417,13 @@ static int update_odbc(const char *database, const char *table, const char *keyf
 	return -1;
 }
 
-static struct cw_config *config_odbc(const char *database, const char *table, const char *file, struct cw_config *cfg)
+static struct opbx_config *config_odbc(const char *database, const char *table, const char *file, struct opbx_config *cfg)
 {
-	struct cw_variable *new_v;
-	struct cw_category *cur_cat;
+	struct opbx_variable *new_v;
+	struct opbx_category *cur_cat;
 	int res = 0;
 	odbc_obj *obj;
-	SQLINTEGER err=0, commented=0, cat_metric=0, var_metric=0, last_cat_metric=0;
+	SQLINTEGER err=0, commented=0, cat_metric=0, var_metric=0, lopbx_cat_metric=0;
 	SQLBIGINT id;
 	char sql[255] = "", filename[128], category[128], var_name[128], var_val[512];
 	SQLSMALLINT rowcount=0;
@@ -453,7 +453,7 @@ static struct cw_config *config_odbc(const char *database, const char *table, co
 	res = odbc_smart_direct_execute(obj, stmt, sql);
 	
 	if ((res != SQL_SUCCESS) && (res != SQL_SUCCESS_WITH_INFO)) {
-		cw_log (LOG_WARNING, "SQL select error!\n[%s]\n\n", sql);
+		opbx_log (LOG_WARNING, "SQL select error!\n[%s]\n\n", sql);
 		SQLFreeHandle (SQL_HANDLE_STMT, stmt);
 		return NULL;
 	}
@@ -461,46 +461,46 @@ static struct cw_config *config_odbc(const char *database, const char *table, co
 	res = SQLNumResultCols (stmt, &rowcount);
 
 	if ((res != SQL_SUCCESS) && (res != SQL_SUCCESS_WITH_INFO)) {
-		cw_log (LOG_WARNING, "SQL NumResultCols error!\n[%s]\n\n", sql);
+		opbx_log (LOG_WARNING, "SQL NumResultCols error!\n[%s]\n\n", sql);
 		SQLFreeHandle (SQL_HANDLE_STMT, stmt);
 		return NULL;
 	}
 
 	if (!rowcount) {
-		cw_log (LOG_NOTICE, "found nothing\n");
+		opbx_log (LOG_NOTICE, "found nothing\n");
 		return cfg;
 	}
 
-	cur_cat = cw_config_get_current_category(cfg);
+	cur_cat = opbx_config_get_current_category(cfg);
 
 	while ((res = SQLFetch(stmt)) != SQL_NO_DATA) {
 		if (!strcmp (var_name, "#include")) {
-			if (!cw_config_internal_load(var_val, cfg)) {
+			if (!opbx_config_internal_load(var_val, cfg)) {
 				SQLFreeHandle (SQL_HANDLE_STMT, stmt);
 				return NULL;
 			}
 			continue;
 		} 
-		if (strcmp(last, category) || last_cat_metric != cat_metric) {
-			cur_cat = cw_category_new(category);
+		if (strcmp(last, category) || lopbx_cat_metric != cat_metric) {
+			cur_cat = opbx_category_new(category);
 			if (!cur_cat) {
-				cw_log(LOG_WARNING, "Out of memory!\n");
+				opbx_log(LOG_WARNING, "Out of memory!\n");
 				break;
 			}
 			strcpy(last, category);
-			last_cat_metric	= cat_metric;
-			cw_category_append(cfg, cur_cat);
+			lopbx_cat_metric	= cat_metric;
+			opbx_category_append(cfg, cur_cat);
 		}
 
-		new_v = cw_variable_new(var_name, var_val);
-		cw_variable_append(cur_cat, new_v);
+		new_v = opbx_variable_new(var_name, var_val);
+		opbx_variable_append(cur_cat, new_v);
 	}
 
 	SQLFreeHandle (SQL_HANDLE_STMT, stmt);
 	return cfg;
 }
 
-static struct cw_config_engine odbc_engine = {
+static struct opbx_config_engine odbc_engine = {
 	.name = "odbc",
 	.load_func = config_odbc,
 	.realtime_func = realtime_odbc,
@@ -510,18 +510,18 @@ static struct cw_config_engine odbc_engine = {
 
 int unload_module (void)
 {
-	cw_config_engine_deregister(&odbc_engine);
+	opbx_config_engine_deregister(&odbc_engine);
 	if (option_verbose)
-		cw_verbose("res_config_odbc unloaded.\n");
+		opbx_verbose("res_config_odbc unloaded.\n");
 	STANDARD_HANGUP_LOCALUSERS;
 	return 0;
 }
 
 int load_module (void)
 {
-	cw_config_engine_register(&odbc_engine);
+	opbx_config_engine_register(&odbc_engine);
 	if (option_verbose)
-		cw_verbose("res_config_odbc loaded.\n");
+		opbx_verbose("res_config_odbc loaded.\n");
 	return 0;
 }
 

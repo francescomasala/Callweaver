@@ -20,23 +20,22 @@
 #include "chan_sccp.h"
 #include "sccp_utils.h"
 #include "sccp_indicate.h"
-
-#include "callweaver/callweaver_db.h"
-#include "callweaver/pbx.h"
-#include "callweaver/utils.h"
+#include <openpbx/opbxdb.h>
+#include <openpbx/pbx.h>
+#include <openpbx/utils.h>
 
 sccp_device_t * sccp_device_find_byid(const char * name) {
   sccp_device_t * d;
   if (!(d = GLOB(devices) ))
   	return NULL;
 
-  cw_mutex_lock(&GLOB(devices_lock));
+  opbx_mutex_lock(&GLOB(devices_lock));
   while (d) {
     if (!strcasecmp(d->id, name))
       break;
     d = d->next;
   }
-  cw_mutex_unlock(&GLOB(devices_lock));
+  opbx_mutex_unlock(&GLOB(devices_lock));
   return d;
 }
 
@@ -45,13 +44,13 @@ sccp_device_t * sccp_device_find_byname(const char * name) {
   if (!(d = GLOB(devices) ))
   	return NULL;
 
-  cw_mutex_lock(&GLOB(devices_lock));
+  opbx_mutex_lock(&GLOB(devices_lock));
   while (d) {
     if (!strcasecmp(d->id, name))
     	break;
     d = d->next;
   }
-  cw_mutex_unlock(&GLOB(devices_lock));
+  opbx_mutex_unlock(&GLOB(devices_lock));
   return d;
 }
 
@@ -62,13 +61,13 @@ sccp_line_t * sccp_line_find_byname(const char * name) {
 	if (!(l = GLOB(lines) ))
 		return NULL;
 
-	cw_mutex_lock(&GLOB(lines_lock));
+	opbx_mutex_lock(&GLOB(lines_lock));
 	while(l && strcasecmp(l->name, name) != 0) {
 		l = l->next;
 	}
 	if (l && l->device)
 		sccp_log(10)(VERBOSE_PREFIX_3 "%s: found line %s\n", DEV_ID_LOG(l->device), l->name);
-	cw_mutex_unlock(&GLOB(lines_lock));
+	opbx_mutex_unlock(&GLOB(lines_lock));
 	return l;
 }
 
@@ -78,14 +77,14 @@ sccp_line_t * sccp_line_find_byid(sccp_device_t * d, uint8_t instance) {
 		return NULL;
 	sccp_log(10)(VERBOSE_PREFIX_3 "%s: Looking for line by instance %d\n", d->id, instance);
 
-	cw_mutex_lock(&d->lock);
+	opbx_mutex_lock(&d->lock);
 	l = d->lines;
 	while (l) {
 		if (l->instance == instance)
 			break;
 		l = l->next_on_device;
 	}
-	cw_mutex_unlock(&d->lock);
+	opbx_mutex_unlock(&d->lock);
 	if (l)
 		sccp_log(10)(VERBOSE_PREFIX_3 "%s: Found line %s\n", d->id, l->name);
 	return l;
@@ -95,14 +94,14 @@ sccp_channel_t * sccp_channel_find_byid(uint32_t id) {
 	sccp_channel_t * c;
 	sccp_log(10)(VERBOSE_PREFIX_3 "SCCP: Looking for channel by id %d\n", id);
 
-	cw_mutex_lock(&GLOB(channels_lock));
+	opbx_mutex_lock(&GLOB(channels_lock));
 	c = GLOB(channels);
 	while (c) {
 		if (c->callid == id)
 			break;
 		c = c->next;
 	}
-	cw_mutex_unlock(&GLOB(channels_lock));
+	opbx_mutex_unlock(&GLOB(channels_lock));
 	if (c)
 		sccp_log(10)(VERBOSE_PREFIX_3 "%s: Found channel (%d)\n", DEV_ID_LOG(c->device), c->callid);
 	return c;
@@ -112,14 +111,14 @@ sccp_channel_t * sccp_channel_find_byid_on_line(sccp_line_t * l, uint32_t id) {
 	sccp_channel_t * c;
 	sccp_log(10)(VERBOSE_PREFIX_3 "SCCP: Looking for channel by id %d\n", id);
 
-	cw_mutex_lock(&l->lock);
+	opbx_mutex_lock(&l->lock);
 	c = l->channels;
 	while (c) {
 		if (c->callid == id)
 			break;
 		c = c->next_on_line;
 	}
-	cw_mutex_unlock(&l->lock);
+	opbx_mutex_unlock(&l->lock);
 	if (c)
 	  sccp_log(10)(VERBOSE_PREFIX_3 "%s: Found channel (%d)\n", DEV_ID_LOG(c->device), c->callid);
 	return c;
@@ -131,14 +130,14 @@ sccp_channel_t * sccp_channel_find_bystate_on_line(sccp_line_t * l, uint8_t stat
 		return NULL;
 	sccp_log(10)(VERBOSE_PREFIX_3 "%s: Looking for a channel with state \"%s\" (%d) on line %s\n", DEV_ID_LOG(l->device), sccp_indicate2str(state), state, l->name);
 
-	cw_mutex_lock(&l->lock);
+	opbx_mutex_lock(&l->lock);
 	c = l->channels;
 	while (c) {
 		if (c->state == state)
 			break;
 		c = c->next_on_line;
 	}
-	cw_mutex_unlock(&l->lock);
+	opbx_mutex_unlock(&l->lock);
 	if (c)
 		sccp_log(10)(VERBOSE_PREFIX_3 "%s: Found channel (%d) with state \"%s\" (%d) on line %s\n", DEV_ID_LOG(l->device), c->callid, sccp_indicate2str(state), state, l->name);
 	return c;
@@ -150,14 +149,14 @@ sccp_channel_t * sccp_channel_find_bycallstate_on_line(sccp_line_t * l, uint8_t 
 		return NULL;
 	sccp_log(10)(VERBOSE_PREFIX_3 "%s: Looking for a channel with state \"%s\" (%d) on line %s\n", DEV_ID_LOG(l->device), sccp_callstate2str(state), state, l->name);
 
-	cw_mutex_lock(&l->lock);
+	opbx_mutex_lock(&l->lock);
 	c = l->channels;
 	while (c) {
 		if (c->callstate == state)
 			break;
 		c = c->next_on_line;
 	}
-	cw_mutex_unlock(&l->lock);
+	opbx_mutex_unlock(&l->lock);
 	if (c)
 		sccp_log(10)(VERBOSE_PREFIX_3 "%s: Found channel (%d) with state \"%s\" (%d) on line %s\n", DEV_ID_LOG(l->device), c->callid, sccp_callstate2str(state), state, l->name);
 	return c;
@@ -169,7 +168,7 @@ sccp_channel_t * sccp_channel_find_bystate_on_device(sccp_device_t * d, uint8_t 
 	if (!d)
 		return NULL;
 	sccp_log(10)(VERBOSE_PREFIX_3 "%s: Looking for a channel with state \"%s\" (%d) on device\n", d->id, sccp_indicate2str(state), state);
-	cw_mutex_lock(&d->lock);
+	opbx_mutex_lock(&d->lock);
 	l = d->lines;
 	while (l) {
 		c = sccp_channel_find_bystate_on_line(l, state);
@@ -177,7 +176,7 @@ sccp_channel_t * sccp_channel_find_bystate_on_device(sccp_device_t * d, uint8_t 
 			break;
 		l = l->next_on_device;
 	}
-	cw_mutex_unlock(&d->lock);
+	opbx_mutex_unlock(&d->lock);
 	if (c)
 		sccp_log(10)(VERBOSE_PREFIX_3 "%s: Found channel (%d) with state \"%s\" (%d) on device\n", d->id, c->callid, sccp_indicate2str(state), state);
 	return c;
@@ -189,7 +188,7 @@ sccp_channel_t * sccp_channel_find_byid_on_device(sccp_device_t * d, uint32_t id
 	if (!d)
 		return NULL;
 	sccp_log(10)(VERBOSE_PREFIX_3 "%s: Looking for a channel number %d on device\n", d->id, id);
-	cw_mutex_lock(&d->lock);
+	opbx_mutex_lock(&d->lock);
 	if (d->active_channel && (d->active_channel->callid == id) ) {
 		c = d->active_channel;
 		goto OUT;
@@ -204,14 +203,14 @@ sccp_channel_t * sccp_channel_find_byid_on_device(sccp_device_t * d, uint32_t id
 OUT:
 	if (c)
 		sccp_log(10)(VERBOSE_PREFIX_3 "%s: Found channel %d on device\n", d->id, id);
-	cw_mutex_unlock(&d->lock);
+	opbx_mutex_unlock(&d->lock);
 	return c;
 }
 
-void sccp_cw_setstate(sccp_channel_t * c, int state) {
+void sccp_opbx_setstate(sccp_channel_t * c, int state) {
 	if (c && c->owner) {
-		cw_setstate(c->owner, state);
-		sccp_log(10)(VERBOSE_PREFIX_3 "%s: Set callweaver state %s (%d) for call %d\n", DEV_ID_LOG(c->device), cw_state2str(state), state, c->callid);
+		opbx_setstate(c->owner, state);
+		sccp_log(10)(VERBOSE_PREFIX_3 "%s: Set asterisk state %s (%d) for call %d\n", DEV_ID_LOG(c->device), opbx_state2str(state), state, c->callid);
 	}
 }
 
@@ -220,7 +219,7 @@ void sccp_dev_dbput(sccp_device_t * d) {
 	sccp_line_t * l;
 	if (!d)
 		return;
-	cw_mutex_lock(&d->lock);
+	opbx_mutex_lock(&d->lock);
 	l = d->lines;
 	while (l) {
 		if (l->cfwd_type == SCCP_CFWD_ALL) {
@@ -233,16 +232,16 @@ void sccp_dev_dbput(sccp_device_t * d) {
 		l = l->next_on_device;
 	}
 
-	if (!cw_strlen_zero(cfwdall))
+	if (!opbx_strlen_zero(cfwdall))
 		cfwdall[strlen(cfwdall)-1] = '\0';
-	if (!cw_strlen_zero(cfwdbusy))
+	if (!opbx_strlen_zero(cfwdbusy))
 		cfwdbusy[strlen(cfwdbusy)-1] = '\0';
 
 	snprintf(tmp, sizeof(tmp), "dnd=%d,cfwdall=%s,cfwdbusy=%s", d->dnd, cfwdall, cfwdbusy);
-	sccp_log(10)(VERBOSE_PREFIX_3 "%s: Storing device status (dnd, cfwd*) in the callweaver db\n", d->id);
-	if (cw_db_put("SCCP", d->id, tmp))
-		cw_log(LOG_NOTICE, "%s: Unable to store device status (dnd, cfwd*) in the callweaver db\n", d->id);
-	cw_mutex_unlock(&d->lock);
+	sccp_log(10)(VERBOSE_PREFIX_3 "%s: Storing device status (dnd, cfwd*) in the openpbx db\n", d->id);
+	if (opbx_db_put("SCCP", d->id, tmp))
+		opbx_log(LOG_NOTICE, "%s: Unable to store device status (dnd, cfwd*) in the openpbx db\n", d->id);
+	opbx_mutex_unlock(&d->lock);
 }
 
 static void sccp_cfwd_parse(sccp_device_t * d, char * tmp, uint8_t type) {
@@ -250,15 +249,15 @@ static void sccp_cfwd_parse(sccp_device_t * d, char * tmp, uint8_t type) {
 	sccp_line_t * l = NULL;
 
 	while ( tmp && (tmp2 = strsep(&tmp,";")) ) {
-		if (tmp2 && !cw_strlen_zero(tmp2)) {
+		if (tmp2 && !opbx_strlen_zero(tmp2)) {
 			tmp3 = strsep(&tmp2,":");
-			if (tmp3 && !cw_strlen_zero(tmp3)) {
+			if (tmp3 && !opbx_strlen_zero(tmp3)) {
 				l = sccp_line_find_byid(d, atoi(tmp3));
 				if (!l) {
 					sccp_log(10)(VERBOSE_PREFIX_3 "%s: Found a call forward %s in the database, but no line available with instance %s\n", d->id, (type == SCCP_CFWD_ALL) ? "ALL" : "BUSY", tmp3);
 				} else {
 					tmp3 = strsep(&tmp2,"");
-					if (tmp3 && !cw_strlen_zero(tmp3)) {
+					if (tmp3 && !opbx_strlen_zero(tmp3)) {
 						sccp_log(10)(VERBOSE_PREFIX_3 "%s: Restoring call forward %s to %s on line %s\n", d->id, (type == SCCP_CFWD_ALL) ? "ALL" : "BUSY", tmp3, l->name);
 						l->cfwd_type = type;
 						l->cfwd_num = strdup(tmp3);
@@ -277,8 +276,8 @@ void sccp_dev_dbget(sccp_device_t * d) {
 
 	if (!d)
 		return;
-	sccp_log(10)(VERBOSE_PREFIX_3 "%s: Restoring device status (dnd, cfwd*) from the callweaver db\n", d->id);
-	if (cw_db_get("SCCP", d->id, result, sizeof(result))) {
+	sccp_log(10)(VERBOSE_PREFIX_3 "%s: Restoring device status (dnd, cfwd*) from the openpbx db\n", d->id);
+	if (opbx_db_get("SCCP", d->id, result, sizeof(result))) {
 		return;
 	}
 	r = result;
@@ -303,12 +302,12 @@ void sccp_dev_dbget(sccp_device_t * d) {
 }
 
 void sccp_dev_dbclean() {
-	struct cw_db_entry *entry;
+	struct opbx_db_entry *entry;
 	sccp_device_t * d;
 	char key[256];
 
-	cw_mutex_lock(&GLOB(devices_lock));
-	entry = cw_db_gettree("SCCP", NULL);
+	opbx_mutex_lock(&GLOB(devices_lock));
+	entry = opbx_db_gettree("SCCP", NULL);
 	while (entry) {
 		sscanf(entry->key,"/SCCP/%s", key);
 		sccp_log(10)(VERBOSE_PREFIX_3 "SCCP: Looking for %s in the devices list\n", key);
@@ -320,29 +319,29 @@ void sccp_dev_dbclean() {
 				d = d->next;
 			}
 			if (!d) {
-				cw_db_del("SCCP", key);
-				sccp_log(10)(VERBOSE_PREFIX_3 "SCCP: device %s removed from callweaver database\n", entry->key);
+				opbx_db_del("SCCP", key);
+				sccp_log(10)(VERBOSE_PREFIX_3 "SCCP: device %s removed from openpbx database\n", entry->key);
 			}
 
 		}
 		entry = entry->next;
 	}
 	if (entry)
-		cw_db_freetree(entry);
-	cw_mutex_unlock(&GLOB(devices_lock));
+		opbx_db_freetree(entry);
+	opbx_mutex_unlock(&GLOB(devices_lock));
 }
 
 const char * sccp_extensionstate2str(uint8_t type) {
 	switch(type) {
-	case CW_EXTENSION_NOT_INUSE:
+	case OPBX_EXTENSION_NOT_INUSE:
 		return "NotInUse";
-	case CW_EXTENSION_BUSY:
+	case OPBX_EXTENSION_BUSY:
 		return "Busy";
-	case CW_EXTENSION_UNAVAILABLE:
+	case OPBX_EXTENSION_UNAVAILABLE:
 		return "Unavailable";
-	case CW_EXTENSION_INUSE:
+	case OPBX_EXTENSION_INUSE:
 		return "InUse";
-	case CW_EXTENSION_RINGING:
+	case OPBX_EXTENSION_RINGING:
 		return "Ringing";
 	default:
 		return "Unknown";
@@ -1387,13 +1386,13 @@ const char * skinny_codec2str(uint8_t type) {
 
 uint8_t sccp_codec_ast2skinny(int fmt) {
 	switch(fmt) {
-	case CW_FORMAT_ALAW:
+	case OPBX_FORMAT_ALAW:
 		return 2;
-	case CW_FORMAT_ULAW:
+	case OPBX_FORMAT_ULAW:
 		return 4;
-	case CW_FORMAT_G723_1:
+	case OPBX_FORMAT_G723_1:
 		return 9;
-	case CW_FORMAT_G729A:
+	case OPBX_FORMAT_G729A:
 		return 12;
 	default:
 		return 0;
@@ -1403,13 +1402,13 @@ uint8_t sccp_codec_ast2skinny(int fmt) {
 int sccp_codec_skinny2ast(uint8_t fmt) {
 	switch(fmt) {
 	case 2:
-		return CW_FORMAT_ALAW;
+		return OPBX_FORMAT_ALAW;
 	case 4:
-		return CW_FORMAT_ULAW;
+		return OPBX_FORMAT_ULAW;
 	case 9:
-		return CW_FORMAT_G723_1;
+		return OPBX_FORMAT_G723_1;
 	case 12:
-		return CW_FORMAT_G729A;
+		return OPBX_FORMAT_G729A;
 	default:
 		return 0;
 	}

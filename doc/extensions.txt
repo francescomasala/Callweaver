@@ -1,12 +1,12 @@
-The CallWeaver dialplan
+The OpenPBX dialplan
 =====================
 
-The CallWeaver dialplan is divided into contexts. A context is simply a group
+The OpenPBX dialplan is divided into contexts. A context is simply a group
 of extensions. For each "line" that should be able to be called, an extension
 must be added to a context. Then, you configure the calling "line" to have
 access to this context.
 
-If you change the dialplan, you can use the CallWeaver CLI command
+If you change the dialplan, you can use the OpenPBX CLI command
 "extensions reload" to load the new dialplan without disrupting
 service in your PBX.
 
@@ -25,15 +25,15 @@ Extensions frequently have data they pass to the executing application
 (most frequently a string).  You can see the available dialplan applications
 by entering the "show applications" command in the CLI.
 
-In this version of CallWeaver, dialplan functions are added. These can
+In this version of OpenPBX, dialplan functions are added. These can
 be used as arguments to any application. For a list of the installed
-functions in your CallWeaver, use the "show functions" command.
+functions in your OpenPBX, use the "show functions" command.
 
 * Example dial plan
 
 The example dial plan, in the configs/extensions.conf.sample file
 is installed as extensions.conf if you run "make samples" after
-installation of CallWeaver. This file includes many more instructions
+installation of OpenPBX. This file includes many more instructions
 and examples than this file, so it's worthwile to read it.
 	
 * Special extensions

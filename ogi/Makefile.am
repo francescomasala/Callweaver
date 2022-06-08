@@ -1,17 +1,14 @@
 AUTOMAKE_OPTS 			= gnu
-
-DEFS += -include $(top_builddir)/include/confdefs.h
-
-cwogi_PROGRAMS 		= eogi-sphinx-test eogi-test
-cwogi_SCRIPTS 		= ogi-test.ogi fastogi-test
+opbxogi_PROGRAMS 		= eogi-sphinx-test eogi-test
+opbxogi_SCRIPTS 		= ogi-test.ogi fastogi-test
 eogi_sphinx_test_SOURCES 	= eogi-sphinx-test.c
 eogi_test_SOURCES 		= eogi-test.c
 
 install-data-hook:
 	if test -z "$(DESTDIR)"; \
 	then \
-		chown -R ${cwrunuser}:${cwrungroup} $(DESTDIR)${cwogidir}; \
+		chown -R ${opbxrunuser}:${opbxrungroup} $(DESTDIR)${opbxogidir}; \
 	fi; \
-	chmod 0750 $(DESTDIR)${cwogidir}
+	chmod 0750 $(DESTDIR)${opbxogidir}
 
 INCLUDES = -I$(top_srcdir)/include

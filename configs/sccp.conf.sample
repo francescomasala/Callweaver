@@ -8,12 +8,12 @@
 ;
 
 [general]
-servername = CallWeaver			; show this name on the device registration
+servername = OpenPBX			; show this name on the device registration
 keepalive = 60				; phone keep alive message evey 60 secs. Used to check the voicemail
 debug = 1					; console debug level. 1 => 10
 context = sccp
 dateFormat = D.M.Y			; M-D-Y in any order. Use M/D/YA (for 12h format)
-bindaddr = 0.0.0.0			; replace with the ip address of the callweaver server (RTP important param)
+bindaddr = 0.0.0.0			; replace with the ip address of the openpbx server (RTP important param)
 port = 2000					; listen on port 2000 (Skinny, default)
 disallow=all				; First disallow all codecs
 allow=alaw					; Allow codecs in order of preference

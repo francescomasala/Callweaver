@@ -106,5 +106,5 @@
 ; built-in defaults are used. 
 
 [general]
-dsn = host=localhost dbname=callweaver user=callweaver password=qwerty
+dsn = host=localhost dbname=openpbx user=openpbx password=qwerty
 

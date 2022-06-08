@@ -4,17 +4,17 @@ This folder contains:
 * Documentation Framework
 * Documentation
 
-To avoid interdependency during build times, CallWeaver documentation sources have
-been engineered to use as separate build process. This does not mean that CallWeaver documentation build 
+To avoid interdependency during build times, OpenPBX documentation sources have
+been engineered to use as separate build process. This does not mean that OpenPBX documentation build 
 will not or cannot be integrated with the main software build.
 
 --------------------------
 License
 --------------------------
-CallWeaver is distributed under GNU GPL
+OpenPBX is distributed under GNU GPL
 [http://www.fsf.org/licensing/licenses/gpl.html]
 
-CallWeaver Documentation is distributed under CC-BY-SA 2.5
+OpenPBX Documentation is distributed under CC-BY-SA 2.5
 [http://creativecommons.org/licenses/by-sa/2.5/]
 
 NOTE: GNU FDL is not GPL compatible.
@@ -57,7 +57,7 @@ oper/			Operation Guide
 prep/			Preparation Guide
 prov/			Provisioning Guide
 Makefile		GNU Makefile
-callweaver-docs.xml	Documentation Set container document
+openpbx-docs.xml	Documentation Set container document
 
 
 

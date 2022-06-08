@@ -1,5 +1,5 @@
 
-; Inter-CallWeaver eXchange driver definition
+; Inter-OpenPBX eXchange driver definition
 ;
 ; This configuration is re-read at reload
 ; or with the CLI command
@@ -21,7 +21,7 @@
 ; Set iaxcompat to yes if you plan to use layered switches or
 ; some other scenario which may cause some delay when doing a
 ; lookup in the dialplan. It incurs a small performance hit to
-; enable it. This option causes CallWeaver to spawn a separate thread
+; enable it. This option causes OpenPBX to spawn a separate thread
 ; when it receives an IAX DPREQ (Dialplan Request) instead of
 ; blocking while it waits for a response.
 ;
@@ -148,7 +148,7 @@ tos=lowdelay
 ;
 ;mailboxdetail=yes
 ;
-; If regcontext is specified, CallWeaver will dynamically create and destroy
+; If regcontext is specified, OpenPBX will dynamically create and destroy
 ; a NoOp priority 1 extension for a given peer who registers or unregisters
 ; with us.  The actual extension is the 'regexten' parameter of the registering
 ; peer or its name if 'regexten' is not provided.  More than one regexten
@@ -256,8 +256,8 @@ inkeys=freeworlddialup
 ; authentication is used, "inkeys" is a list of acceptable public keys on the 
 ; local system that can be used to authenticate the remote peer, separated by
 ; the ":" character.  "outkey" is a single, private key to use to authenticate
-; to the other side.  Public keys are named /var/lib/callweaver/keys/<name>.pub
-; while private keys are named /var/lib/callweaver/keys/<name>.key.  Private
+; to the other side.  Public keys are named /var/lib/openpbx/keys/<name>.pub
+; while private keys are named /var/lib/openpbx/keys/<name>.key.  Private
 ; keys should always be 3DES encrypted.
 ;
 ;
@@ -268,7 +268,7 @@ inkeys=freeworlddialup
 ;auth=md5,plaintext,rsa
 ;secret=markpasswd
 ;setvar=foo=bar
-;dbsecret=mysecrets/place	; Secrets can be stored in cwdb, too
+;dbsecret=mysecrets/place	; Secrets can be stored in opbxdb, too
 ;notransfer=yes		; Disable IAX native transfer
 ;maxauthreq=10		; Set maximum number of outstanding AUTHREQs waiting for replies. Any further authentication attempts will be blocked
 ;			; if this limit is reached until they expire or a reply is received.
@@ -283,11 +283,11 @@ inkeys=freeworlddialup
 ;
 [demo]
 type=peer
-username=callweaver
+username=openpbx
 secret=supersecret
 host=216.207.245.47
 ;sendani=no
-;host=fred.callweaver.org
+;host=openpbx.linux-support.net
 ;port=5036
 ;mask=255.255.255.255
 ;qualify=yes			; Make sure this peer is alive

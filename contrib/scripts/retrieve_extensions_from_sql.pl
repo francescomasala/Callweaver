@@ -46,7 +46,7 @@ require DBI;	# We need database drivers for this thing to work
 
 my $table_name = "extensions";		# name of the extensions table
 my $global_table_name = "globals";	# name of the globals table
-my $extensions_conf = "/etc/callweaver/extensions.conf";	# path to extensions.conf
+my $extensions_conf = "/etc/openpbx/extensions.conf";	# path to extensions.conf
 #	 WARNING: this file will be substituted by the output of this program
 my $dbbrand = "Pg"; 		# Hint: "mysql" or any other Perl DBI driver.
 my $hostname = "localhost";	# The SQL server's hostname or IP

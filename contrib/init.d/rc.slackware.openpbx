@@ -1,0 +1,42 @@
+#!/bin/sh
+#
+# Start/stop/restart OpenPBX
+#
+# Version: 1.0 - Paul Belanger <pabelanger@gmail.com>
+#
+# 03.29.2005 - Initial Version
+#
+
+openpbx_start() {
+   if [ -x /usr/sbin/openpbx ]; then
+      echo "Starting OpenPBX   /usr/sbin/openpbx"
+      /usr/sbin/openpbx
+   fi
+}
+
+openpbx_stop() {
+    # If there is no PID file, ignore this request...
+    if [ -r /var/run/openpbx.pid ]; then
+      killall openpbx
+    fi
+}
+
+openpbx_restart() {
+   openpbx_stop
+   openpbx_start
+}
+
+case "$1" in
+   'start')
+      openpbx_start
+      ;;
+   'stop')
+      openpbx_stop
+      ;;
+   'restart')
+      openpbx_restart
+      ;;
+   *)
+      echo "usage $0 start|stop|restart" ;;
+esac
+
