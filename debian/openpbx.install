@@ -1,7 +1,0 @@
-usr/lib/openpbx.org/libopbx*.so.*
-usr/lib/openpbx.org/libopenpbx*.so.*
-usr/lib/openpbx.org/modules/*.so
-usr/lib/openpbx.org/libedit.so.* usr/lib/openpbx.org/
-usr/sbin
-usr/bin
-etc/openpbx.org
